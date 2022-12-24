@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SMART HOME INTERFACE</title>
+    <link rel="stylesheet" href="style.css">    
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="initial-scale=1.0">
+    <meta name="viewport" content="maximum-scale=1.0">
+    <meta name="viewport" content="user-scalable=no">
+    <meta name="viewport" content="width=device-width">
+    <link rel="apple-touch-icon-precomposed" href="http://elfege.com/penrose.jpg">
+    <link rel="apple-touch-startup-image" href="http://elfege.com/penrose.jpg">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body onload="getPreferences()">
+  <table style='empty-cells: show'>
+    <tr>
+      <td>
+        <div style="width:70%; margin-left:auto; margin-right:auto">
+          <h1 class="letter" id="pageTitle"></h1>
+          <h1 class="letter" style="float:left; text-align: center;">S</h1>
+          <h1 class="letter" style="float:left; text-align: center;">M</h1>
+          <h1 class="letter" style="float:left; text-align: center;">A</h1>
+          <h1 class="letter" style="float:left; text-align: center;">R</h1>
+          <h1 class="letter" style="float:left; text-align: center;">T</h1>
+          <h1 class="letter" style="float:left; text-align: center;">&nbsp</h1>
+          <h1 class="letter" style="float:left; text-align: center;">H</h1>
+          <h1 class="letter" style="float:left; text-align: center;">O</h1>
+          <h1 class="letter" style="float:left; text-align: center;">M</h1>
+          <h1 class="letter" style="float:left; text-align: center;">E</h1>
+          <h1 class="letter" id="pageTitle"></h1>
+        </div>
+      </td>
+    <!-- <td></td> -->
+
+
+    </tr>
+    <tr>
+      <table style='empty-cells: show'>
+        
+        <tr>
+          <td>
+            <table style='empty-cells: show'>
+              <tr>
+                  <div>
+                    <h4 id='currentMode'></h4> 
+                    <h4 id='refreshRateMessage'></h4>
+
+                    <button class="headerButton refreshButton" class="headerButton" id="refreshALl" onclick="refreshAll('userRequest')"> REFRESH </button>            
+                    <button class="headerButton" id="homepower";> </button>
+                    <button class="headerButton" id="powerSwitches";> </button>
+                    <button class="headerButton" onclick='resetPreferences()'>Reset prefs.</button>
+                    <button class="headerButton" id="reload" onclick="location.reload()"> RELOAD </button> 
+                    <button class="headerButton" id="thermsotats" onclick="window.open('/thermostats.html','_blank')"> Thermostats </button> 
+                     
+                    <button class="headerButton" id="debugbtn" onclick="toggleDebug()">DEBUG</button>
+                  </div>
+              </tr>
+              <tr>
+                <h4 id="submitBtnRefreshRate">set refresh rate:
+                <input style="width: 20px; height: 20px;" class="refreshrateinput" id="refreshRate" value=""></h4>
+                <h4 id="locks"></h4>
+              </tr>
+              <tr></tr>
+              <tr></tr>
+              <tr></tr>
+            </table>
+          </td>
+
+          <td>           
+            <div style="float:left;" id="buttons"></div>
+            <div style="float:left;" id="dimmers"></div>
+          </td>          
+        </tr>
+      </table>
+    </tr>
+  </table>
+
+</body>
+
+<script src="script.js?n=1"></script>
+</html>

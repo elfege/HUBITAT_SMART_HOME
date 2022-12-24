@@ -1,0 +1,518 @@
+:root {
+  --buttonSize:120px;
+  --tdSize: calc(var(--buttonSize)* 2);
+  --buttonGroupMargin: 5px;
+  --sliderSpanTDmarginLEFT: 5px; 
+  --sliderSpanTDmarginRIGHT: 7px; 
+  --sliderLength: 150px; /*calc(var(--buttonSize) * 2); /*buttonSize x 2 */
+  --sliderLengthHover: calc(var(--sliderLength) + 20px);;
+  --sliderWidth: 10px;
+  --buttonFontSize:12px;
+  --fontSize:20px;
+  --fontColor:#0B0B0A;
+  --buttonColor:#64AEB1;
+  --defautlRadiusVal: 15px;
+  --hoverRadiusVal: 30px;
+  --buttonTransition:  0.5s;
+  --headerButtonHeight: 25px;
+  --headerButtonWidth: var(--buttonSize);
+
+  --backgroundColor: rgb(7, 141, 216);
+
+  --buttonOffHover: yellow;   /*"linear-gradient(45deg, #F1F116, #D5D536, #B6B644, #92921C, #E0310E)";*/
+  --buttonOnHover: darkgrey;  /*"linear-gradient(45deg, #5E6060, #517979, #3E9D9D, #31BCBC, #18A2E0)";*/ 
+  --buttonOff: darkgrey;      /*"linear-gradient(45deg, #5E6060, #517979, #3E9D9D, #31BCBC, #18A2E0)";*/ 
+  --buttonOn:  white;         /*"linear-gradient(45deg, #F1F116, #D5D536, #B6B644, #92921C, #E0310E)";*/
+}
+body {
+  /*zoom: 1 ;*/
+  /*display: flex;*/
+  /*justify-content: left;*/
+  /*height: 100vh;*/
+  /*background-image: url("/local/img1.jpg");*/
+  background-repeat: no-repeat;
+  background-size: 100%;
+  background-color: var(--backgroundColor);
+  background: blue;
+  margin: 0;
+  background-attachment: fixed;
+  opacity: 1;
+  /*cursor: move;*/
+  transition: background-color 5000ms;
+}
+
+h4 {
+  color: white;
+}
+
+.letter {
+  float: left;
+  font-size: 3rem;
+  text-align: center;
+  transition: color 5000ms;
+
+}
+
+
+table {
+  width:100%;
+  border: 0px solid white;
+  padding: 0px;
+  text-align: center;
+  vertical-align: top;
+  opacity: 1;
+}
+tr {
+  vertical-align: top;
+  text-align: center;
+  border: 0px solid white;
+}
+td {
+  vertical-align: top;
+  text-align: center;
+  border: 0px solid white;
+}
+div {
+  float: inherit;
+  margin-left: var(--buttonGroupMargin);
+  margin-right: var(--buttonGroupMargin);
+  margin-top: var(--buttonGroupMargin);
+  margin-bottom: var(--buttonGroupMargin);
+}  
+
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  input[type="range"][orient=vertical]
+  {
+   /*writing-mode: bt-lr;*/ /*works but... WON'T ALLOW ANY COLOR UPDATE*/ /* IE */
+   -webkit-appearance: slider-vertical; /* Chromium  */
+   transform: rotate(270deg);
+   -webkit-appearance: none;
+
+ }
+ input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 30px;
+  height: 30px;
+  background: #078dd8; /*this is rgb(7, 141, 216) we must make sure the body's background never shifts to this color*/
+  border-radius: 0%;
+  cursor: -moz-grab;
+  cursor: -webkit-grab;
+  cursor:move;
+  
+}
+
+
+
+
+}
+/* FF*/
+i/*nput[type="range"]::-moz-range-progress {
+  background-color: #43e5f7; 
+}
+input[type="range"]::-moz-range-track {  
+  background-color: #9a905d;
+}
+/* IE*/
+/*input[type="range"]::-ms-fill-lower {
+  background-color: #43e5f7; 
+}
+input[type="range"]::-ms-fill-upper {  
+  background-color: #9a905d;
+}*/
+
+.sliderSpanName {
+  vertical-align: top;
+  horizontal-align: left;
+  color: white;
+  font-size: relative;
+}
+.sliderSpanVal {
+  vertical-align: top;
+  font-size: 10px;
+  font-weight: bold;
+  color: yellow;
+}
+
+
+h1 {
+  color: var(--fontColor); 
+}
+.buttonName {
+  color: var(--fontColor);
+  font-size: 30px;
+}
+h2 {
+  color:var(--fontColor);  
+}
+
+
+
+.column {
+  float: left;
+  width: 10%;
+  padding: 5px;
+}
+
+/* Clearfix (clear floats) */
+.row::after {
+  content: "";
+  clear: both;
+  display: table;
+}
+button {
+  vertical-align: top;
+  border-radius: var(--defautlRadiusVal);
+  display: block;      
+  transition-duration: var(--buttonTransition);
+  border: 0px;
+  width:  var(--buttonSize);
+  height: var(--buttonSize);
+  margin-left:0;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-block;
+/*display: block;*/
+font-size: relative; /*var(--buttonFontSize);*/
+color:var(--fontColor);/*font color*/
+outline-offset: 4px;
+margin-left: var(--buttonGroupMargin);
+margin-right: var(--buttonGroupMargin);
+margin-bottom: var(--buttonGroupMargin);
+margin-top: var(--buttonGroupMargin);
+}
+button::after { 
+
+}
+button.on{
+  background-color: var(--buttonOn);
+  color: black;
+  transition-duration: var(--buttonTransition);
+}
+button.off {
+  background-color: var(--buttonOff);
+  color: black; 
+  transition-duration: var(--buttonTransition);
+}
+/*hover is sticky on iphone */
+@media (hover: hover) { 
+  button:hover{
+    background-color: grey; 
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s;  
+  }
+}
+.buttonBulb { 
+/*inherits from button class*/
+}
+.buttonBulb::after {
+  background-color: rgba(255,255,255,255,0);
+  content: "";
+  clear: both;
+  display: block;
+  padding:15px;
+  margin-top: -20px;
+  margin-left:0px;
+  margin-right:0px;
+  border: 0px solid #000000;  
+  background-position: center;
+}
+.buttonBulb.on::after{
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/lightOn.png");
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}
+.buttonBulb.off::after{
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/lightOff.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}  
+@media (hover: hover) {
+  .buttonBulb:hover { 
+    background-color: rgba(255,255,255,255,0);   
+    color: black;
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s; 
+  }
+  .buttonBulb:hover.off::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/lightOn.png");
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s; 
+  }
+  .buttonBulb:hover.on::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/lightOff.png");
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s; 
+  }
+}    
+.buttonContact::after {
+  background-color: rgba(255,255,255,255,0);
+  content: "";
+  clear: both;
+  display: block;
+  padding:10px;
+  margin-left:25px;
+  margin-right:30px;
+  border: 0px solid #000000;
+}
+.buttonContact.on::after{
+  /*content:"open";
+  align-content: center;*/
+  color: red;
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/windowOpen.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}
+.buttonContact.off::after{
+  /*color: black;*/
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/windowClosed.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}  
+@media (hover: hover) {
+  .buttonContact:hover { 
+    background-color: rgba(255,255,255,255,0);   
+    color: black;
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s; 
+  }
+  .buttonContact:hover.off::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/windowOpen.png");
+    background-position: right;
+    background-position: right;
+    transition-duration: 0.5s; 
+  }
+  .buttonContact:hover.on::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/windowClosed.png");
+    background-position: right;
+    background-position: right;
+    transition-duration: 0.5s; 
+  }
+}
+.buttonFan::after {
+  background-color: rgba(255,255,255,255,0);
+  content: "";
+  clear: both;
+  display: block;
+  padding:20px;
+  margin-left:20px;
+  margin-right:30px;
+  border: 0px solid #000000;
+}
+.buttonFan.on::after{
+  color: red;
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/fan.gif");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}
+.buttonFan.off::after{
+  /*color: black;*/
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/fan.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}  
+@media (hover: hover) {
+  .buttonFan:hover { 
+    background-color: rgba(255,255,255,255,0);   
+    color: black;
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s; 
+  }
+  .buttonFan:hover.off::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/fan.png");
+    background-position: center;
+    transition-duration: 0.5s; 
+  }
+  .buttonFan:hover.on::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/fan.gif");
+    background-position: center;
+    transition-duration: 0.5s; 
+  }
+}
+
+.buttonCam::after {
+  background-color: rgba(255,255,255,255,0);
+  content: "";
+  clear: both;
+  display: block;
+  padding:20px;
+  margin-left:20px;
+  margin-right:30px;
+  border: 0px solid #000000;
+}
+.buttonCam.on::after{
+  color: red;
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/camera.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}
+.buttonCam.off::after{
+  /*color: black;*/
+  background-color: rgba(255,255,255,255,0);
+  background-image: url("/local/camera.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  transition-duration: var(--buttonTransition);
+}  
+@media (hover: hover) {
+  .buttonCam:hover { 
+    background-color: rgba(255,255,255,255,0);   
+    color: black;
+    border-radius: var(--hoverRadiusVal);
+    transition-duration: 0.5s; 
+  }
+  .buttonCam:hover.off::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/camera.png");
+    background-position: center;
+    transition-duration: 0.5s; 
+  }
+  .buttonCam:hover.on::after {
+    background-color: rgba(255,255,255,255,0);
+    background-image: url("/local/camera.png");
+    background-position: center;
+    transition-duration: 0.5s; 
+  }
+}
+
+.headerButton {
+  display: flex;
+  vertical-align: top;
+  border-radius: 0px; /*var(--defautlRadiusVal);*/
+  transition-duration: var(--buttonTransition);
+  border: 0px;
+  width: var(--buttonSize);
+  height: var(--headerButtonHeight);
+  margin-left:0;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-block;
+  /*display: block;*/
+  font-size: relative; /*var(--buttonFontSize);*/
+  color:var(--fontColor);/*font color*/
+  outline-offset: 4px;
+  margin-left: var(--buttonGroupMargin);
+  margin-right: var(--buttonGroupMargin);
+  margin-bottom: var(--buttonGroupMargin);
+  margin-top: var(--buttonGroupMargin);
+}    
+
+.refreshButton {
+  background-color: blue;
+  color: white;
+}
+
+.lockButton {    
+  padding: 0px;    
+  color: var(--fontColor);/*font color*/
+  border-radius: 0px;
+  border: 0px;
+  width:  100px;
+  height: 25px;
+  margin-left:0;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  /*display: inline-block;*/
+  font-size: 8px;
+  outline-offset: 0px; 
+}
+.text {
+  vertical-align: top;
+  padding: 0px;
+  background-color: var(--buttonOn);
+  color: black;
+  border-radius: 0px;
+  border: 0px;
+  width:  25px;
+  height: var(--headerButtonHeight);
+  margin-left:0;
+  text-align: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  /*display: inline-block;*/
+  font-size: 8px;
+  /*color:var(--fontColor);/*font color*/
+  outline-offset: 4px;
+}
+.watttext {
+  background-color: var(--backgroundColor); /*var(--buttonOff);*/
+  border-radius: 0px;
+  color: white;
+  width: 160px;
+  height: 25px;
+  font-size: relative;
+}
+span {
+  color: white;
+  float: left;
+  cursor: pointer;
+  margin-left: 5px;
+  margin-right: 5px;
+  margin-top: 10px;
+ /* word-wrap: break-word;
+  word-break: break-all;*/
+}
+.headerspan {
+
+
+}
+.textForm {
+  vertical-align: top;
+  padding: 0px;
+  background-color: var(--buttonOn);
+  color: black;
+  border-radius: 0px;
+  border: 1px solid black;
+  width:  200px;
+  height: var(--headerButtonHeight);
+  margin-left:0;
+  text-align: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  /*display: inline-block;*/
+  font-size: 8px;
+  /*color:var(--fontColor);/*font color*/
+  outline-offset: 4px;
+}
+
+form {
+  overflow: hidden;
+}
+input {
+  float: center;
+  clear: both;
+  margin-left: 5px;
+  margin-right: 5px;
+  margin-top: 10px;
+}
+
+textarea {
+  float: left;
+  clear: both;
+  margin-left: 5px;
+  margin-right: 5px;
+  margin-top: 10px;
+  width: 300px;
+}
+

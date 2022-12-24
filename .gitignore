@@ -3,6 +3,6 @@ SMARTHOME2/
 SMARTHOME3/
 
 **/.hubitat
-**/.vscode/
+**/.vscode
 
-_SYNCAPP/
+**/_SYNCAPP

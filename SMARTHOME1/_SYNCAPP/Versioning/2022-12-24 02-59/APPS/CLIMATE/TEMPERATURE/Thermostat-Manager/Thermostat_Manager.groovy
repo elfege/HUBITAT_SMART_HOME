@@ -1731,7 +1731,8 @@ def mainloop(source){
                     def critical = criticalcold ? criticalcold : 65
                     if(thermostat.currentValue("temperature") < critical) 
                     {
-                        atomicState.override = false
+                        atomicState.override = false // cancel if it gets too cold
+                        atomicState.antifreeze = true
                     }
                     return
                 }
@@ -1780,7 +1781,7 @@ def mainloop(source){
 
         /********************** ANTI FREEZE SAFETY TESTS *************************/
         // first make sure dimmer is within safe parameters. Accidental modifications with Alexa or Siri can make it problematic...         
-        def Crit = criticalcold ? criticalcold : 70
+        def Crit = criticalcold ? criticalcold : 65
         if(dimmer?.currentValue("level") <= Crit - 1 && !simpleModeActive)
         {
             def safeVal = criticalcold && criticalhot ? (criticalcold + criticalhot) / 2 : 72

@@ -1262,6 +1262,9 @@ def modeChangeHandler(evt){
 
     atomicState.dontcheckthermstateCount = 0
 
+    // log.debug """
+    // location.mode in restricted ? ${location.mode} in ${restricted} ? ---------------------
+    // """
     if(location.mode in restricted)
     {
         logtrace "$thermostat set to $restrictedThermMode due to restricted mode"
@@ -1345,6 +1348,7 @@ def motionHandler(evt){
     if(!atomicState.paused){
         if(location.mode in restricted){
             descriptionText "location in restricted mode, doing nothing"
+            
             return
         } 
         atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
@@ -1361,6 +1365,12 @@ def temperatureHandler(evt){
     if(!atomicState.paused){
         if(location.mode in restricted){
             descriptionText "location in restricted mode, doing nothing"
+             def critical = criticalcold ? criticalcold : 65
+                    if(thermostat.currentValue("temperature") < critical) 
+                    {
+                        atomicState.override = false // cancel if it gets too cold
+                        atomicState.antifreeze = true
+                    }
             return
         } 
         logging("$evt.device returns ${evt.value}F")

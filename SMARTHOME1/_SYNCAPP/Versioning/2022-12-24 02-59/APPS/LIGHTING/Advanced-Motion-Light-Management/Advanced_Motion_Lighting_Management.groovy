@@ -223,10 +223,10 @@ releasable ?    $releasable
 
             if(powerswitch && switches)
             {
-                def text = "Control a separate switch under certain conditions and only after turning off ${switches.join(", ")} and before turning them on. This can be usefull to shut down a power source that powers the lights switches themselves. Make sure, though, that you apply this option only if $switches are LAN devices. Powering off the source of a zigbee a zwave device will seriously damage your mesh network and render your hub unstable"
+                def text = "Control a separate switch under certain conditions and only after turning off $switches and before turning them on. This can be usefull to shut down a power source that powers the lights switches themselves. Make sure, though, that you apply this option only if $switches are LAN devices. Powering off the source of a zigbee a zwave device will seriously damage your mesh network and render your hub unstable"
                 paragraph formatText(text, "white", "red")
 
-                input "waitForStatus", "bool", title: "Turn off $powerswitch only when ${switches.join(", ")} ${switches.size()>1 ? "are":"is"} returning a specific state", description:"type status value", submitOnChange:true
+                input "waitForStatus", "bool", title: "Turn off $powerswitch only when $switches ${switches.size()>1 ? "are":"is"} returning a specific state", description:"type status value", submitOnChange:true
                 if(waitForStatus)
                 {
                     input "switchAttribute", "text", title: "state attribute name as string", defaultValue:"switch"
@@ -239,7 +239,7 @@ releasable ?    $releasable
             input "contacts", "capability.contactSensor", title: "Use contact sensors to trigger these lights", multiple:true, required: false, submitOnChange: true 
             if(contacts)
             {
-                input "switchOnWithContactOnly", "bool", title: "Turn back on ${switches.join(", ")}  only when one of these contacts opens", submitOnChange:true
+                input "switchOnWithContactOnly", "bool", title: "Turn $switches back on only when one of these contacts has been opened", submitOnChange:true
             }
 
             def switchesWithDimCap = switches.findAll{it.hasCapability("Switch Level")}
@@ -630,8 +630,7 @@ boolean restrictedTime(){
             log.debug "start < end ? ${start < end} || start > end ${start > end}"
             log.debug "currTime <= end ${currTime <= end} || currTime >= start ${currTime >= start}" 
             
-            result = start < end ? currTime >= start && currTime <= end : currTime <= end || currTime >= start
-            if(result) break
+            return start < end ? currTime >= start && currTime <= end : currTime <= end || currTime >= start
         }
     }
     log.debug "restricted time returns $result"

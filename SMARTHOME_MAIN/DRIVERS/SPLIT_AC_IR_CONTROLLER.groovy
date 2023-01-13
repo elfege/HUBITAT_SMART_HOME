@@ -83,7 +83,7 @@ def parse(String description) {
     state.lastEventName = state.lastEventName ? state.lastEventName : ""
     state.lastEventValue = state.lastEventValue ? state.lastEventValue : ""
 
-    if(enablelogging == true && now() - state.enableLoggingTime > 30 * 60 * 1000)
+    if(enablelogging && now() - state.enableLoggingTime > 30 * 60 * 1000)
     {
         disablelogging()
     }
@@ -107,9 +107,10 @@ def parse(String description) {
         def parts = bodyString.split(" ")
         def name  = parts.length > 0 ? parts[0].trim() : null
         def value = parts.length > 1 ? parts[1].trim() : null
-        boolean isStateChanged = value != state.lastEventValue || name != state.lastEventName
+        
+        boolean isStateChanged = false
 
-        def timeThreshold = 60000
+        def timeThreshold = 2000
 
         if(now() - state.lastEvent > timeThreshold || isStateChanged || state.refreshRequest) 
         {
@@ -147,7 +148,7 @@ def sendEthernet(message) {
 // handle commands
 def on() {
 
-    sendEvent(name: "switch", value: "on") // event sent by ESP32
+    //sendEvent(name: "switch", value: "on") // event sent by ESP
     logging("Executing 'switch on'")
 
     sendEthernet("on")
@@ -155,10 +156,10 @@ def on() {
 }
 def off() {
 
-    sendEvent(name: "switch", value: "off") // event sent by ESP32
+    //sendEvent(name: "switch", value: "off") // event sent by ESP
 
     logging("Executing 'thermostatMode off'")
-    sendEvent(name: "switch", value:"off")
+    //sendEvent(name: "switch", value:"off")
     state.currentState = "off"
     sendEthernet("off")
 }
@@ -185,13 +186,13 @@ def setThermostatMode(String value) {
     sendEthernet(value)
 }
 def fanOn() {
-    sendEvent(name:"thermostatFanMode", value:"on")
+    //sendEvent(name:"thermostatFanMode", value:"on")
     logging("Executing 'fan on'")    
     sendEthernet("fanOn")
 }
 def fanAuto(){
     logging("Executing 'fan auto'")
-    sendEvent(name:"thermostatFanMode", value:"auto")
+    //sendEvent(name:"thermostatFanMode", value:"auto")
     sendEthernet("fanAuto")
 }  
 
@@ -237,8 +238,8 @@ def setHeatingSetpoint(cmd) {
 
     logging("HEATING")
     state.lastHeatSetpoint = cmd.toInteger()
-    sendEvent(name: "switch", value: "on")
-    sendEvent(name: "thermostatSetpoint", value: cmd)
+    //sendEvent(name: "switch", value: "on")
+    //sendEvent(name: "thermostatSetpoint", value: cmd)
     sendEthernet("setHeatingSetpoint${cmd.toInteger()}") // will effectively change on the controller if and only if current mode correspond
 
 }
@@ -249,11 +250,11 @@ def setCoolingSetpoint(cmd) {
 
 
     logging("COOLING")
-       sendEvent(name: "coolingSetpoint", value: cmd) // event should be triggered by device's feedback
+       //sendEvent(name: "coolingSetpoint", value: cmd) // event should be triggered by device's feedback
 
     state.lastCoolSetpoint = cmd.toInteger()
-    sendEvent(name: "switch", value: "on")
-    sendEvent(name: "thermostatSetpoint", value: cmd)
+    //sendEvent(name: "switch", value: "on")
+    //sendEvent(name: "thermostatSetpoint", value: cmd)
     sendEthernet("setCoolSetpoint${cmd.toString()}")
 
 }
@@ -262,7 +263,7 @@ def cool() {
     // if(state.currentState != "cool"){
     logging("Executing 'cool'")
     //
-    sendEvent(name: "thermostatMode", value: "cool")// event sent by ESP32
+    //sendEvent(name: "thermostatMode", value: "cool")// event sent by ESP32
     //
     state.currentState = "cool"
     sendEthernet("cool")
@@ -274,7 +275,7 @@ def heat() {
     //if(state.currentState != "heat"){
     logging("Executing 'heat'")
     //
-    sendEvent(name: "thermostatMode", value: "heat") // event sent by ESP32
+    //sendEvent(name: "thermostatMode", value: "heat") // event sent by ESP32
     //
     state.currentState = "heat"
     sendEthernet("heat")
@@ -283,33 +284,33 @@ def heat() {
 def auto() {
     logging("Executing 'auto'")
     //
-    sendEvent(name: "switch", value: "on") // event sent by ESP32
+    //sendEvent(name: "switch", value: "on") // event sent by ESP32
     //
-    sendEvent(name: "thermostatMode", value: "auto")// event sent by ESP32
+    //sendEvent(name: "thermostatMode", value: "auto")// event sent by ESP32
     sendEthernet("auto")
 }
 
 def turbo() {
     logging("Executing 'turbo'")
-    sendEvent(name: "turbo", value: "true")
+    //sendEvent(name: "turbo", value: "true")
     sendEthernet("turbo")
 }
 def fanHigh() {
     logging("FAN HIGH CMD")
-    event sent by ESP32 sendEvent(name: "FANSPEED", value: "fanhigh")
-    sendEvent(name: "fanSpeed", value: "high")
+    event sent by ESP32 //sendEvent(name: "FANSPEED", value: "fanhigh")
+    //sendEvent(name: "fanSpeed", value: "high")
     sendEthernet("fanhigh")
 }
 def fanMed() {
     logging("FAN MED CMD")
-    event sent by ESP32 sendEvent(name: "FANSPEED", value: "fanmed")
-    sendEvent(name: "fanSpeed", value: "medium")
+    event sent by ESP32 //sendEvent(name: "FANSPEED", value: "fanmed")
+    //sendEvent(name: "fanSpeed", value: "medium")
     sendEthernet("fanmed")
 }
 def fanLow() {
-    log.debug("FAN LOW CMD")
+    logging("FAN LOW CMD")
 
-    sendEvent(name: "fanSpeed", value: "low")
+    //sendEvent(name: "fanSpeed", value: "low")
     sendEthernet("fanlow")
 }
 
@@ -355,7 +356,7 @@ def getTemperature(){
                 value = a.currentValue
             }
             logging "temperature = ${value}"
-            // logging "sendEvent(name: ${name}, value: $value)"
+            // logging "//sendEvent(name: ${name}, value: $value)"
     
             break // first index is last reported value by the device 
 
@@ -403,7 +404,7 @@ def getHumidity(){
                 value = a.currentValue
             }
             logging "humidity = ${value}"
-            // logging "sendEvent(name: ${name}, value: $value)"
+            // logging "//sendEvent(name: ${name}, value: $value)"
     
             break // first index is last reported value by the device 
 

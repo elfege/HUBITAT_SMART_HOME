@@ -148,6 +148,7 @@ def thermostats(){
             {
                 input "thermostatHeat", "capability.thermostat", title: "Select a thermostat used exclusively for heating", required:true
                 input"thermostatCool", "capability.thermostat", title: "Select a thermostat used exclusively for cooling", required: true
+                input "keep2ndThermOffAtAllTimes", "bool", title: "Keep the unused thermostat off at all times (if enabled, you can't use this thermostat for any other purpose, it'll be shut down within a minute after you turn it on when not in use by this app", defaultValue:True
             }
 
 
@@ -188,7 +189,7 @@ def thermostats(){
                 atomicState.pageRefresh += 1
                 if(atomicState.pageRefresh > 2 && offrequiredbyuser)
                 {
-                    paragraph formatText("Thermostat off when target temp is reached is mandatory with 'do not sent target temperatures', which you have enabled in the sections above", "white", "red")
+                    paragraph formatText("Thermostat off when target temp is reached is mandatory with 'do not send target temperatures', which you have enabled in the sections above", "white", "red")
                     atomicState.pageRefresh = 0
                 }
                 atomicState.fanCirculateAlways = atomicState.fanCirculateAlways != null ? atomicState.fanCirculateAlways : false
@@ -527,7 +528,7 @@ def comfortSettings(){
             }
             else
             {
-                if(nightModeButton) app.updateSetting("nightModeButton", [type:"capability", value:null])
+                if(nightModeButton) app.updateSetting("nightModeButton", [type:"capability", value:[]])
                 app.updateSetting("simpleModeTimeLimit", [type:"number", value:null])
                 app.updateSetting("allowWindowsInSimpleMode", [type:"bool", value:false])
                 app.updateSetting("setSpecialTemp", [type:"bool", value:false])
@@ -600,7 +601,7 @@ def windowsManagement(){
 
                     input "outsidetempwindowsH", "number", title: "Set a temperature below which it's ok to turn on $windows", required: true, submitOnChange: true
                     input "outsidetempwindowsL", "number", title: "Set a temperature below which it's NOT ok to turn on $windows", required: true, submitOnChange: true
-                    if(outsidetempwindowsH && outsidetempwindowsL)
+                    if(outsidetempwindowsH && outsidetempwindowsL != null) // for the rare case a user might set low to "0" - it'd be interpreted as boolean false
                     {
                         paragraph "If outside temperature is between ${outsidetempwindowsL}F & ${outsidetempwindowsH}F, $windows will be used to coold down your place instead of your AC"
 
@@ -764,7 +765,7 @@ def fanCirculation(){
                 {
                     def m = "You cannot use ${fanDimmer == dimmer ? "$dimmer" : "$fan"} for this operation"
                     paragraph formatText(m, "white", "red")
-                    app.updateSetting("fanDimmer", [type:"capability", value:null])
+                    app.updateSetting("fanDimmer", [type:"capability", value:[]])
 
                 }
                 else
@@ -827,7 +828,7 @@ def virtualThermostat(){
             def noIssue = true
             if(differentiateThermostatsHeatCool && ("${altThermostat}" == "${thermostatHeat}" || "${altThermostat}" == "${thermostatCool}"))
             {
-                log.warn "test"
+                // log.warn "test"
                 app.updateSetting("altThermostat", [type:"capability", value:[]])
                 def mess = "$altThermostat can't be used as your alternate thermostat because it's already selected in the 'dual thermostat' section"
                 paragraph formatText(mess, "red", "darkgray")
@@ -967,6 +968,13 @@ def operationConsistency(){
             if(!pw)
             {
                 input "dontcheckthermstate", "bool", title:"Do not check current thermostat's state before sending a command", defaultValue:false
+            }
+            if(differentiateThermostatsHeatCool && pw)
+            {
+                log.debug "pw = $pw must be off loaded from settings"
+                def text = "Sorry, this fail safe feature is not compatible with using two thermostats at the moment"
+                paragraph formatText(text, "white", "blue")
+                app.updateSetting("pw", [type:"capability", value:[]])
             }
         }
         section("Safety")
@@ -2016,8 +2024,9 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
 
             if((heatpumpConditionsTrue) || (tooMuchPower && devicePriority != "$thermostat"))
             {
-                if(thermostat.currentValue("thermostatMode") != "off" && !fanCirculateAlways)
+                if((thermostat.currentValue("thermostatMode") != "off" || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10)) && !fanCirculateAlways)
                 {
+                    atomicState.dontcheckthermstateCount += 1
                     if(okToTurnOff())
                     {
                         descriptionText "thermostat off 735h4ze6 heatpumpConditionsTrue = $heatpumpConditionsTrue"
@@ -2822,7 +2831,12 @@ def resetCmdForce(){
     atomicState.forceAttempts = 0   
 }
 def setDimmer(val){
-    log.warn "setDimmer $val"
+    
+
+    if(simpleModeIsActive()) return 
+
+    log.trace "setDimmer $val"
+
     if(!atomicState.setPointOverride)
     {
         if(dimmer)
@@ -3399,7 +3413,7 @@ atomicState.widerOpeningDone = $atomicState.widerOpeningDone
             }
         }
         else if(windows && !inWindowsModes){
-            descriptionText "outside of windows modes"
+            descriptionText "outside of windows modes (current mode:${location.mode}"
             if(someAreOpen && atomicState.openByApp) // && (inside > target + 2 || inside < target - 2 ))
             {
                 windows.off()
@@ -3458,8 +3472,11 @@ alwaysButNotWhenPowerSaving = $alwaysButNotWhenPowerSaving
         }
         else if(!ignoreMode || contactsAreOpen() || !Active() || offrequiredbyuser)
         {
-            descriptionText "Turning thermostat"
-            if(thermostat.currentValue("thermostatMode") != "off") thermostat.setThermostatMode("off") 
+            descriptionText "Turning off thermostat"
+            if(thermostat.currentValue("thermostatMode") != "off") 
+            {
+                thermostat.setThermostatMode("off") 
+            }
         }
     }
 }
@@ -3815,14 +3832,26 @@ simpleModeIsActive() = ${simpleModeIsActive()}
 
     if(differentiateThermostatsHeatCool)
     {
+        atomicState.keepOffAtAllTimesRun = atomicState.keepOffAtAllTimesRun == null ? 8 * 60 * 1000 : atomicState.keepOffAtAllTimesRun
         def neededThermostat = need1 == "cool" ? thermostatCool : thermostatHeat
         if(thermostat.id != neededThermostat.id)
         {
             log.warn "using $neededThermostat as ${need1 == "cool" ? "cooling unit" : "heating unit"} due to user's requested differenciation"
             app.updateSetting("thermostat", [type:"capability", value: neededThermostat])
+            atomicState.otherThermWasTurnedOff = false // reset this value so as to allow to turn off the other unit now that we swapped them
         }
         def remainsOff = need1 == "cool" ? thermostatHeat : thermostatCool
-        if(remainsOff.currentValue("thermostatMode") != "off") remainsOff.off()
+        if((remainsOff.currentValue("thermostatMode") != "off" || keep2ndThermOffAtAllTimes) && (!atomicState.otherThermWasTurnedOff || keep2ndThermOffAtAllTimes)) 
+        {
+            if(keep2ndThermOffAtAllTimes && now() - atomicState.keepOffAtAllTimesRun > 5 * 60 * 1000) { //prevent sending too many requests when user enabled this fail safe option
+                atomicState.keepOffAtAllTimesRun = now()
+                remainsOff.off()
+            }
+            else {
+                remainsOff.off()
+            }
+            atomicState.otherThermWasTurnedOff = true // allow user to manually turn this unit back on, since we won't use it here until weather changes
+        }
     }
 
     logging formatText("""

@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SMART HOME INTERFACE</title>  
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="initial-scale=1.0">
+  <meta name="viewport" content="maximum-scale=1.0">
+  <meta name="viewport" content="user-scalable=no">
+  <meta name="viewport" content="width=device-width">
+  <link rel="apple-touch-icon-precomposed" href="http://elfege.com/penrose.jpg">
+  <link rel="apple-touch-startup-image" href="http://elfege.com/penrose.jpg">
+
+  <style>
+    :root {
+      --buttonSize:90px;
+      --buttonFontSize:relative;
+      --fontSize:8px;
+      --fontColor:#131B2A;
+      --buttonColor:#A3E1D8;
+      --backgroundColor: #4D5F7F; //
+    }
+    body {
+      background: linear-gradient(45deg, #131B2A, #4D5F7F, #8D929A);
+      height: 100vh;
+      background-color:var(--backgroundColor);  // 002fa7 "international Klein blue"
+      opacity: 0.1;
+    }
+    table{
+      width:100%;
+      /*border: 5px solid grey;*/
+      padding: 0px;
+      text-align: center;
+      background-color:var(--backgroundColor);
+      opacity: 0.8;
+
+    }
+    tr, th, td {
+      border: 0px solid white;
+      border-left: 0px solid black
+      border-color:#ffffff;
+      background-color:var(--backgroundColor);
+      border-radius:25px;
+      font-size: var(--buttonFontSize);
+      /*border-image: url("") 30 stretch;*/
+      padding: 0px;
+      opacity: 0.5;
+    }
+    .innerTable {
+      style=border:0px;
+      border-radius:0px;
+      padding:0px;
+      opacity: 0.5;
+    }
+  h1 {
+    color: var(--fontColor); 
+  }
+  .buttonName {
+      color: var(--fontColor);
+      font-size: 30px;
+  }
+
+  h2 {
+    color:var(--fontColor);  
+  }
+  button {
+    /*background: url(http://elfege.com/penrose.jpg) no-repeat;*/
+    background-color: var(--buttonColor);
+    border-radius: 20px;
+    border: 0px;
+    width:  var(--buttonSize);
+    height: var(--buttonSize);
+    margin-left:0;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    /*display: inline-block;*/
+    font-size: var(--buttonFontSize);
+    color:var(--fontColor);/*font color*/
+    outline-offset: 4px;
+
+  }
+  button:hover {
+    background-color:var(--backgroundColor);
+    color: white;
+    border-radius: 20px;
+    transition-duration: 3s; 
+
+  }
+
+  .headerButton {
+    /*background: url(http://elfege.com/penrose.jpg) no-repeat;*/
+    background-color: var(--buttonColor);
+    border-radius: 2px;
+    border: 0px;
+    width:  70px;
+    height: 20px;
+    margin-left:0;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    /*display: inline-block;*/
+    font-size: 8px;
+    color:var(--fontColor);/*font color*/
+    outline-offset: 4px;
+
+  }
+  .lockButton {
+    /*background: url(http://elfege.com/penrose.jpg) no-repeat;*/
+    background-color: var(--buttonColor);
+    border-radius: 2px;
+    border: 0px;
+    width:  70px;
+    height: 20px;
+    margin-left:0;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    /*display: inline-block;*/
+    font-size: 8px;
+    color:var(--fontColor);/*font color*/
+    outline-offset: 4px;
+
+  }
+  .dropButton {
+    
+    background-color: #3498DB;
+    color: white;
+    padding: 16px;
+    border: none;
+    cursor: pointer;
+    width:  100px;
+    height: 16px;
+    margin-left:0;
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    color: black;
+    border-radius: 0px;
+  }
+  .dropButton:hover, .dropButton:focus {
+    background-color: #2980B9;
+    color: white;
+    border-radius: 0px;
+    transition-duration: 0.5s; 
+  }
+  .dropdown {
+    position: relative;
+    display: inline-block;
+  }
+
+  .dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f1f1f1;
+    min-width: 100px;
+    overflow: auto;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+  }
+
+  .dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+  }
+
+  .dropdown a:hover {background-color: #ddd;}
+
+  .show {display: block;}
+  .triangle-up {
+    background-color: #ffffff;
+    width: 0;
+    height: 0;
+    border-left: 25px solid transparent;
+    border-right: 25px solid transparent;
+    border-bottom: 50px solid var(--buttonColor);
+  }
+   .triangle-down {
+    background-color: #ffffff;
+    width: 0;
+    height: 0;
+    border-left: 25px solid transparent;
+    border-right: 25px solid transparent;
+    border-top: 50px solid var(--buttonColor);
+  }
+  .triangle-up:hover {
+    width: 0;
+    height: 0;
+    border-left: 25px solid transparent;
+    border-right: 25px solid transparent;
+    border-bottom: 50px solid #FAE454;
+  }
+  .triangle-down:hover {
+    width: 0;
+    height: 0;
+    border-left: 25px solid transparent;
+    border-right: 25px solid transparent;
+    border-top: 50px solid #FAE454;
+  }
+
+  .sliderButton{
+     width:var(--buttonSize);
+     height:20px;
+     margin-left:0;
+     text-align: center;
+     font-size: 10px;
+  }
+  iframe{
+    width: var(--buttonSize);
+    height: var(--buttonSize);
+    background: #B6EEE6;
+    transition: width 1s, height 1s;
+    border:0px;
+
+  }
+  iframe:hover{
+    width: 500px;
+    height: 100px;
+  }
+  .slidecontainer {
+    width: var(--buttonSize);
+  }
+
+  .slider {
+    -webkit-appearance: none;
+    width: var(--buttonSize);
+    height: 5px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.4;
+    font-size: var(--buttonFontSize);
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+  }
+
+  .slider:hover {
+    opacity: 1;
+  }
+
+  .slider::-webkit-slider-thumb { /*cursor*/
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 30%;
+    background: #04AA6D;
+    cursor: pointer;
+  }
+
+  .slider::-moz-range-thumb {
+    width: var(--buttonSize);
+    height: 25px;
+    background: #04AA6D;
+    cursor: pointer;
+  }
+  .sliderSpan{
+    font-size: 10px;
+    color: #4D76BA;
+    font-weight: bold;
+  }
+  
+
+  
+</style>  
+ <center>    
+  <h4>SMART HOME INTERFACE</h4>
+  <p></p> 
+  <SPAN>CURRENT MODE: <SPAN style="color:red" id="currentMode"></SPAN>
+  <p></p> 
+  <SPAN># of columns:</SPAN><input class="headerButton" type="text" id="buttonsPerRow" value="">
+  <button class="headerButton" onclick="defineButtonVar()">Submit</button>
+  <button class="headerButton" onclick="clearLocalStorage()">default (4)</button>
+ </center>  
+<body onload="init()">
+  <center>    
+    <table style="width:100%">
+      <tr>
+        <td>  <button class="headerButton" id="refreshALl" onclick="refreshAll()"> REFRESH </button></td>  
+      
+        <td>  <button class="headerButton" id="reload" onclick="location.reload()"> RELOAD </button></td>
+      
+        <td> <button class="headerButton" id="stopscript" onclick="clearAll(isRefreshing ? false : true)"> refreshing </button></td>
+      
+        <td><button class="headerButton" id="thermsotats" onclick="window.open('http://192.168.10.15/thermostats.html','_blank')"> Thermostats </button></td>
+        <!--<td><button class="headerButton" id="dimmersNlights" onclick="window.open('http://192.168.10.15/dimmers.html','_blank')";> Dimmers </button></td>-->
+        <td><button class="headerButton" id="home" onclick="window.open('http://192.168.10.15','_blank')";> HOME </button></td>
+     
+    </tr>
+  </table>  
+  <div id="locks"></div>
+  <div id="buttons"></div>
+  <div id="dimmers"></div>
+  <div id="thermostats"></div>
+  <div id="lanDevices"></div>
+</center>
+</body>
+
+<script>
+  /***************************************CUSTOMIZABLE SECTION*****************************/
+//ADD YOUR NEW ACCESS TOKEN HERE AS SUCH : "access_token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+// YOU WILL FIND IT IN HUBITAT'S "Maker API" app.
+var access_token = "access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd";
+var ip = "192.168.10.69"
+
+//ADD YOU APP NUMBER // YOU'LL FIND IT IN THE URL TEMPLATES PROVIDED BY THE APP
+var appNumber = "1348";
+
+/// set to false if you want to build a regular tile 
+// set to true if your device has its own web server html interface (must fit a 500x200 px (width x heigth) window)
+// in iFrame mode the tile will expand with "mouse hover" and shrink back once released
+var useIframe = true;
+
+// ADD SOME LAN DEVICES IP's // YOU CAN ADD AS MANY devices/capabilities AS YOU WISH, providing you respect the exact same terminology i.e. "lanDevice[number]"
+var lanDevice0 = "192.168.10.203"; var cpability0 = ["Switch","SwitchLevel","Stop","Contact"]; //capabilities not needed with Iframe     
+var lanDevice1 = "192.168.10.204"; var cpability1 = ["Switch","SwitchLevel","Stop","Contact"];     
+var lanDevice2 = "192.168.10.205"; var cpability2 = ["Switch","SwitchLevel","Stop","Contact"];        
+var lanDevice3 = "192.168.10.206"; var cpability3 = ["Switch","SwitchLevel","Stop","Contact"];             
+var lanDevice4 = "192.168.10.207"; var cpability4 = ["Switch","SwitchLevel","Stop","Contact"];           
+var lanDevice5 = "";
+var lanDevice6 = "";
+var lanDevice7 = "";
+var lanDevice8 = "";
+var lanDevice9 = "";
+var lanDevice10 = "";
+
+var refreshInterval = 5000; // you may need to modify this value. Beware of ressources. Too low of a value can render your 
+// page and browser unstable. 
+var max = defineButtonVar(); //  number of buttons per row
+
+/****************DO NOT MODIFY ANYTHING BELOW THIS LINE!**************************/
+
+
+if (window.navigator.userAgent.indexOf('iPhone') != -1) {
+  if (window.navigator.standalone == true) {
+
+  }else{
+    alert("Tap the + button and choose 'Add to Home Screen'");
+  }
+}else{
+  //normal browser, set a time limit to refresh()
+  setTimeout(function(){ clearAll(true); }, 1 * 3600 * 1000); // clear all intervals after 1 hour
+  //console.log("running sliderEventListener in 5000ms");
+}
+
+var interval1 = setInterval(function(){refreshAll();}, refreshInterval); // set interval refresh
+
+function init(){
+
+  console.log ("page initialization..."); 
+  //getAllDevices();
+  buildButtons();
+  //sliderEventListener();
+  setTimeout(function(){refreshAll();}, 500);    
+  setTimeout(function(){sliderEventListener();}, 5000); // must be called last for db to be updated
+  console.log("INITIALIZATION DONE");  
+}
+
+function defineButtonVar() 
+{
+
+  var newVar = document.getElementById("buttonsPerRow").value;
+  //console.log("newVar = "+newVar)
+  var status = newVar == ""
+  //console.log("newVar true/false ? "+status)
+  if(newVar == "") // first boot on the device (computer or phone)
+  {
+    newVar = window.localStorage.getItem('butPerRow'); // check if there's a stored value
+    console.log("newVar local = "+newVar)
+    var status2 = newVar == null
+    //console.log("newVar status2 ? "+status2)
+    if(newVar == null)
+    {
+      console.log("4 buttons per row")
+      return 4
+    }
+    else 
+    {
+
+       var newVarInt = parseInt(newVar) // stuck here, returns NaN... // found the solution: must be parsed as int before storage!
+       console.log("returning user's stored value:"+newVarInt)
+       return newVarInt
+    }
+  }
+  else // this is a user custom request 
+  {
+    newVarStored = parseInt(newVar);
+    window.localStorage.setItem('butPerRow', newVarStored); // store the value on local storage
+  }
+  location.reload()
+}
+function clearLocalStorage()
+{
+  window.localStorage.clear();
+  console.log("data cleared");
+  location.reload();
+}
+
+var maxDimmers = max; // don't change this value
+var cmdLevel = "setLevel"
+var cmdSwitch = "toggle";
+var cmdLock = "lockToggle"
+var id = ""; 
+
+var isRefreshing = false;
+var listOfDevicesURL = "http://"+ip+"/apps/api/"+appNumber+"/devices/all?"+access_token;
+var listOfModes = "http://"+ip+"/apps/api/"+appNumber+"/modes?/all?"+access_token;
+
+var allDevices = getAllDevices(); // will be replaced by allDevicesLabelsSorted
+var allthermostats = []
+var allthermostatsNames = []
+//console.log(JSON.stringify(allDevices));
+
+var listString = "";
+//var xmlhttp = new XMLHttpRequest();
+var sliderId = "sliderId"; // this var needs to be public
+var nSId = 0; // this number needs to be public
+var spanIdList = [] // this value must be public, will be updated here with nSId number
+var allDevicesLabelsSorted = [];
+var buttonOff = "#A3E1D8"
+var buttonOn = "#EFF700" 
+
+ function visitPage(url){
+        window.open=url;
+    }
+var dimmerList = []
+var lockList = []
+
+function getAllDevices()
+{
+  //console.log("getAllDevices() URL = "+listOfDevicesURL)
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.open("GET", listOfDevicesURL, true);
+  xmlhttp.send();
+
+  xmlhttp.onreadystatechange = function() {
+
+    if (this.readyState == 4 && this.status == 200) {
+
+      //console.log("qualifying content");
+      allDevices = JSON.parse(this.responseText);
+      allDevices = allDevices.sort(); // useless as such devices being numbers
+    };
+  };
+}
+function getMode()
+{
+  var xmlhttp = new XMLHttpRequest();
+  var listOfModesURL = "http://"+ip+"/apps/api/"+appNumber+"/modes?"+access_token
+  var listOfModes = ""
+  //console.log("http://"+ip+"/apps/api/"+appNumber+"/modes?"+access_token)
+  //"http://"+ip+"/apps/api/1348/modes?access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd"
+  xmlhttp.onreadystatechange = function() 
+  {
+    if (this.readyState == 4 && this.status == 200) 
+    {
+      var listOfModes = JSON.parse(this.responseText);
+        //console.log("list of modes: "+JSON.stringify(listOfModes))
+        var currentMode = "";
+        var s = listOfModes.length
+        
+        for(var i = 0;i<s;i++) // find the active:true value 
+        {
+          var entry =  listOfModes[i]
+          //console.log ("entry: "+JSON.stringify(entry))
+
+         if(entry.active == true)
+         {
+          currentMode = entry.name.toUpperCase()
+          //console.log("Current Mode is:"+entry.name)
+        }
+      }
+      if(currentMode == "")
+      {
+        currentMode = "error"
+      }
+      document.getElementById("currentMode").innerHTML = currentMode
+    }
+  };
+  xmlhttp.open("GET", listOfModesURL, true);
+  xmlhttp.send();
+}
+function refreshAll()
+{
+
+  //the list of all the devices, which was created last time the page was loaded
+
+  // iterate recent events request for each device
+  var s = allDevicesLabelsSorted.length;
+  //alert(allDevicesLabelsSorted);
+  //console.log("********************* LIST SIZE: "+s)
+     
+  var lasti = i;  
+  var device = "";
+  var deviceId = "";
+
+  for (var i = 0; i < s ; i++) 
+  {
+
+    //get the device id from the public var allDevicesLabelsSorted created when the page loaded
+    deviceLabel = allDevicesLabelsSorted[i][0];
+    deviceId = allDevicesLabelsSorted[i][1]; //listOfDevicesURL returns ONLY id, name, label and type. 
+    //console.log ("///////////////// device_id = "+deviceId)
+
+    // now use this id to get last recent events for this specific device
+    // NOT GOOD CAN RETURN OTHER EVENTS THAN ON/OFF OR LEVEL url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+deviceId+"/events?"+access_token; // recent events URL where id is spelled "device_id"
+    //"http://"+ip+"/apps/api/"+appNumber+"/devices/2213/events?"+access_token
+
+    url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+deviceId+"?"+access_token;
+    //http://"+ip+"/apps/api/"+appNumber+"/devices/1956? +access_token     
+    var xmlhttp = new XMLHttpRequest();
+    
+    var value = "";    
+
+    xmlhttp.onreadystatechange = function() 
+    {
+
+      if (this.readyState == 4 && this.status == 200) 
+      {
+        var myObj = JSON.parse(this.responseText);
+        value = myObj.attributes[0].currentValue;
+        //console.log ("parse myObj = "+myObj.id+" iteration #"+i+" value="+value);
+
+        var initialValue = value;
+        var ID = myObj.id; 
+        var newId = "";
+        //console.log(myObj.label+" "+"("+myObj.id+") is currently : "+value);
+
+      
+          var a = 0; 
+          var size = myObj.attributes.length;
+          ////console.log(myObj.label+" ATTRIBUTES = "+size);
+
+          for(a=0; a < size ; a++)// try all indexes until attribute's name is "level"
+          { 
+
+            value = myObj.attributes[a].currentValue // get the current value as "on" or "off" for this index
+
+            if(myObj.attributes[a].name == "level") // but first check for a value that might be a level value
+            {
+              ////console.log("LEVEL FOUND for "+myObj.label+"="+value);
+              refreshSlider(myObj.id, value, myObj.label); //myObj.label parameter is for debug purpose only here
+              // slider and span values will be updated by refreshSlider (because we must correspond slider obj to span obj)
+
+              // we want every slider tile to also be an on/off button. Each such button has the id = id+"button" 
+              // so we need to reconstruct this id name here for proper refresh 
+              newId = myObj.id+"button";
+            }
+          }
+         
+         
+         if(value != "on" && value != "off")// if the value found in this iteration is nor on nor off, look for it, even if it's a dimmer
+          { 
+            a = 0;
+            for(a=0; a < size ; a++) 
+            {
+              // if no level attribute was found, continue unitl you get on/off att.
+              // if we didn't find what we were looking for, it could be something else than a dimmer
+              // returning values at the same index as a usual switch that are not switch values   
+
+              var newValue = myObj.attributes[a].currentValue
+              //console.log("RefreshALL device name: "+myObj.label+" value found: "+newValue);
+              if(newValue == "on" || newValue == "off") //&& myObj.attributes[a].name != "level")
+              {
+                value = newValue;
+                if(newId.length != 0) // if it's a dimmer-switch
+                {
+                 //console.log("newValue = "+newValue+" device Name = "+myObj.label+" myObj.id = "+myObj.id+" newId = "+newId+" newId.length = "+newId.length);
+                 //console.log("Name = "+myObj.label+"newId = "+newId+", value = "+value)
+                  document.getElementById(newId).innerHTML = value;
+                }
+                
+                //break;// we found what we wanted         
+              }
+              // if no break, it means we're dealing with a device that has its on/off attributes stored at a different index
+            }
+          }
+        
+        var NAME = myObj.name
+        var NAMELowerCase = NAME.toLowerCase()
+        //console.log("nameLowerCase = "+NAMELowerCase)
+        if(NAMELowerCase.includes("thermostat"))
+        {
+          //console.log("**************isgnoring data for "+NAMELowerCase)
+        }
+        else 
+        {
+          ID = newId.length != 0 ? newId : ID; 
+          //document.getElementById(ID).innerHTML = value; // on / off value updated only for dimmers
+          var calledBy = "refreshAll iteration "+i;
+          updateButtonColor(ID, value, NAME, calledBy); // only for simple buttons, slider buttons color being handled by event 
+        }
+      }
+    };
+    xmlhttp.open("GET", url, true);
+    xmlhttp.send();
+  }
+  refreshThermsotats();
+  refreshLocks();
+  getMode();
+};
+
+// get device value
+//Use the XMLHttpRequest to get data from the server:
+function getData(id, customID)
+{
+
+  console.log("getting data for id:"+id);
+  // this url gets the device id's datasheet with attributes
+  url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"?"+access_token;    
+  var xmlhttp = new XMLHttpRequest();
+  //var listOfCapabilities = [];
+  var value = "";
+
+
+  xmlhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      var myObj = JSON.parse(this.responseText);
+      value = myObj.attributes[0].currentValue
+        if(myObj.type.includes("Aeotec"))
+        {
+          // old bad Z-wave shit, needs refresh
+          toggleDevice("refresh", id, true)  
+        }
+
+        console.log(myObj.label+" is : "+value)     
+        if(value != "on" && value != "off")
+        {
+          //console.log("*************************");
+          var a = 0; 
+          var size = myObj.attributes.length;
+
+        for(var a=0; a < size ; a++){ // try all indexes until currentValue returns either on or off 
+
+          value = myObj.attributes[a].currentValue
+
+          if(value == "on" || value == "off")
+          {
+            //console.log("////////////// FOUND VALUE = "+value);
+            break;
+          }
+        }
+      }
+      if(customID)
+      {
+        // reconstruct the custom ID
+        id = id+"button";        
+        //console.log("updating "+myObj.label+"'s value")
+        document.getElementById(id).innerHTML = value; // we update the value onto the button only when it's a dimmer
+      }
+      // when not a dimmer, the on/off value isn't updated so buttons keep their names
+      var calledBy = "getData 524"
+      updateButtonColor(id,value, myObj.label, calledBy); 
+    }
+  };
+  xmlhttp.open("GET", url, true);
+  xmlhttp.send();
+  ////console.log("getData returns: "+value)
+  //return value;
+};
+function updateButtonColor(id, value, label, calledBy)
+{
+  //console.log("device id:"+id+" is:"+value+" , calledBy:"+calledBy);
+
+  if(value == "on" || value == "unlocked")
+  {
+    document.getElementById(id).style.background="#F5DC85" // color when on and no mouse hover
+    //document.getElementById(id).style.hover="#7D7E59" 
+    //document.getElementById(id).style.background=buttonOn 
+
+    var style = document.createElement('style');    
+    var cssHover = 'button:hover{ background-color: #C6C653 }'; // mouse hover
+
+    if (style.styleSheet) {
+      style.styleSheet.cssText = cssHover;
+    } else {
+      style.appendChild(document.createTextNode(cssHover));
+    }
+  }
+  else if(value == "off" || value == null || value == "locked" ) // if device has no value yet we still need to create its style so it can be appended below
+  {
+    document.getElementById(id).style="#A3E1D8"; //color when off and no mouse hover
+
+    var cssHover = 'button:hover{ background-color: #C6C653 }'; //mouse hover
+    var style = document.createElement('style');
+
+    if (style.styleSheet) {
+      style.styleSheet.cssText = cssHover;
+    } else {
+      style.appendChild(document.createTextNode(cssHover));
+    }
+    //document.getElementsByTagName('button')[0].appendChild(style);
+  }
+
+  //console.log(label+"'s value = "+value)
+
+  //document.getElementsByTagName('button')[0].appendChild(style);
+  if(style == undefined)  
+    {
+      console.log("label="+label+" id="+id+" style="+style)
+      console.log("STYLE UPDATE STOPPED!")
+      return 
+    }
+  
+      document.getElementById(id).appendChild(style);
+
+    if(id.includes("button")) // if it's a button attached to a slider, make sure to restore its original smaller style size
+    {
+      document.getElementById(id).style = "with:var(--buttonSize);"
+      document.getElementById(id).style = "height:25px;"
+      if(value == "off")
+      {
+        document.getElementById(id).style.background = "#A3E1D8" // apply the "off" color too
+      }
+      else if(value == "on")
+      {
+        document.getElementById(id).style.background = "#F5DC85" // apply the "on" color too
+      }
+    }
+}
+
+function ValidateIPaddress(ipaddress) 
+{  
+  if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(ipaddress)) {  
+    return (true)  
+  }  
+  //console.log("NOT AN IP ADDRESS");
+  return (false);
+};
+function buildButtons()
+{
+  console.log("buildButtons()")
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.onreadystatechange = function() 
+  {
+    if (this.readyState == 4 && this.status == 200) 
+    {
+
+      //console.log("qualifying content");
+      allDevices = JSON.parse(this.responseText);
+      //allDevices = allDevices.sort(); // useless as such devices being numbers
+      var s = allDevices.length;
+          
+      var lasti = i;  
+      var device = "";
+      var deviceId = "";
+      var html = "";
+      var deviceCapabilities = [];
+      var x = "";
+      var someDimmers = false
+
+      var labelSorted = "";
+      var idSorted    = "";
+      var deviceCapabilitiesSorted = "";
+
+      //console.log("allDevices = "+allDevices);
+
+      //create a sorted list of all devices labels
+      var allDevicesLabels = [];
+      for (var i = 0; i < s ; i++) 
+      {
+        labelSorted = allDevices[i].label;
+        idSorted    = allDevices[i].id;
+        deviceCapabilitiesSorted = allDevices[i].capabilities; // is an array
+        allDevicesLabels.push([labelSorted,idSorted,deviceCapabilitiesSorted]);
+      }
+      allDevicesLabelsSorted = allDevicesLabels.sort(); // update global variable with this array
+      //console.log("allDevicesLabelsSorted = "+allDevicesLabelsSorted);
+
+      x += "<table style='width:100%' border:1px><tr>"
+      s = allDevicesLabelsSorted.length; // should be same size but never mind... 
+      i = 0;
+      
+      var deviceCount = 0 // we need a sepater iteration counter here as to not affect the layout when the device is a dimmer
+      for (i=0; i < s ; i++) 
+      {
+
+
+        // listString += allDevices[i].name;
+        deviceLabel = allDevicesLabelsSorted[i][0]; // don't use allDevicesLabels here, not in same order as allDevicesLabelsSorted
+        deviceLabel = deviceLabel.replace("on Home 1", "");
+        deviceLabel = deviceLabel.replace("on Home 3", "");
+        deviceLabel = deviceLabel.replace("temperature", "temp.")
+        deviceLabel = deviceLabel.replace("Temperature", "temp.")
+
+        if(deviceLabel.length > 14)
+        {
+         deviceLabel =  deviceLabel.substr(0, 14);
+        }
+        deviceId = allDevicesLabelsSorted[i][1]; //listOfDevicesURL returns ONLY id, name, label and type. 
+
+        ////console.log("device id requested = "+deviceId);
+        // so in order to get capabilities we need to use a different function using the proper url
+        deviceCapabilities = allDevicesLabelsSorted[i][2];
+        ////console.log("deviceCapabilities = " + deviceCapabilities)
+        //console.log("creating button : "+deviceLabel+" id:"+deviceId);
+
+        id = deviceId; 
+        
+        if(deviceCapabilities.find(checkLock))
+        {
+          someLocks = true // confirm existence of locks for later construction
+          lockList.push([deviceId, deviceLabel])
+        }
+        else if(deviceCapabilities.find(checkDimmer)) // find SwitchLevel in capabilities 
+        {
+          someDimmers = true // confirm existence of dimmers for later construction
+          //console.log("someDimmers set to "+someDimmers)
+          nSId++;
+          var spanSliderId = "spanId"+nSId; // create a unique ID for this slider value text span
+          deviceIdLevelButton = deviceId+"button"; // id of the corresponding on/off button of the dimmer
+         
+          spanIdList.push([deviceId, spanSliderId]); // public list updated for later slider.value update
+          dimmerList.push([deviceId, deviceLabel, spanSliderId,deviceIdLevelButton])
+
+        }
+        else if(deviceCapabilities.find(checkSwitch))
+        {
+          deviceCount++
+
+          x += `
+          <th>
+            <button id='`+deviceId+`'onclick='toggleDevice(cmdSwitch, id, true)'>`+deviceLabel.toLowerCase()+`</button>
+          </th>`;           
+        }
+        else
+        {
+          console.log(deviceLabel+" is nor a switch nor a dimmer...")
+        }   
+        if(deviceCount==max || deviceCount==lasti+max) // new row every 4 columns
+        {
+          lasti = deviceCount;
+          x += "</tr><tr>"; // new row and horizontal line
+        } 
+
+      }
+      x += "</tr></table>"
+      
+      document.getElementById("buttons").innerHTML = x;
+
+      if(someDimmers) // needs to be built separatelty so as to have different max number of objects per row
+      {
+       //console.log("some dimmers...")
+       x = buildDimmers(dimmerList, lasti=0, maxDimmers)
+       document.getElementById("dimmers").innerHTML = x;
+       
+      }
+      if(someLocks)
+      {
+       //console.log("some dimmers...")
+       x = buildLocks(lockList, lasti=0, max)
+       document.getElementById("locks").innerHTML = x;
+      }
+      
+    }
+  };
+  xmlhttp.open("GET", listOfDevicesURL, true);
+  xmlhttp.send();
+
+  //setTimeout(function(){buildLANdevices()}, 1000);
+  //setTimeout(function(){buildThermostats()}, 2000);
+  ////console.log("PAGE BUILT SUCCESSFULY spanIdList = "+localStorage.getItem("spanIdList"));
+};
+
+function buildDimmers(dimmerList, lasti, maxDimmers){
+  console.log("buildDimmers()")
+  var i = 0
+  var s = dimmerList.length
+  console.log("dimmerList length="+s)
+  var a = "<table style='width:100%' border:1px><tr>"
+  for(i=0;i<s;i++)
+  {
+    //dimmerList.push([deviceId, deviceLabel, spanSliderId,deviceIdLevelButton])
+    deviceId = dimmerList[i][0]
+    deviceLabel = dimmerList[i][1]
+    spanSliderId = dimmerList[i][2]
+    deviceIdLevelButton = dimmerList[i][3]
+
+    console.log("building dimmer #"+dimmerList[i][0])
+    a += `
+    <th>
+      <table>
+        <tr>
+          <SPAN class='sliderSpan'>`+deviceLabel.toUpperCase()+`</SPAN>
+          <div class='slidecontainer'>
+            </tr>
+            <tr>
+              <input type='range' min='0' max='100' step='1' id='`+deviceId+`' class='slider' onmouseup='setLevel(id, value)' onchange='setLevel(id, value)'>
+            </tr>
+            <tr>
+              <span id=`+spanSliderId+`></span> 
+              <p></p>
+            </tr>
+            <tr>
+          </div>
+          <button class="sliderButton" id=`+deviceIdLevelButton+` onclick='toggleDevice(cmdSwitch,id, true)'>`+deviceLabel.toLowerCase()+`</button>
+        </tr>
+      </table>
+    </th>`;
+  
+    if(i==(maxDimmers-1) || i==lasti+maxDimmers) // new row every 4 columns
+    {
+      lasti = i;
+      a += "</tr><tr>"; // new row and horizontal line
+    } 
+  }
+  a += "</tr></table>"
+
+  return a
+      
+}
+function buildLocks(lockList, lasti, maxLocks){
+  console.log("buildLocks()")
+  var i = 0
+  var s = lockList.length
+  //console.log("lockList length="+s)
+  //console.log("*************lockList = "+lockList)
+  var b = "<table style='width:100%' border:1px><tr>"
+  //"http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"/"+cmd+"?"+access_token;
+  //http://"+ip+"/apps/api/1348/devices/2519/lock?access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd
+  
+  for(i=0;i<s;i++)
+  {
+    deviceId = lockList[i][0]
+    deviceLabel = lockList[i][1]
+
+    
+    b += `
+    <th>
+      <table>
+        <tr>
+          <button class="lockButton" id='`+deviceId+`'onclick='toggleLock(cmdLock, id, true)'>LOCK</button>
+        </tr>
+      </table>
+    </th>`;             
+  }   
+  if(i==(maxLocks-1) || i==lasti+maxLocks) // new row every 4 columns
+  {
+    lasti = i;
+    b += "</tr><tr>"; // new row and horizontal line
+  } 
+  b += "</tr></table>"
+  return b   
+};
+
+function toggleLock(cmd, id)
+{
+  var value = lockState // get the last state
+  console.log("lock id:"+id+" is "+value)
+  if(value == null || value == undefined) 
+    {
+      console.log("REQUEST STOPPED")
+      return 
+    }
+  var lockCMD = value == "locked" ? "unlock" : "lock"
+  console.log("sending lock cmd: "+lockCMD)
+  var url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"/"+lockCMD+"?"+access_token;    
+  var xhttp = new XMLHttpRequest();
+  xhttp.open("GET", url, true);
+  xhttp.send();
+
+  setTimeout(function(){getLockState(id)}, 4000); // refresh the value in N seconds
+}
+
+function refreshLocks()
+{
+  var s = lockList.length
+  for(var i = 0; i<s; i++)
+  {
+    console.log("refreshing lock:"+lockList[i][0])
+    getLockState(lockList[i][0])
+  }
+}
+
+var lockState = ""
+function getLockState(id){
+  
+  url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"?"+access_token; 
+  //   http://"+ip+"/apps/api/1348/devices/2519?access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd; 
+  var xmlhttp = new XMLHttpRequest();
+  
+  var value = null
+
+  xmlhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      var myObj = JSON.parse(this.responseText);
+      var i = 0
+      var s = myObj.attributes.length
+      for(i=0;i<s;i++) // search for the "lock" attribute name
+      {
+        //console.log("myObj.attributes[i].name = "+myObj.attributes[i].name)
+        if(myObj.attributes[i].name == "lock")
+        {
+          value = myObj.attributes[i].currentValue 
+          //console.log("myObj.attributes[i].currentValue = "+myObj.attributes[i].currentValue)  
+          console.log("returning:"+value)
+          lockState = value 
+          document.getElementById(id).innerHTML = lockState; 
+        }
+      }
+    };
+  };
+  xmlhttp.open("GET", url, true);
+  xmlhttp.send();
+}
+function buildThermostats(){
+  console.log("buildThermostats()")
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.onreadystatechange = function() {
+
+    if (this.readyState == 4 && this.status == 200) {
+
+      //console.log("qualifying content");
+      allDevices = JSON.parse(this.responseText);
+      //allDevices = allDevices.sort(); // useless as such devices being numbers
+      var s = allDevices.length;
+         
+        
+      var device = "";
+      var deviceId = "";
+      var html = "";
+      var deviceCapabilities = [];
+      var x = "";
+
+      var labelSorted = "";
+      var idSorted    = "";
+      var deviceCapabilitiesSorted = "";
+
+      //console.log("allDevices = "+allDevices);
+
+      //create a sorted list of all devices labels
+      var allDevicesLabels = [];
+      for (var i = 0; i < s ; i++) 
+      {
+        labelSorted = allDevices[i].label;
+        idSorted    = allDevices[i].id;
+        deviceCapabilitiesSorted = allDevices[i].capabilities; // is an array
+        allDevicesLabels.push([labelSorted,idSorted,deviceCapabilitiesSorted]);
+      }
+      allDevicesLabelsSorted = allDevicesLabels.sort(); // update global variable with this array
+      //console.log("allDevicesLabelsSorted = "+allDevicesLabelsSorted);
+
+      x += "<table style='width:100%' border:1px><tr>"
+      s = allDevicesLabelsSorted.length; // should be same size but never mind... 
+      i = 0;
+      var maxThermPerRow = 1
+      var thermostatsCount = 0
+      var lastThermCount = 0
+      for (i=0; i < s ; i++) 
+      {
+
+        // listString += allDevices[i].name;
+        deviceLabel = allDevicesLabelsSorted[i][0]; // don't use allDevicesLabels here, not in same order as allDevicesLabelsSorted
+        deviceLabel = deviceLabel.replace("on Home 1", "");
+        deviceLabel = deviceLabel.replace("on Home 3", "");
+
+        if(deviceLabel.length > 25)
+        {
+         deviceLabel =  deviceLabel.substr(0, 25);
+        }
+        deviceId = allDevicesLabelsSorted[i][1]; //listOfDevicesURL returns ONLY id, name, label and type. 
+
+
+        ////console.log("device id requested = "+deviceId);
+        // so in order to get capabilities we need to use a different function using the proper url
+        deviceCapabilities = allDevicesLabelsSorted[i][2];
+        //console.log("deviceCapabilities = " + deviceCapabilities)
+        //console.log("creating button : "+deviceLabel+" id:"+deviceId);
+
+        id = deviceId; 
+        var up = "up"
+        var down = "down"
+        var cool = "cool"
+        var heat = "heat"
+        var auto = "auto"
+        var off  = "off"
+
+
+       if(deviceCapabilities.find(checkThermosat)) // find thermostat capability 
+        {  
+
+          thermostatsCount++
+          var deviceLabelLowerCase = deviceLabel.toLowerCase() 
+
+          if(deviceLabelLowerCase.includes("temperature"))
+          {
+            //not the device we want // unique to ELFEGE'S CONFIG, replace deviceLabel.includes("temperature") by "1=2" for your own usage or delete this condition
+          }
+          else
+          {
+          
+            allthermostats.push(deviceId)
+            allthermostatsNames.push([deviceId, deviceLabel])
+              //console.log("building "+deviceLabel)
+            var CUP = deviceId+"CUP"
+            var HUP = deviceId+"HUP"
+            
+            var CDOWN = deviceId+"CDOWN"
+            var HDOWN = deviceId+"HDOWN"
+            var TSP = deviceId+"thermostatSetpoint"
+            var CSP = deviceId+"coolingSetpoint"
+            var HSP = deviceId+"heatingSetpoint"
+            var currtemp = deviceId+"temperature"
+            var thermostatMode = deviceId+"thermostatMode"
+            var operatingMode = deviceId+"thermostatOperatingState"
+            var humidity = deviceId+"humidity"
+            var coolMode = deviceId+"coolMode"
+            var heatMode = deviceId+"heatMode"
+            var autoMode = deviceId+"autoMode"
+            var offMode  = deviceId+"offMode"
+          
+
+            console.log("building tag id: "+TSP)
+            console.log("building tag id: "+CSP)
+            console.log("building tag id: "+HSP)
+
+            x += `
+            <td>
+            <th class='innerTable'>
+              <table  class='innerTable' style='border: 1px solid black'>
+                <SPAN class='buttonName'>`+deviceLabelLowerCase+`</SPAN>
+                <tr>
+                  <td><span style='color:blue'>cooling<span></td>
+                  <td><table class='innerTable'>
+                        <tr class='innerTable'>
+                          <th class='innerTable'><span>temperature: </span><span id='`+currtemp+`'></span><span>°F</span></th>
+                          <th class='innerTable'><span>mode: </span><span id='`+thermostatMode+`'></span></th>
+                        </tr>
+                        <tr class='innerTable'>
+                          <th  class='innerTable'><span>state: </span><span id='`+operatingMode+`'></span></th>
+                          <th  class='innerTable'><span>humidity: </span><span id='`+humidity+`'></span><span>%</span></th>
+                        </tr>
+                        <tr>
+                          <th>
+                            <th>  <button style=width:100px;height:35px;font-size:12px id='`+coolMode+`'onclick='setThermostatMode(`+deviceId+`, id)'>COOL</button></th>
+                            <th>  <button style=width:100px;height:35px;font-size:12px id='`+heatMode+`'onclick='setThermostatMode(`+deviceId+`, id)'>HEAT</button></th>
+                            <th>  <button style=width:100px;height:35px;font-size:12px id='`+autoMode+`'onclick='setThermostatMode(`+deviceId+`, id)'>AUTO</button></th>
+                            <th>  <button style=width:100px;height:35px;font-size:12px id='`+offMode+`'onclick='setThermostatMode(`+deviceId+`, id)'>OFF</button></th>
+                          </th>
+                        </tr>
+                      </table>
+                  <td><span style='color:red'>heating<span></td>
+                </tr>             
+                <tr class='innerTable'>
+                  <td><center><div class='triangle-up' id='`+CUP+`' onclick='changeTemp(id, null)' ></div></center></td> <!--coolingSetpoint UP -->
+                  <td></td>
+                  <td><center><div class='triangle-up' id='`+HUP+`'onclick='changeTemp(id, null)' ></div></center></td> <!--heatingSetpoint UP -->
+                </tr>   
+                 <tr class='innerTable'>
+                  <td class='innerTable'><center><span id='`+CSP+`'>CoolSP</span></center></td> <!-- cooling setpoint numeric value -->
+                  <td class='innerTable'><center><SPAN id='`+TSP+`' class='buttonName'>TSP</SPAN></center></td> <!--TSP -->
+                  <td class='innerTable'><center><span id='`+HSP+`'>HeatSP</span></center></td> <!-- heating setpoint numeric value -->                
+                </tr>  
+                 <tr class='innerTable'>
+                  <td class='innerTable'><center><div class='triangle-down' id='`+CDOWN+`'DOWN onclick='changeTemp(id)' ></div></center></td> <!--coolingSetpoint DOWN -->
+                  <td class='innerTable'></td>
+                  <td class='innerTable'><center><div class='triangle-down' id='`+HDOWN+`'DOWN onclick='changeTemp(id)' ></div></center></td> <!--heatingSetpoint DOWN -->
+                </tr>     
+              </table>         
+            </th>
+            </td>
+            `;
+          }            
+        }
+        //if(thermostatsCount==(maxThermPerRow-1) || thermostatsCount==lastThermCount+max)
+        if(thermostatsCount == maxThermPerRow) // new row every n columns
+        {
+          //lastThermCount = thermostatsCount
+          thermostatsCount = 0
+          x += "</tr><tr>"; // new row
+        } 
+
+      }
+      x += "</tr></table>"
+      //alert(x);
+      document.getElementById("thermostats").innerHTML = x;
+      ////console.log("all devices = "+listString);
+    }
+  };
+  xmlhttp.open("GET", listOfDevicesURL, true);
+  xmlhttp.send();
+  
+
+  //setTimeout(function(){buildLANdevices()}, 2000);
+
+  ////console.log("PAGE BUILT SUCCESSFULY spanIdList = "+localStorage.getItem("spanIdList"));
+};
+function refreshThermsotats()
+{
+ 
+  //console.log("allthermostats = "+JSON.stringify(allthermostatsNames)) // 2D array [id:name]
+    
+  var s = allthermostats.length; // we use only the simple list of id's  here
+  for(var i=0;i<s;i++)
+  {
+
+    //console.log("loop "+i+"of"+s)
+    var iteration = 0;
+    var deviceNAME = allthermostatsNames[i][1]
+    //console.log("allthermostats:"+allthermostats)
+    //console.log("allthermostatsNames:"+allthermostatsNames)
+
+    //console.log("requesting refresh for:"+deviceNAME+" with id:"+allthermostats[i])
+    
+    //console.log("allthermostatsNames: "+allthermostatsNames)
+    //console.log("allthermostats: "+allthermostats)
+
+    var xmlhttp = new XMLHttpRequest();
+    updateThermHtml(allthermostats[i], deviceNAME, xmlhttp)
+    
+    
+  }
+}
+
+function setThermostatMode(deviceId, id) {
+
+  var cmd = id.replace("Mode", "")
+  cmd = cmd.replace(deviceId, "") // that leaves "cool" or "heat" or "auto"
+  console.log("-------- cmd = "+cmd)
+  
+  console.log("setThermostatMode")
+  console.log("device#"+deviceId+" "+cmd+" "+id);
+
+  //var url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"/setThermostatMode/"+cmd+"?"+access_token;   
+  var url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+deviceId+"/"+cmd+"?"+access_token;   
+  var xhttp = new XMLHttpRequest();
+  xhttp.open("GET", url, true);
+  xhttp.send();
+
+  refreshThermsotats();
+
+}
+
+function updateThermHtml(id, deviceNAME, xmlhttp)
+{
+  //console.log("received refresh request for:"+deviceNAME+" with id:"+id)
+
+  var tempValue = 0;
+  var thermostatSetpointValue = 0;
+  var coolingSetpointValue = 0;
+  var heatingSetpointValue = 0;
+  
+  var attributeName;
+  var deviceName;
+  var thermDeviceId;
+  var thermInfoURL = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"?"+access_token
+    //http://"+ip+"/apps/api/1348/devices/2528?access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd
+  var htmlIdCool = ""
+  var htmlIdHeat = ""
+  var htmlIdTSP = "" 
+  var htmlIdTM = ""
+  var htmlIdTOM = ""
+  var htmlIdHum = ""
+   //console.log("HTTPget for "+id)
+    
+    
+  xmlhttp.open("GET", thermInfoURL, true);
+  xmlhttp.send();
+
+    xmlhttp.onreadystatechange = function() 
+    {
+      if (this.readyState == 4 && this.status == 200) 
+      {
+        
+        var myObj = JSON.parse(this.responseText);
+        deviceName = myObj.name
+        thermDeviceId = myObj.id 
+        htmlIdCool = thermDeviceId+"coolingSetpoint"
+        htmlIdHeat = thermDeviceId+"heatingSetpoint"
+        htmlIdTSP = thermDeviceId+"thermostatSetpoint"
+        htmlIdTempValue = thermDeviceId+"temperature"
+        htmlIdTM = thermDeviceId+"thermostatMode"
+        htmlIdTOM = thermDeviceId+"thermostatOperatingState"
+        htmlIdHum = thermDeviceId+"humidity"
+
+        var si = myObj.attributes.length   
+        if(id == thermDeviceId) // not necessary, may delete later, old debug 
+        {
+          //console.log(deviceName+" === "+deviceNAME)
+          //console.log(thermDeviceId+" === "+id)
+
+          for(var iteration = 0; iteration<si; iteration++)
+          {
+            //console.log("loop "+i+"of"+s+" sub: "+iteration+"of"+si)
+
+            attributeName = myObj.attributes[iteration].name
+            //console.log(deviceName+" attributeName = "+attributeName+"("+iteration+")")
+
+            if(attributeName == "temperature")
+            {
+              tempValue = myObj.attributes[iteration].currentValue
+              document.getElementById(htmlIdTempValue).innerHTML = tempValue; 
+            }
+            if(attributeName == "coolingSetpoint")
+            {
+              coolingSetpointValue = myObj.attributes[iteration].currentValue    
+              //console.log("updating "+deviceName+": "+htmlIdCool+" coolingSetpointValue ="+coolingSetpointValue)
+              document.getElementById(htmlIdCool).innerHTML = coolingSetpointValue;    
+            }
+            if(attributeName == "heatingSetpoint")
+            {
+              heatingSetpointValue = myObj.attributes[iteration].currentValue
+              //console.log("updating "+deviceNAME+": "+htmlIdHeat+" heatingSetpointValue ="+heatingSetpointValue)
+              document.getElementById(htmlIdHeat).innerHTML = heatingSetpointValue; 
+            }
+            if(attributeName == "thermostatSetpoint")
+            {
+              thermostatSetpointValue = myObj.attributes[iteration].currentValue
+              //console.log("updating "+deviceNAME+": "+htmlIdTSP+" thermostatSetpointValue ="+thermostatSetpointValue)
+              document.getElementById(htmlIdTSP).innerHTML = thermostatSetpointValue
+            }
+            if(attributeName == "thermostatMode")
+            {
+              thermostatModeValue = myObj.attributes[iteration].currentValue
+              document.getElementById(htmlIdTM).innerHTML = thermostatModeValue
+            }
+            if(attributeName == "thermostatOperatingState")
+            {
+              thermostatOperatingStateValue = myObj.attributes[iteration].currentValue
+              document.getElementById(htmlIdTOM).innerHTML = thermostatOperatingStateValue
+            }
+            if(attributeName == "humidity")
+            {
+              humidityValue = myObj.attributes[iteration].currentValue
+              document.getElementById(htmlIdHum).innerHTML = humidityValue
+            }
+          }
+        }
+        else
+        {
+          console.log("WRONG ID! ------------- "+thermDeviceId+" != "+id)
+        }
+      };
+    };
+}
+function changeTemp(id, name)
+{
+  //console.log("thermo. id & thermCmd: "+id);
+
+  var thermCmd = id.includes("CUP") ? "raiseCoolingSetpoint" : id.includes("CDOWN") ? "lowerCoolingSetpoint" : id.includes("HUP") ? "raiseHeatingSetpoint" : id.includes("HDOWN") ? "lowerHeatingSetpoint" : "NO_COMMAND" 
+
+  
+    //console.log("thermCmd = "+thermCmd)
+
+  thermDeviceId = id.includes("CUP") ? id.replace("CUP", "") : id.includes("CDOWN") ? id.replace("CDOWN", "") : id.includes("HUP") ? id.replace("HUP", "") : id.includes("HDOWN") ? id.replace("HDOWN", "") : "REFRESH_REQUEST";
+  
+  //console.log("command request for: "+thermDeviceId)
+  
+  // get the current setpoint using device info url
+  var thermInfoURL = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+thermDeviceId+"?"+access_token
+  
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.open("GET", thermInfoURL, true);
+  xmlhttp.send();
+  
+  var cmdToSend = "";
+  var cmdValue = "";
+
+  xmlhttp.onreadystatechange = function() 
+  {
+    if (this.readyState == 4 && this.status == 200) 
+    {
+
+      var myObj = JSON.parse(this.responseText);
+      var s = myObj.attributes.length
+
+      for(var i=0; i<s; i++)
+      {
+        if( myObj.attributes[i].name == "coolingSetpoint")
+        {
+          coolingSetpointValue = myObj.attributes[i].currentValue
+        }
+        if( myObj.attributes[i].name == "heatingSetpoint")
+        {
+          heatingSetpointValue = myObj.attributes[i].currentValue
+        }
+        if( myObj.attributes[i].name == "thermostatSetpoint")
+        {
+          thermostatSetpointValue = myObj.attributes[i].currentValue
+        }
+      } 
+    
+  
+     /* console.log("tempValue = "+tempValue)
+      console.log("coolingSetpointValue = "+coolingSetpointValue)
+      console.log("heatingSetpointValue = "+heatingSetpointValue)
+      console.log("thermostatSetpointValue = "+thermostatSetpointValue)*/
+      
+      // increment the command value for each cmd type 
+      var valRaiseCSP = parseInt(coolingSetpointValue)+1
+      var valRaiseHSP = parseInt(heatingSetpointValue)+1
+
+      var valLowerCSP = parseInt(coolingSetpointValue)-1
+      var valLowerHSP = parseInt(heatingSetpointValue)-1
+
+      //console.log("valRaiseCSP:"+valRaiseCSP+" valRaiseHSP:"+valRaiseHSP+" valLowerCSP:"+valLowerCSP+" valLowerHSP:"+valLowerHSP)
+      
+      // define the cmd type
+      cmdToSend = thermCmd == "raiseCoolingSetpoint" ? "setCoolingSetpoint" : thermCmd == "raiseHeatingSetpoint" ? "setHeatingSetpoint" : thermCmd == "lowerCoolingSetpoint" ? "setCoolingSetpoint" : thermCmd == "lowerHeatingSetpoint" ? "setHeatingSetpoint" : "ERROR";
+    
+      // define the sub-command, the setpoint value 
+      cmdValue = thermCmd == "raiseCoolingSetpoint" ? valRaiseCSP : thermCmd == "raiseHeatingSetpoint" ? valRaiseHSP : thermCmd == "lowerCoolingSetpoint" ? valLowerCSP : thermCmd == "lowerHeatingSetpoint" ? valLowerHSP : "ERROR";
+
+      var htlmIdCmdType = cmdValue == valRaiseCSP || cmdValue == valLowerCSP ? "coolingSetpoint" : "heatingSetpoint" 
+
+
+      document.getElementById(thermDeviceId+htlmIdCmdType).innerHTML = cmdValue;
+
+      if(cmdToSend == "ERROR" || cmdToSend == "")
+      {   
+        console.log("ERROR OR NO CMD REQUEST cmdToSend:"+cmdToSend)
+      }
+      else 
+      {
+        //console.log("sending command "+cmdToSend+" "+cmdValue+" to thermostat ID: "+thermDeviceId)
+      }
+     
+   
+      var CMDurl = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+thermDeviceId+"/"+cmdToSend+"/"+cmdValue+"?"+access_token;  
+      //http://"+ip+"/apps/api/1348/devices/2257/commands?setCoolingSetpoint/74?access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd;  
+      xmlhttp = new XMLHttpRequest(); 
+      xmlhttp.open("GET", CMDurl, true);
+      xmlhttp.send();
+
+      setTimeout(function(){refreshThermsotats()}, 1000);
+   
+
+    };
+  };
+}
+
+function buildLANdevices(){ // DEPRECATED USING SLIDERS BUTTONS INSTEAD
+  console.log("buildLANdevices()"); 
+  var lanDevicesArray = [];
+  var lanDevice = "";
+  var n = 0;
+  var k = "lanDevice";
+  
+  var newVal = "abc";
+  // build variables and create an array
+  for(var i = 0;i<30; i++) 
+  {
+    //lanDevice.replace(i,i);
+    //lanDevicesArray.push(
+
+    k = "lanDevice" + i.toString();
+    newVal = window[k];
+
+    //console.log("newVal = "+newVal);     
+
+    if(ValidateIPaddress(newVal))
+    {
+      //console.log("ip address ok: "+newVal);
+      lanDevicesArray.push(newVal);
+    }
+    else
+    {
+      break;
+    }       
+  }
+  //console.log("lanDevices IP's are:"+lanDevicesArray);
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.onreadystatechange = function() 
+  {
+    if (this.readyState == 4 && this.status == 200) 
+    {
+      var L = "";
+      
+      var lasti = i;  
+      var s = lanDevicesArray.length;
+      L += "<table>";
+      L +="<tr>";
+      for (var i = 0; i < s; i++) {
+
+        L += "<th><iframe scrolling='no' src='http://"+lanDevicesArray[i]+"/index2'></iframe></th>"
+
+        if(i==(max-1) || i==lasti+max) // new row every 4 columns
+        {
+          lasti = i;
+            L += "</tr><tr>"; // new row and horizontal line
+        } 
+      }
+      L+="</tr>";
+      
+      document.getElementById("lanDevices").innerHTML = L;
+      ////console.log("all devices = "+listString);
+    }
+  };
+  xmlhttp.open("GET", listOfDevicesURL, true);
+  xmlhttp.send();
+};
+
+function refreshSlider(deviceId, value, label){
+  //console.log("refreshSlider()");
+  // find the spanId corresponding to this deviceId
+  
+  var s = spanIdList.length;
+  var spanId = "";
+  for(var i = 0;i<s;i++)
+  {
+    ////console.log("panIdList @ index ["+i+"][0] = "+spanIdList[i][0]);
+    ////console.log("Checking list @ index ["+i+"][1] = "+spanIdList[i][1]);
+    if(spanIdList[i][0] == deviceId){
+
+      spanId = spanIdList[i][1];
+      //console.log("FOUND spanId "+spanId+" for : "+label);
+    }
+  }
+  document.getElementById(spanId).innerHTML = value; // update span number value
+  document.getElementById(deviceId).value = value;// update the slider position
+}
+function sliderEventListener(){
+  //console.log("spanIdList = "+spanIdList);
+  //console.log("sliderEventListener()");
+  // create an event listener for all sliders inputs, if any
+  var b = spanIdList.length;
+  var n = 0;
+  //console.log("b = "+b+" n = "+n);
+  for (b != 0; n < b; n++ ) { 
+    //[deviceId, spanSliderId]  
+    var slider = spanIdList[n][0]; // slider object id
+    var output = spanIdList[n][1]; // span object that shows the value number
+    //console.log("creating listener for "+slider+" && "+output);
+    var rangeInput = document.getElementById(spanIdList[n][0]);
+    
+    //classic oninput update
+    rangeInput.addEventListener("input", sliderOutput(slider, output, n), false);
+  }
+}
+
+function sliderOutput(sliderObj, spanObj,n)
+{
+  var slider = document.getElementById(sliderObj);
+  var output = document.getElementById(spanObj);
+
+  //allows to see changes as cursor runs
+  output.value = slider.value; // update the slider position
+  output.innerHTML = slider.value;// update span number dispayed value 
+  
+  //real time (sort of...) refresh, don't wait for next intervaled refreshAll(); 
+  refreshSlider(spanIdList[n][0], output.value, "");
+  //refreshSlider(spanIdList[n][0], output.innerHTML, ""); 
+
+
+  slider.oninput = function() 
+  {
+    //updates cursor and number value once input done
+    output.innerHTML = this.value;// update span number dispayed value 
+    output.value = slider.value; // update the slider position
+  
+    // console.log("slider.value is:"+slider.value);
+    // console.log("deviceId:"+sliderObj+"button");
+    if(slider.value == 0)
+    {
+      document.getElementById(sliderObj+"button").innerHTML = "off";
+      var calledBy = "sliderOutput 524"
+      updateButtonColor(sliderObj+"button", "off", sliderObj, calledBy);
+    }
+    else
+    {
+      document.getElementById(sliderObj+"button").innerHTML = "on";
+      var calledBy = "sliderOutput 895"
+      updateButtonColor(sliderObj+"button", "on", calledBy);
+    }
+  }
+};  
+
+function checkDimmer(cap) { // checks if device has SwitchLevel capability
+  return cap == "SwitchLevel";
+};
+function checkSwitch(cap) { // checks if device has SwitchLevel capability
+  return cap == "Switch";
+};
+function checkThermosat(cap) { // checks if device has Thermostat capability
+  return cap == "Thermostat";
+};
+function checkLock(cap) { // checks if device has Thermostat capability
+  return cap == "Lock";
+};
+
+function setLevel(id, value)
+{
+  //console.log(value+" "+id);
+  // device accepting "toggleDevice" command
+  var url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"/setLevel/"+value+"?"+access_token;
+  //http://"+ip+"/apps/api/"+appNumber+"/devices/2598/setLevel/10?+access_token
+
+  //http://"+ip+"/apps/api/1348/devices/2631/setLevel/75?access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd
+  var xhttp = new XMLHttpRequest();
+  xhttp.open("GET", url, true);
+  xhttp.send();
+
+  setTimeout(function(){getData(id)}, 1000);
+
+  //levelUpdate(id, value);
+  // setLevel/50
+}
+
+function toggleDevice(cmd, id, feedBackLoop) 
+{
+  console.log(cmd+" "+id);
+  // device accepting "toggleDevice" command
+
+  var customID = id.includes("button");
+  if(customID)
+  {
+    //console.log("customID detected for object #"+id);
+    id = id.replace("button", ""); // restore the id if it's a modified one (due to level/button combination)
+    //console.log("now id restored to its original value: "+id);
+  }
+  var url = "http://"+ip+"/apps/api/"+appNumber+"/devices/"+id+"/"+cmd+"?"+access_token;    
+  var xhttp = new XMLHttpRequest();
+  xhttp.open("GET", url, true);
+  xhttp.send();
+
+  if(feedBackLoop != true)
+  {
+    setTimeout(function(){getData(id, customID)}, 1000);
+  }
+  else
+  {
+    //console.log("preventing feedBackLoop")
+  }
+};
+
+
+function clearAll(clear)
+{
+  isRefreshing = clear; // update global if this was a button hit (button clearAll(!isRefreshing))
+  var refreshState = "NA";
+  if(clear)
+  {
+    clearInterval(interval1);
+    refreshState = "refresh is off";
+    //alert("REFRESH STOPPED! (hit the 'refresh' button again to resume");
+  }
+  else {
+    interval1 = setInterval(function(){refreshAll();}, refreshInterval);
+    refreshState = "refreshing ("+refreshInterval/1000+"s)";
+    //alert("refresh resumed");
+  }
+  document.getElementById("stopscript").innerHTML = refreshState;
+}
+
+</script>
+</html>

@@ -1,8 +1,24 @@
 const smartDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase());
 
-const access_token = "d6699bb3-0d13-48d1-ab5d-8cc583efa76c"
-const ip = "192.168.10.72"
-const appNumber = "35"
+const access_token = readTextFile()
+const ip = readTextFile()
+const appNumber = readTextFile()
+
+function readTextFile() {
+    var rawFile = new XMLHttpRequest();
+    rawFile.open("GET", "testing.txt", true);
+    rawFile.onreadystatechange = function() {
+      if (rawFile.readyState === 4) {
+        var allText = rawFile.responseText;
+        document.getElementById("textSection").innerHTML = allText;
+      }
+    }
+    rawFile.send();
+  }
+  
+fr.readAsText(this.files[0]);
+
+
 
 const everythingUrl = "http://" + ip + "/apps/api/" + appNumber + "/devices/all?access_token=" + access_token;
 const modes = "http://" + ip + "/apps/api/" + appNumber + "/modes?/all??access_token=" + access_token;
@@ -310,6 +326,7 @@ socket.addEventListener('close', (event) => {
     console.log("connexion to ", origin)
     setTimeout(initialize, 1000)
 })
+
 
 
 

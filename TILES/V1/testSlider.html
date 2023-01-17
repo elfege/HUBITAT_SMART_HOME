@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+</head>
+<body onload="init()">
+
+	<table style='width:100%' border:1px><tr>
+		<th>
+			<table>
+				<tr>
+					<SPAN class='sliderSpan'>light office</SPAN>
+					<div class='slidecontainer'>
+					</tr>
+					<tr>
+						<div class="slidecontainer">
+						<input type='range' min='0' max='100' step='1' id='2598' onmouseup='setLevel(id, value)' onchange='setLevel(id, value)'>
+						</div>
+					</tr>
+					<tr>
+						<span id=lightoffice></span> 
+						<p></p>
+					</tr>
+					<tr>
+					</div>
+				</tr>
+			</table>
+		</th>
+	</tr><tr>
+	</table>
+
+</body>
+<script>
+	var access_token = "access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd";
+	var appNumber = 1348
+
+	function setLevel(id, value)
+	{
+		console.log("setLevel:"+value)
+		var url = "http://192.168.10.70/apps/api/"+appNumber+"/devices/"+id+"/setLevel/"+value+"?"+access_token;
+		var xhttp = new XMLHttpRequest();
+		xhttp.open("GET", url, true);
+		xhttp.send();
+	}
+	function sliderEventListener()
+	{
+		var slider = "2598"; // slider object id
+		var output = "lightoffice"; // span object that shows the value number
+		console.log("creating listener for "+slider+" && "+output);
+		var rangeInput = document.getElementById(output);
+		rangeInput.addEventListener("input", sliderOutput(slider, output), false);//classic oninput update
+	}
+
+	function sliderOutput(sliderObj, spanObj)
+	{
+		var slider = document.getElementById(sliderObj);
+		var output = document.getElementById(spanObj);
+		output.value = slider.value; // update the slider position //allows to see changes as cursor runs
+		output.innerHTML = slider.value;// update span number dispayed value //allows to see changes as cursor runs
+		slider.oninput = function() 
+		{
+			output.innerHTML = this.value;// update span number dispayed value 
+			output.value = slider.value; // update the slider position   
+		};  
+	}
+	sliderEventListener()
+</script>
+</html>

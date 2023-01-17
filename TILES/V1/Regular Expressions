@@ -1,0 +1,16 @@
+
+    // reference: https://eloquentjavascript.net/1st_edition/chapter10.html  (seems full or errors...)
+    // also : https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
+  
+var isMatch = function(s, p) {
+   
+    let re = new RegExp(p)
+    let matchVals = s.match(re)
+    if(matchVals === null)
+        {
+            return new RegExp(re.exec(s)).test(s)
+        }
+    let MATCH = s === matchVals[0]   
+    return MATCH
+};
+    

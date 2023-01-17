@@ -1,0 +1,105 @@
+:root {
+    --tileSize: 6rem;
+
+}
+
+body {
+    background-image: url("/images/klein_explosion.jpg");
+    background-repeat:no-repeat;
+    background-size:110% 110%;
+    
+    /* background: -moz-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
+    background: -webkit-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
+    background: linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
+    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr="#020024", endColorstr="#00d4ff", GradientType=1); */
+}
+
+
+.tiles {
+    border: none;
+    width: var(--tileSize);
+    height: var(--tileSize);
+    font-size: xx-small;
+    word-wrap: break-word;
+    float: left;
+    margin: 1px;
+    border-radius: .5rem;
+
+}
+
+.tiles:hover {
+    background-color: rgb(158, 155, 139);
+}
+
+.tiles.off:hover {
+    background-color: rgb(243, 208, 13);
+}
+
+.titles {
+    color: whitesmoke;
+}
+
+.dimmerObject {
+    /* opacity: 0.6; */
+}
+
+.badge:hover {
+    background-color: rgb(171, 112, 22);
+    color: black;
+}
+
+.spanDimmer {
+    font-size: small;
+    font-weight: 700;
+    color: aliceblue;
+
+}
+
+/* devices states as data attributes*/
+[data-state="off"] {
+    background-color: grey !important;
+    color: white !important;
+}
+
+[data-state="on"] {
+    background-color: rgb(229, 229, 35);
+    color: black !important;
+}
+
+.locked {
+    background-color: red;
+    color: darkblue;
+}
+
+.unlocked {
+    background-color: white;
+    color: black;
+}
+
+
+
+/* cursor's color when active */
+/* .rs-handle.rs-focus {
+    background-color: rgb(240, 241, 232);
+} */
+
+
+
+/* ROUND SLIDER SOURCE AND DOC
+
+https://roundsliderui.com/document.html#how-to-install 
+
+The roundSlider has the following public classes, which user can overwrite these classes to apply their custom styles or themes.
+
+.rs-path-color : This class applies the background color for the slider path.
+.rs-range-color : This class applies the background color for the slider range.
+.rs-bg-color : This class applies the background color for the slider control.
+.rs-border : This class applies the border color for the slider control.
+.rs-border.rs-inner : This class applies the styles for inner border alone.
+.rs-border.rs-outer : This class applies the styles for outer border alone.
+.rs-handle : This class added for the slider handles. We can set the handle styles here.
+.rs-first .rs-handle : Mentions the first handle of the slider.
+.rs-second .rs-handle : Mentions the second handle of the slider. This is available at the range slider only.
+.rs-handle.rs-focus : When the slider handle was focused, at that time the focus class added for the corresponding handle.
+.rs-animation .rs-transition : This class applies the CSS3 animation related styles.
+*/

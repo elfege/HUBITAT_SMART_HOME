@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>SMART HOME INTERFACE</title>  
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="viewport" content="initial-scale=1.0">
+	<meta name="viewport" content="maximum-scale=1.0">
+	<meta name="viewport" content="user-scalable=no">
+	<meta name="viewport" content="width=device-width">
+	<link rel="apple-touch-icon-precomposed" href="http://elfege.com/penrose.jpg">
+	<link rel="apple-touch-startup-image" href="http://elfege.com/penrose.jpg">
+
+	<style>
+		:root {
+			--buttonSize:180px;
+			--buttonFontSize:40px;
+			--fontSize:10;
+			--fontColor:#002fa7;
+			--buttonColor:#A3E1D8;
+		}
+		body {
+			background-color:#ffffff;  // 002fa7 "international Klein blue"
+		}
+		table{
+			width:100%;
+			text-align: center;
+			background-color:#ffffff;  // "international Klein blue"
+
+		}
+		th, td {
+			border: 10px solid white;
+			border-color:#ffffff;
+			background-color:#ffffff;
+			border-radius:25px;
+			/*border-image: url("") 30 stretch;*/
+			padding: 10px;
+/* box-shadow: 3px 3px #569F96;
+transition: width 1s, height 1s;*/
+}
+h1 {
+	color: var(--fontColor);
+}
+
+h2 {
+	color:var(--fontColor);  // "international Klein blue"
+}
+button {
+	/*background: url(http://elfege.com/penrose.jpg) no-repeat;*/
+	background-color: var(--buttonColor);
+	border-radius: 40px;
+	border: 0px;
+	width:  var(--buttonSize);
+	height: var(--buttonSize);
+	margin-left:0;
+	text-align: center;
+	text-decoration: none;
+	cursor: pointer;
+	/*display: inline-block;*/
+	font-size: var(--buttonFontSize);
+	color:var(--fontColor);/*font color*/
+	outline-offset: 4px;
+
+}
+button:hover {
+	background-color: #7C7C70;
+	color: white;
+	border-radius: 20px;
+	transition-duration: 3s; 
+}
+iframe{
+	width: var(--buttonSize);
+	height: var(--buttonSize);
+	background: #B6EEE6;
+	transition: width 1s, height 1s;
+	border:0px;
+
+}
+iframe:hover{
+	width: 500px;
+	height: 100px;
+}
+.slidecontainer {
+	width: 100%;
+}
+
+.slider {
+	-webkit-appearance: none;
+	width: 100%;
+	height: 25px;
+	background: #d3d3d3;
+	outline: none;
+	opacity: 0.7;
+	-webkit-transition: .2s;
+	transition: opacity .2s;
+}
+
+.slider:hover {
+	opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 25px;
+	height: 25px;
+	border-radius: 30%;
+	background: #04AA6D;
+	cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+	width: 25px;
+	height: 25px;
+	background: #04AA6D;
+	cursor: pointer;
+}
+.arrow {
+  border: solid black;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  padding: 3px;
+}
+.right {
+  transform: rotate(-45deg);
+  -webkit-transform: rotate(-45deg);
+}
+
+.left {
+  transform: rotate(135deg);
+  -webkit-transform: rotate(135deg);
+}
+
+.up {
+  transform: rotate(-135deg);
+  -webkit-transform: rotate(-135deg);
+}
+
+.down {
+  transform: rotate(45deg);
+  -webkit-transform: rotate(45deg);
+}
+</style>      
+<center>
+	<h1>SMART HOME INTERFACE</h1>
+	<p></p> 
+	<h2>CURRENT MODE:<SPAN id="currentMode"></SPAN></h2>  
+</center>
+</head>
+<body onload="init()">
+	<center>    
+		<table style="width:100%">
+			<tr>
+				<th>
+					<h2>REFRESH ALL</h2>
+					<p></p> 
+					<button style=width:100px;height:45px;font-size:12px id="refreshALl" onclick="refreshAll()"> REFRESH </button>  
+				</th>
+				<th>
+
+					<h2>REFRESH PAGE</h2>
+					<p></p> 
+					<button style=width:100px;height:45px;font-size:12px id="reload" onclick="location.reload()"> RELOAD </button>
+				</th>
+				<th>
+					<h2>STOP SCRIPTS</h2>
+					<p></p> 
+					<button style=width:100px;height:45px;font-size:12px id="stopscript" onclick="clearAll(isRefreshing ? false : true)"> refreshing </button>  
+					<!--<button id="1956"onclick="toggleDevice('toggle',id)"> TEST </button>  -->
+					<button id='1956'onclick='toggleDevice(cmdSwitch, id)'>light office </button>
+					<button id='1572'onclick='toggleDevice(cmdSwitch, id)'>light piano </button>
+				</th>
+			</tr>
+			<table>
+				<tr>
+					<SPAN class='buttonName'>`+deviceLabel.toLowerCase()+`</SPAN>
+					<div class='slidecontainer'>
+					</tr>
+					<tr>
+						<span id="+coolingSetpoint+"></span>
+						<p></p>
+						<tr>
+							<i id="+deviceId+" onclick='changeTemp(up, id) class="arrow up"></i>                 
+						</tr>
+						<tr>
+						</div>
+						<i id="+deviceId+" onclick='changeTemp(down, id) class='arrow down'></i>
+						<p>Right arrow: <i class="arrow right"></i></p>
+					</tr>
+
+				</table>  
+
+		<div id="buttons"></div>
+		<div id="lanDevices"></div>
+
+	</center>
+</body>
+
+<script>
+	/***************************************CUSTOMIZABLE SECTION*****************************/
+//ADD YOUR NEW ACCESS TOKEN HERE AS SUCH : "access_token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+// YOU WILL FIND IT IN HUBITAT'S "Maker API" app.
+var access_token = "access_token=8b5615ed-43a6-4318-bd88-af5f1e2c30bd";
+
+//ADD YOU APP NUMBER // YOU'LL FIND IT IN THE URL TEMPLATES PROVIDED BY THE APP
+var appNumber = "1348";
+
+/// set to false if you want to build a regular tile 
+// set to true if your device has its own web server html interface (must fit a 500x200 px (width x heigth) window)
+// in iFrame mode the tile will expand with "mouse hover" and shrink back once released
+var useIframe = true;
+
+// ADD SOME LAN DEVICES IP's // YOU CAN ADD AS MANY devices/capabilities AS YOU WISH, providing you respect the exact same terminology i.e. "lanDevice[number]"
+var lanDevice0 = "192.168.10.203"; var cpability0 = ["Switch","SwitchLevel","Stop","Contact"]; //capabilities not needed with Iframe     
+var lanDevice1 = "192.168.10.204"; var cpability1 = ["Switch","SwitchLevel","Stop","Contact"];     
+var lanDevice2 = "192.168.10.205"; var cpability2 = ["Switch","SwitchLevel","Stop","Contact"];        
+var lanDevice3 = "192.168.10.206"; var cpability3 = ["Switch","SwitchLevel","Stop","Contact"];             
+var lanDevice4 = "192.168.10.207"; var cpability4 = ["Switch","SwitchLevel","Stop","Contact"];           
+var lanDevice5 = "";
+var lanDevice6 = "";
+var lanDevice7 = "";
+var lanDevice8 = "";
+var lanDevice9 = "";
+var lanDevice10 = "";
+
+var refreshInterval = 5000; // you may need to modify this value. Beware of ressources. Too low of a value can render your 
+// page and browser unstable. 
+var max = 4; //  number of devices per row
+/****************DO NOT MODIFY ANYTHING BELOW THIS LINE!**************************/
+
+
+if (window.navigator.userAgent.indexOf('iPhone') != -1) {
+	if (window.navigator.standalone == true) {
+
+	}else{
+		alert("Tap the + button and choose 'Add to Home Screen'");
+	}
+}else{
+//normal browser, set a time limit to refresh()
+setTimeout(function(){ clearAll(true); }, 1 * 3600 * 1000); // clear all intervals after 1 hour
+//console.log("running sliderEventListener in 5000ms");
+}
+
+
+function init(){
+	console.log ("page initialization..."); 
+	
+console.log("END OF INTIALIZATION");  
+}
+
+
+
+var cmdLevel = "setLevel"
+var cmdSwitch = "toggle";
+var id = ""; 
+var allDevices = []; // will be replaced by allDevicesLabelsSorted
+var isRefreshing = false;
+var listOfDevicesURL = "http://192.168.10.70/apps/api/"+appNumber+"/devices/all?"+access_token;
+var listOfModes = "http://192.168.10.70/apps/api/"+appNumber+"/modes?/all?"+access_token;
+
+var listString = "";
+var xmlhttp = new XMLHttpRequest();
+var sliderId = "sliderId"; // this var needs to be public
+var nSId = 0; // this number needs to be public
+var spanIdList = [] // this value must be public, will be updated here with nSId number
+var allDevicesLabelsSorted = [];
+var buttonOff = "#A3E1D8"
+var buttonOn = "#EFF700" 
+
+
+
+// get device value
+//Use the XMLHttpRequest to get data from the server:
+function getData(id, customID)
+{
+
+	console.log("getting data for id:"+id);
+// this url gets the device id's datasheet with attributes
+url = "http://192.168.10.70/apps/api/"+appNumber+"/devices/"+id+"?"+access_token;    
+var xmlhttp = new XMLHttpRequest();
+var listOfCapabilities = [];
+var value = "";
+
+
+	xmlhttp.onreadystatechange = function() 
+	{
+		if (this.readyState == 4 && this.status == 200) 
+		{
+			var myObj = JSON.parse(this.responseText);
+			value = myObj.attributes[0].currentValue
+			console.log(myObj.label+" is : "+value)     
+			if(value != "on" && value != "off")
+			{
+				//console.log("*************************");
+				var a = 0; 
+				var size = myObj.attributes.length;
+
+				for(var a=0; a < size ; a++){ // try all indexes until currentValue returns either on or off 
+
+					value = myObj.attributes[a].currentValue
+
+					if(value == "on" || value == "off")
+					{
+						console.log("////////////// FOUND VALUE = "+value);
+						break;
+					}
+				}
+			}
+			if(customID)
+			{
+			// reconstruct the custom ID
+			id = id+"button";
+			}
+		console.log("updating "+myObj.label+"'s value")
+		document.getElementById(id).innerHTML = value;
+		var calledBy = "getData 524"
+		//updateButtonColor(id,value, calledBy);
+		console.log("XML document updated")
+
+		// NEXT: do a similar test for myObj.attributes[index].name == "level" 
+		};
+	};
+	xmlhttp.open("GET", url, true);
+	xmlhttp.send();
+	////console.log("getData returns: "+value)
+	//return value;
+};
+
+
+function toggleDevice(cmd, id) 
+{
+	console.log(cmd+" "+id)
+// device accepting "toggleDevice" command
+
+	var customID = id.includes("button")
+	if(customID)
+	{
+	//console.log("customID detected for object #"+id);
+	id = id.replace("button", ""); // restore the id if it's a modified one (due to level/button combination)
+	//console.log("now id restored to its original value: "+id);
+	}
+	var url = "http://192.168.10.70/apps/api/"+appNumber+"/devices/"+id+"/"+cmd+"?"+access_token;    
+	var xhttp = new XMLHttpRequest();
+	xhttp.open("GET", url, true);
+	xhttp.send();
+
+	setTimeout(function(){getData(id, customID)}, 500);
+};
+
+
+function clearAll(clear)
+{
+isRefreshing = clear; // update global if this was a button hit (button clearAll(!isRefreshing))
+var refreshState = "NA";
+if(clear)
+{
+	clearInterval(interval1);
+	refreshState = "refresh is off";
+	alert("REFRESH STOPPED! (hit the 'refresh' button again to resume");
+}
+else {
+	interval1 = setInterval(function(){refreshAll();}, refreshInterval);
+	refreshState = "refreshing ("+refreshInterval/1000+"s)";
+	alert("refresh resumed");
+}
+document.getElementById("stopscript").innerHTML = refreshState;
+}
+
+</script>
+</html>

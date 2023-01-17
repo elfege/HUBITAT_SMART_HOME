@@ -1,27 +1,42 @@
 const smartDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase());
 
-const access_token = readTextFile()
-const ip = readTextFile()
-const appNumber = readTextFile()
 
-function readTextFile() {
-    var rawFile = new XMLHttpRequest();
-    rawFile.open("GET", "testing.txt", true);
-    rawFile.onreadystatechange = function() {
-      if (rawFile.readyState === 4) {
-        var allText = rawFile.responseText;
-        document.getElementById("textSection").innerHTML = allText;
-      }
-    }
-    rawFile.send();
-  }
-  
-fr.readAsText(this.files[0]);
+let everythingUrl;
+let access_token;
+let ip;
+let appNumber;
+
+// const modes = "http://" + ip + "/apps/api/" + appNumber + "/modes?/all??access_token=" + access_token;
 
 
+axios.get("\\credentials.json")
+.then(response => {
+    console.log("response.data", response.data)
+    access_token = response.data.access_token
+    ip = response.data.ip
+    appNumber = response.data.appNumber
+    console.log(`
+    response.data.access_token => ${response.data.access_token}
+    response.data.ip => ${response.data.ip}
+    response.data.appNumber => ${response.data.appNumber}
 
-const everythingUrl = "http://" + ip + "/apps/api/" + appNumber + "/devices/all?access_token=" + access_token;
-const modes = "http://" + ip + "/apps/api/" + appNumber + "/modes?/all??access_token=" + access_token;
+    *****************
+
+    access_token => ${access_token}
+    ip => ${ip}
+    appNumber => ${appNumber}
+    `)
+    WebSocket_init(response.data.ip)
+    everythingUrl = "http://" + ip + "/apps/api/" + appNumber + "/devices/all?access_token=" + access_token;
+    jQuery(function () {
+        console.log("dom loaded")
+        initialize(access_token, ip, appNumber)
+        //delete all comments so they don't show in dev tools
+        // $("*").contents().filter(function () { return this.nodeType == 8; }).remove()
+    
+    })
+})
+
 
 const labelLength = 35;
 
@@ -31,22 +46,14 @@ console.log(everythingUrl)
 // master_container.remove()
 
 
-jQuery(function () {
-    console.log("dom loaded")
-    initialize()
-    //delete all comments so they don't show in dev tools
-    $("*").contents().filter(function () { return this.nodeType == 8; }).remove()
 
-})
 
-function initialize() {
+function initialize(access_token, ip, appNumber) {
     console.log("initialize")
     axios.get(everythingUrl)
         .then(res => {
             // console.log("response:", res.data)
             const allDevices = res.data
-
-
 
             allDevices.forEach((e, index) => {
                 const id_From_Hub = e.id
@@ -199,6 +206,7 @@ function initialize() {
             $("#loading_message_container").remove()
             $("#master_container").removeAttr("hidden")
         })
+  
         .catch(err => {
             console.log(err)
             setTimeout(initialize, 5000)
@@ -272,62 +280,55 @@ function trimLabel(label, length) {
 };
 
 
-// Create WebSocket connection.
-const socket = new WebSocket(`ws://${ip}/eventsocket`);
-// Connection opened
-socket.addEventListener('open', (event) => {
-    socket.send('Hello Server!');
-});
-// Listen for messages
-socket.addEventListener('message', (event) => {
-    // console.log('Message from server ', event.data);
+function WebSocket_init(ip) {
 
+    console.log("ip => ", ip)
+    
+    // Create WebSocket connection.
+    const socket = new WebSocket(`ws://${ip}/eventsocket`);
+    // Connection opened
+    socket.addEventListener('open', (event) => {
+        socket.send('Hello Server!');
+    });
+    // Listen for messages
+    socket.addEventListener('message', (event) => {
+        const evt = JSON.parse(event.data)
+        // console.log(evt.displayName, evt.name, "is", evt.value)
 
-    /* 
-   structure of message:
-   
-   "name":"power",
-   "displayName" : "Server Room ",
-    "value" : "251.001",
-    "type" : "null",
-    "unit":"W",
-   "deviceId":83,
-   "hubId":0,
-   "installedAppId":0,
-   "descriptionText" : "Server Room power is: 251.001W"}
-   */
+        const device = evt.name !== "level" ? $(`*[data-id_From_Hub="${evt.deviceId}"]`) : $(`*[data-id_From_Hub_level="${evt.deviceId}"]`)
 
-    const evt = JSON.parse(event.data)
-    // console.log(evt.displayName, evt.name, "is", evt.value)
-    // console.log("received: ", data)
-    // console.log("********************")
-    // console.log("deviceId:", data.deviceId)
-    // console.log("event name:", data.name)
-    // console.log("name:", evt.displayName)
-    // console.log("value:", evt.value)
+        const states = ["on", "off", "locked", "unlocked"]
 
-    const device = evt.name !== "level" ? $(`*[data-id_From_Hub="${evt.deviceId}"]`) : $(`*[data-id_From_Hub_level="${evt.deviceId}"]`)
-
-    const states = ["on", "off", "locked", "unlocked"]
-
-    if (evt.name === "level") {
-        device.roundSlider("option", "value", evt.value)
-        const state = parseInt(evt.value) > 0 ? "on" : "off"
-        $(`#${evt.deviceId}dimSpan`).attr("data-state", state)
-    }
-    else if (states.find(e => e === evt.value)) {
-        device.attr("data-state", evt.value)
-    }
-
-
-});
-
-socket.addEventListener('close', (event) => {
-    console.log("connexion to ", origin)
-    setTimeout(initialize, 1000)
-})
+        if (evt.name === "level") {
+            device.roundSlider("option", "value", evt.value)
+            const state = parseInt(evt.value) > 0 ? "on" : "off"
+            $(`#${evt.deviceId}dimSpan`).attr("data-state", state)
+        }
+        else if (states.find(e => e === evt.value)) {
+            device.attr("data-state", evt.value)
+        }
+    })
+    socket.addEventListener('close', (event) => {
+        console.log("connexion to ", origin)
+        setTimeout(initialize, 1000)
+    })
+}
 
 
 
 
+
+        /* 
+       structure of message:
+       
+       "name":"power",
+       "displayName" : "Server Room ",
+        "value" : "251.001",
+        "type" : "null",
+        "unit":"W",
+       "deviceId":83,
+       "hubId":0,
+       "installedAppId":0,
+       "descriptionText" : "Server Room power is: 251.001W"}
+       */
 //http://192.168.10.15:20010/event, => for homebridge, to be put back into makerAPI post section

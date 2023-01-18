@@ -175,7 +175,7 @@ async function initialize(access_token, ip, appNumber) {
     $("#master_container").removeAttr("hidden");
   }).catch(error => {
     console.log("error: ", error);
-    setTimeout(restart, 5000);
+    setTimeout(restart, 1000);
   });
 }
 async function sendCommand(cmdurl) {

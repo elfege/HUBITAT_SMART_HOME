@@ -10,7 +10,7 @@ let allDevices = {};
 
 jQuery(function () {
   console.log("dom loaded");
-  allDevices = initialize(access_token, ip, appNumber);
+  // allDevices = initialize(access_token, ip, appNumber);
   console.log(JSON.stringify(allDevices));
   //delete all comments so they don't show in dev tools
   $("*").contents().filter(function () {
@@ -20,7 +20,20 @@ jQuery(function () {
   console.log("allDevices:", allDevices);
 });
 
-getCredentials();
+getCredentials().then(() => {
+  console.log(`
+  ---
+  access_token => ${access_token}
+  ip => ${ip}
+  appNumber => ${appNumber}
+  everythingUrl => ${everythingUrl}
+  ---
+  `);
+  initialize(access_token, ip, appNumber).then(() => {
+    console.log(allDevices)
+  })
+});
+
 async function getCredentials() {
   const response = await axios.get("\\credentials.json");
   console.log("response.data => ", response.data);
@@ -29,14 +42,7 @@ async function getCredentials() {
   appNumber = response.data.appNumber;
   everythingUrl = "http://" + ip + "/apps/api/" + appNumber + "/devices/all?access_token=" + access_token;
 
-  console.log(`
-        ---
-        access_token => ${access_token}
-        ip => ${ip}
-        appNumber => ${appNumber}
-        everythingUrl => ${everythingUrl}
-        ---
-        `);
+  
 }
 
 async function initialize(access_token, ip, appNumber) {
@@ -44,7 +50,7 @@ async function initialize(access_token, ip, appNumber) {
 
   WebSocket_init(ip);
 
-  axios.get(everythingUrl).then(res => {
+  await axios.get(everythingUrl).then(res => {
     // console.log("response:", res.data)
     allDevices = res.data;
 

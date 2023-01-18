@@ -56,15 +56,16 @@ body {
 }
 
 /* devices states as data attributes*/
-[data-state="off"] {
+.off {
     background-color: grey !important;
     color: white !important;
 }
 
-[data-state="on"] {
+.on {
     background-color: rgb(229, 229, 35);
     color: black !important;
 }
+
 
 .locked {
     background-color: red;

@@ -5,11 +5,15 @@
 
 3) In the same folder where you just copied the files, create a credentials.json file (you can just create a new text file and save it with the extension ".json") and add the following content exactly:
 
+
 ```JSON 
     "access_token": "your",
     "ip": "192.168.xxx.xxx",
-    "appNumber": "35"
+    "appNumber": "app_number"
 ```
+
+➡️This info is available in your MAKER API app. 
+
 
 5) In a browser, simply type :"http://[your_ip]/[dedicated_directory_if_applicable]/ and your page should load with any switch, light or lock you've added to your MAKER API app. 
 

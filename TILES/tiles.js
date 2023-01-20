@@ -30,8 +30,8 @@ getCredentials().then(() => {
   ---
   `);
   initialize(access_token, ip, appNumber).then(() => {
-    console.log(allDevices)
-  })
+    console.log(allDevices);
+  });
 });
 
 async function getCredentials() {
@@ -41,8 +41,6 @@ async function getCredentials() {
   ip = response.data.ip;
   appNumber = response.data.appNumber;
   everythingUrl = "http://" + ip + "/apps/api/" + appNumber + "/devices/all?access_token=" + access_token;
-
-  
 }
 
 async function initialize(access_token, ip, appNumber) {
@@ -129,8 +127,23 @@ async function initialize(access_token, ip, appNumber) {
         if (isLock) {
           const id_html = id_From_Hub + "lock";
 
-          /************************CREATE LOCKS ********************************/
-          $("#lockContainer").append($("<div>").addClass("row")).append($("<a>").addClass("btn btn-outline-primary btn-block text-white").attr({id: `${id_html}`, "data-id_From_Hub": id_From_Hub, "data-device-type": "lock"}).text(e.label));
+          console.log("/************************CREATE LOCKS ********************************/");
+          $("#locksRow").append($("<div>").addClass("col-lg-fluid"))
+          .append($("<button>")
+          .addClass("btn btn-primary ml-3")
+          .attr({id: `${id_html}`, "data-id_From_Hub": id_From_Hub, "data-device-type": "lock"})
+          .text(e.label.toLowerCase().replace("lock", "")).css("text-transform", "capitalize"));
+
+          const state = e.attributes.lock;
+          const classToRemove = state === "locked"
+            ? "bi bi-lock locked"
+            : "bi bi-unlock unlocked";
+
+          const classToAdd = state === "locked"
+            ? "bi bi-lock locked"
+            : "bi bi-unlock unlocked";
+
+          $(`#${id_html}`).removeClass(classToRemove).addClass(classToAdd);
 
           $(`#${id_html}`).on("click", () => {
             axios.get(`http://${ip}/apps/api/${appNumber}/devices/${id_From_Hub}?access_token=d6699bb3-0d13-48d1-ab5d-8cc583efa76c`).then(resp => {
@@ -159,7 +172,7 @@ async function initialize(access_token, ip, appNumber) {
         if (isSwitch && notAButton) {
           const id_html = id_From_Hub + "switch";
 
-          $("#switches").append($("<button>").addClass("tiles").attr({id: id_html, "data-id_From_Hub": id_From_Hub,  "data-device-type": `${deviceType}`}).text(trimLabel(e.label, labelLength)));
+          $("#switches").append($("<button>").addClass("tiles").attr({id: id_html, "data-id_From_Hub": id_From_Hub, "data-device-type": `${deviceType}`}).text(trimLabel(e.label, labelLength)));
 
           $(`#${id_html}`).on("click", () => {
             const url = `http://${ip}/apps/api/${appNumber}/devices/${id_From_Hub}/toggle?access_token=${access_token}`;
@@ -198,9 +211,11 @@ async function updateDeviceState(id_From_Hub, id_html, type, notAButton, value) 
     })
       ?.currentValue;
 
-    if (type !== "switch&Level") {
-      const clsRemove = state === "on" ? "off" : "on"
-      $(`#${id_html}`).removeClass(clsRemove)
+    if (type !== "switch&Level" && type !== "lock") {
+      const clsRemove = state === "on"
+        ? "off"
+        : "on";
+      $(`#${id_html}`).removeClass(clsRemove);
       $(`#${id_html}`).addClass(state);
     }
 
@@ -254,19 +269,28 @@ function WebSocket_init(ip) {
     const evt = JSON.parse(event.data);
     console.log(evt.displayName, evt.name, "is", evt.value);
 
-
-    const isDimCapable = allDevices.find(el => el.id === `${evt.deviceId}`)?.capabilities?.find(el => el === "SwitchLevel");
+    const isDimCapable = allDevices.find(el => el.id === `${evt.deviceId}`)
+      ?.capabilities
+        ?.find(el => el === "SwitchLevel");
 
     const device = evt.name !== "level"
       ? $(`*[data-id_From_Hub="${evt.deviceId}"]`)
       : $(`*[data-id_From_Hub_level="${evt.deviceId}"]`);
+
     const states = ["on", "off", "locked", "unlocked"];
 
-    
+    if (evt.name === "lock") {
+      const classToRemove = evt.value === "locked"
+        ? "bi bi-unlock unlocked"
+        : "bi bi-lock locked"
 
-    if (evt.name === "level") {
+      const classToAdd = evt.value === "locked"
+        ? "bi bi-lock locked"
+        : "bi bi-unlock unlocked";
+
+      $(`#${evt.deviceId}lock`).removeClass(classToRemove).addClass(classToAdd);
+    } else if (evt.name === "level") {
       // DIMMERS
-      console.log("*************************************** ", evt.value);
       updateDimmerState(device, evt.deviceId, evt.name, evt.value);
     } else if (states.find(e => e === evt.value)) {
       // switches or devices as switches
@@ -276,13 +300,14 @@ function WebSocket_init(ip) {
         updateDimmerState(device, evt.deviceId, evt.name, evt.value);
       } else {
         // for regular tiles only
-        const clsRemove = evt.value === "on" ? "off" : "on"
+        const clsRemove = evt.value === "on"
+          ? "off"
+          : "on";
         console.log("updating state class for ", device);
-        console.log("removing class ", clsRemove)
-        device.removeClass(clsRemove)
-        console.log("Adding class ", evt.value)
+        console.log("removing class ", clsRemove);
+        device.removeClass(clsRemove);
+        console.log("Adding class ", evt.value);
         device.addClass(evt.value);
-        
       }
     }
   });
@@ -321,12 +346,14 @@ function updateDimmerState(device, deviceId, evtName, value) {
   devAsDimSpan.css("color", color);
 
   if (evtName === "switch") {
-    console.log("******************")
-    const clsRemove = value === "on" ? "off" : "on"
+    console.log("******************");
+    const clsRemove = value === "on"
+      ? "off"
+      : "on";
     console.log("updating state class for ", device);
-    console.log("removing class", clsRemove)
-    device.removeClass(clsRemove)
-    console.log("adding class ", value)
+    console.log("removing class", clsRemove);
+    device.removeClass(clsRemove);
+    console.log("adding class ", value);
     device.addClass(value);
   }
 

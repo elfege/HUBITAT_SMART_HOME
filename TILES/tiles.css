@@ -1,47 +1,114 @@
 :root {
-    --tileSize: 6rem;
+    --tileSize: 16rem;
+    --tileHeight: 4rem;
+    --onColor: rgb(205, 205, 194);
+    --offColor: rgb(58, 54, 54);
 
 }
 
 body {
-    background-image: url("/images/klein_explosion.jpg");
-    background-repeat:no-repeat;
-    background-size:110% 110%;
-    
+    /* background-image: url("/images/green_wallpaper.jpg"); */
+    background: url(/images/green_wallpaper.jpg) no-repeat center center fixed;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+    background-size: cover;
+    /* background-size :100vw 100vh;
+    background-attachment:fixed */
+
     /* background: -moz-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
     background: -webkit-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
     background: linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr="#020024", endColorstr="#00d4ff", GradientType=1); */
 }
 
+.navBar {
+    background-color: transparent !important;
+}
+
+.navButton {
+    width: 100px !important;
+    opacity: .8;
+    font-weight: 700;
+
+}
+
 
 .tiles {
     border: none;
+    /* width: var(--tileSize); */
+
+    position: relative;
+    margin: 2px;
     width: var(--tileSize);
-    height: var(--tileSize);
-    font-size: xx-small;
+    height: var(--tileHeight);
+    font-size: small;
+    font-weight: 700;
     word-wrap: break-word;
-    float: left;
-    margin: 1px;
-    border-radius: .5rem;
+    /* float: left; */
+
+
+    border-radius: 1rem;
+    opacity: 0.95;
 
 }
 
-.tiles:hover {
-    background-color: rgb(158, 155, 139);
+@media screen and (max-width: 500px) {
+    .tiles {
+        border: none;
+        /* width: var(--tileSize); */
+
+        position: relative;
+        margin: 2px;
+        width: 48%;
+        height: var(--tileHeight);
+        font-size: small;
+        font-weight: 700;
+        word-wrap: break-word;
+        /* float: left; */
+
+
+        border-radius: 1rem;
+        opacity: 0.95;
+
+    }
+
+    .off:hover {}
+
+    .on:hover {}
 }
 
-.tiles.off:hover {
-    background-color: rgb(243, 208, 13);
+/* devices states as data attributes*/
+.off {
+    background-color: var(--offColor) !important;
+    color: var(--onColor) !important;
 }
+
+.on {
+    background-color: var(--onColor) !important;
+    color: var(--offColor) !important;
+}
+
+
+@media not screen and (max-width: 500px) {
+    .off:hover {
+        background-color: var(--onColor) !important;
+        color: var(--offColor) !important;
+    }
+
+    .on:hover {
+        background-color: var(--offColor) !important;
+        color: var(--onColor) !important;
+    }
+}
+
+
 
 .titles {
     color: whitesmoke;
 }
 
-.dimmerObject {
-    /* opacity: 0.6; */
-}
+
 
 .badge:hover {
     background-color: rgb(171, 112, 22);
@@ -50,32 +117,12 @@ body {
 
 .spanDimmer {
     font-size: small;
-    font-weight: 700;
+    font-weight: 900;
     color: aliceblue;
 
 }
 
-/* devices states as data attributes*/
-.off {
-    background-color: grey !important;
-    color: white !important;
-}
 
-.on {
-    background-color: rgb(229, 229, 35);
-    color: black !important;
-}
-
-
-.locked {
-    background-color: red;
-    color: darkblue;
-}
-
-.unlocked {
-    background-color: green;
-    color: black;
-}
 
 
 

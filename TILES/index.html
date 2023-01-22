@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 
     <link rel="icon" type="image/png" href="static/favicon-32x32.png" sizes="32x32"/>
     <link rel="icon" type="image/png" href="static/favicon-16x16.png" sizes="16x16"/>
@@ -27,97 +27,142 @@
     <script type="text/javascript" src="tiles.js"></script>
 
     <!-- <link href="https://cdn.jsdelivr.net/npm/round-slider@1.6.1/dist/roundslider.min.css" rel="stylesheet"/> <script src="https://cdn.jsdelivr.net/npm/round-slider@1.6.1/dist/roundslider.min.js"></script> -->
+    <link href="https://cdn.jsdelivr.net/gh/gitbrent/bootstrap-switch-button@1.1.0/css/bootstrap-switch-button.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/bootstrap-switch-button@1.1.0/dist/bootstrap-switch-button.min.js"></script>
 
     <title>TILES</title>
 
   </head>
 
   <body>
+
     <!--MESSAGE CONTAINER-->
-    <div class="container-fluid" id="loading_message_container">
-      <div class="row">
-        <div class="col-lg-fluid d-flex justify-content-center">
-          <span class="text-bg-primary" id="loading_message"></span>
+    <div hidden="hidden" class="container-fill">
+      <div class="container-fluid" id="loading_message_container">
+        <div class="row">
+          <div class="col-lg-fluid d-flex justify-content-center">
+            <span class="text-bg-primary" id="loading_message"></span>
+          </div>
         </div>
       </div>
     </div>
 
     <!--MASTER CONTAINER-->
-    <div hidden="hidden" class="container" id="master_container">
+    <div hidden="hidden" class="container-fluid" id="master_container">
+      <!-- NAVBAR -->
+      <nav class="navBar">
+
+        <div class="navbar-nav navBar">
+          <div class="container-fluid">
+            <div id="row-nav-buttons" class="row d-flex justify-content-center m-0">
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" onclick="location.reload()">RELOAD</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" id="lightsToggle">LIGHTS</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" id="switchesToggle">SWITCHES</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" id="dimmersToggle">DIMMERS</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" id="locksToggle">LOCKS</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" id="showAll">SHOW ALL</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <div class="dropdown">
+                  <button class="btn btn-secondary bt-block navButton m-0 dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <span id="currentMode">MODES</span>
+                  </button>
+                  <div id="modesDrop" class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                    <!-- <a class="dropdown-item" href="#">Action</a>
+                    <a class="dropdown-item" href="#">Another action</a>
+                    <a class="dropdown-item" href="#">Something else here</a> -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
       <!--MASTER ROW-->
-      <div class="row">
+      <div class="row d-flex justify-content-center m-0">
+
         <!--MASTER COLUMN-->
-        <div class="col-xs-fluid d-flex justify-content-center">
+        <div class="col-lg-12">
+
           <!--ALL DEVICES'S CONTAINER-->
-          <div class="container">
-            <!--HUBITAT TITLE-->
-            <div class="row">
-              <div class="col-lg-12">
-                <p class="text-warning pl-5 pr-5 pt-3 d-flex justify-content-center">HUBITAT</p>
-              </div>
-            </div>
+          <div class="container-fill">
 
-            <!-- LOCKS ROW -->
-            <div class="row">
-              <div class="col-lg-12">
-                <div class="container">
-                  <div class="row d-flex justify-content-center">
-                    <span class="titles">
-                      LOCKS</span></div>
-                </div>
-                <div class="row" id="locksRow">
-                </div>
-              </div>
-            </div>
+            <!-- ROW CONTAINING LIGHTS SWITCHES AND DIMMERS CONTAINER -->
+            <div class="row d-flex justify-content-center">
 
-            <!-- LIGHTS ROW -->
-            <div class="row">
-              <div class="col-lg-12">
-                <!--LIGHTS TITLE-->
-                <div class="container">
-                  <div class="row d-flex justify-content-center">
-                    <span class="titles">
-                      LIGHTS</span>
-                  </div>
-                  <div class="row">
-                    <!--LIGHTS-->
-                    <div class="col-lg-fluid">
-                      <div id="lights"></div>
+              <!-- CONTAINER ALL DEVICES TYPES -->
+              <div class="container-fill d-flex justify-content-center">
+                <div class="row d-flex justify-content-center">
+
+                  <!--LOCKS COL-->
+                  <div hidden="hidden" id="locksCol" class="col-lg-fill text-white m-0">
+                    <div class="container-fill">
+                      <div class="row d-flex justify-content-center">
+                        <span class="titles">
+                          LOCKS</span>
+                      </div>
+                      <div id="rowLocks" class="row d-flex justify-content-center">
+                        <!--LOCKS-->
+
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-            <div class="row">
-              <div class="col-lg-12">
-                <div class="container">
-                  <div class="row d-flex justify-content-center">
-                    <!--OTHER SWITCHES TITLE-->
-                    <span class="titles">
-                      OTHER SWITCHES AND OUTLETS</span>
-                  </div>
-                  <div class="row">
-                    <!--OTHER SWITCHES-->
-                    <div class="col-lg-fluid">
-                      <div id="switches"></div>
-                      <div id="other"></div>
+
+                  <!--LIGHTS COL-->
+                  <div hidden="hidden" id="lightsCol" class="col-lg-fill text-white m-0">
+                    <div class="container-fill">
+                      <div class="row d-flex justify-content-center">
+                        <span class="titles">
+                          LIGHTS</span>
+                      </div>
+                      <div class="row-fill">
+                        <!--LIGHTS-->
+                        <div id="lights" class="col-lg-fill ml-2"></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-            <div class="row" ">
-              <div class=" col-lg-12">
-                <div class="container-fluid">
-                  <div class="row">
-                    <!--DIMMERS TITLE-->
-                    <span class="titles">
-                      DIMMERS</span>
+
+                  <!--OTHER SWITCHES COL-->
+                  <div hidden="hidden" id="otherSwitchesCol" class="col-lg-fill text-white m-0">
+                    <div class="container-fill">
+                      <div class="row d-flex justify-content-center p-0 m-0">
+                        <!--OTHER SWITCHES TITLE-->
+                        <span class="titles">
+                          OTHER SWITCHES AND OUTLETS</span>
+                      </div>
+                      <div class="row m-2">
+                        <!-- SWITCHES-->
+                        <div id="switches" class="col-lg-fill ml-2"></div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="row">
-                    <!--DIMMERS-->
-                    <div class="col-lg-fluid">
-                      <div id="dimmers"></div>
+
+                  <!-- DIMMERS COLUMN -->
+                  <div hidden="hidden" id="dimmersCol" class="col-lg-fill text-white m-0">
+                    <div class="container-fill">
+                      <div class="row d-flex justify-content-center p-0 m-0">
+                        <!--DIMMERS TITLE-->
+                        <span class="titles">
+                          DIMMERS</span>
+                      </div>
+                      <div class="row m-2">
+                        <!--DIMMERS-->
+                        <div class="col-lg-12">
+                          <div id="dimmers"></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -127,6 +172,7 @@
         </div>
       </div>
     </div>
+
   </body>
   <script>
     $("#loading_message_container").removeAttr("hidden")

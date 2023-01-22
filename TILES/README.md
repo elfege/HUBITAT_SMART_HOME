@@ -7,13 +7,10 @@
 
 
 ```JSON 
-    "access_token": "your",
-    "ip": "192.168.xxx.xxx",
-    "appNumber": "app_number"
+    "access_token": "your_access_token", ➡️This info is available in your MAKER API app. 
+    "ip": "your_hub's_ip",  ➡️This info is available in your MAKER API app. 
+    "appNumber": "app_number"   ➡️This info is available in your MAKER API app. 
 ```
-
-➡️This info is available in your MAKER API app. 
-
 
 5) In a browser, simply type :"http://[your_ip]/[dedicated_directory_if_applicable]/ and your page should load with any switch, light or lock you've added to your MAKER API app. 
 

@@ -36,6 +36,10 @@
 
   <body>
 
+    <div id="overlay" onclick="overlayOff()">
+      <div id="OverlayText"></div>
+    </div>
+
     <!--MESSAGE CONTAINER-->
     <div hidden="hidden" class="container-fill">
       <div class="container-fluid" id="loading_message_container">
@@ -71,7 +75,10 @@
                 <button class="btn btn-secondary bt-block navButton m-0" id="locksToggle">LOCKS</button>
               </div>
               <div class="col-fluid m-1 block">
-                <button class="btn btn-secondary bt-block navButton m-0" id="showAll">SHOW ALL</button>
+                <button class="btn btn-secondary bt-block navButton m-0" id="thremostatsToggle">THERMOSTATS</button>
+              </div>
+              <div class="col-fluid m-1 block">
+                <button class="btn btn-secondary bt-block navButton m-0" id="showAll">ALL</button>
               </div>
               <div class="col-fluid m-1 block">
                 <div class="dropdown">
@@ -89,9 +96,9 @@
           </div>
         </div>
       </nav>
-
+<center>
       <!--MASTER ROW-->
-      <div class="row d-flex justify-content-center m-0">
+      <div class="row m-1">
 
         <!--MASTER COLUMN-->
         <div class="col-lg-12">
@@ -165,12 +172,31 @@
                       </div>
                     </div>
                   </div>
+
+                  <!-- THERMOSTATS COLUMN -->
+                  <div hidden="hidden" id="thermostatsCol" class="col-lg-fill text-white m-0">
+                    <div class="container-fill">
+                      <div class="row d-flex justify-content-center p-0 m-0">
+                        <!--THERMOSTATS TITLE-->
+                        <span class="titles">
+                          THERMOSTATS</span>
+                      </div>
+                      <div class="row m-2">
+                        <!--THERMOSTATS-->
+                        <div class="col-lg-12">
+                          <div id="thermostats"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+</center>
     </div>
 
   </body>

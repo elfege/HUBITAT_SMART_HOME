@@ -1,20 +1,26 @@
 :root {
     --tileSize: 16rem;
     --tileHeight: 4rem;
-    --onColor: rgb(205, 205, 194);
+    --onColor: rgb(203, 203, 74);
     --offColor: rgb(58, 54, 54);
+    --offColorSlider: rgb(119, 112, 112);
+    --spanDimmerOff: white;
+    --spanDimmerOn: yellow;
+    --baseBackground:url(/images/landscape.jpg);
+    --thermostatsBackground:url(/images/temperature.jpg);
+    --locksBackground:url(/images/locks.jpg);
 
 }
 
 body {
     /* background-image: url("/images/green_wallpaper.jpg"); */
-    background: url(/images/green_wallpaper.jpg) no-repeat center center fixed;
-    -webkit-background-size: cover;
+    /* background: url(/images/landscape.jpg) no-repeat center center fixed; */
+    /* -webkit-background-size: cover;
     -moz-background-size: cover;
     -o-background-size: cover;
     background-size: cover;
-    /* background-size :100vw 100vh;
-    background-attachment:fixed */
+    background-size :100vw 100vh;
+    background-attachment:fixed; */
 
     /* background: -moz-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
     background: -webkit-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
@@ -27,7 +33,7 @@ body {
 }
 
 .navButton {
-    width: 100px !important;
+    width: 160px !important;
     opacity: .8;
     font-weight: 700;
 
@@ -49,7 +55,7 @@ body {
 
 
     border-radius: 1rem;
-    opacity: 0.95;
+    opacity: 0.75;
 
 }
 
@@ -116,11 +122,179 @@ body {
 }
 
 .spanDimmer {
-    font-size: small;
-    font-weight: 900;
+    font-size:.5rem;
+    font-weight: 600;
     color: aliceblue;
+    background-color: rgb(111, 102, 102);
+    padding:3px 3px 3px 3px;
 
 }
+
+.spanThermostat {
+    font-size:2rem;
+    font-weight: 600;
+    color: aliceblue;
+    /* background-color: rgb(111, 102, 102); */
+    padding:3px 3px 3px 3px;
+
+}
+
+#overlay {
+    position: fixed;
+    display: none;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 2;
+    cursor: pointer;
+}
+
+
+#OverlayText {
+    background-color: antiquewhite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    font-size: 10px;
+    color: rgb(16, 9, 9);
+    transform: translate(-50%, -50%);
+    -ms-transform: translate(-50%, -50%);
+    padding-top: 50px;
+    padding-right: 50px;
+    padding-bottom: 50px;
+    padding-left: 50px;
+}
+
+
+@import url("https://fonts.googleapis.com/css2?family=Play:wght@700&display=swap");
+.thermostatWrap {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  align-items: center;
+  gap: 5vmin;
+}
+.thermostatWrap .thermostat {
+  width: 50vmin;
+  height: 50vmin;
+  border-radius: 50%;
+  box-shadow: -3px -1px 20px 20px rgba(255, 255, 255, 0.03), 20px 13px 50px 5px black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: linear-gradient(146deg, #00000094, #ffffff03);
+}
+.thermostatWrap .thermostat::before {
+  content: "";
+  display: block;
+  position: absolute;
+  z-index: 1;
+  width: 95%;
+  height: 95%;
+  border-radius: 50%;
+}
+.thermostatWrap .thermostat::after {
+  content: "";
+  display: block;
+  position: absolute;
+  z-index: 0;
+  width: 90%;
+  height: 90%;
+  border-radius: 50%;
+  background: #000;
+}
+.thermostatWrap .temperature {
+  font-family: "Play", sans-serif;
+  font-size: max(11vmin, 1.5rem);
+  font-weight: 700;
+  color: #ccc;
+  height: 80%;
+  width: 80%;
+  display: grid;
+  place-items: center;
+  position: relative;
+  z-index: 1;
+}
+.thermostatWrap .temperature::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 50%;
+  z-index: -1;
+  box-shadow: inset 0 0 11px 0px #fbfbfb24;
+  -webkit-mask-image: radial-gradient(transparent 55%, black 0);
+          mask-image: radial-gradient(transparent 55%, black 0);
+  transform: scaleX(-1);
+  background: conic-gradient(#ffffff22, #506eff, #2bc016, #f1c40f, #ba1200 var(--radius, 0%), #ffffff22 var(--radius, 0%) 100%);
+}
+.thermostatWrap .temperature::after {
+  content: "";
+  position: absolute;
+  top: 4.5vmin;
+  bottom: 4.5vmin;
+  left: 4.5vmin;
+  right: 4.5vmin;
+  border-radius: 50%;
+  z-index: 1;
+  display: block;
+  box-shadow: 0 0 13px 0px #ffffff5c;
+}
+.thermostatWrap .sliderWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0px 1px 4px 0 rgba(0, 0, 0, 0.3);
+  padding: 1rem;
+  border-radius: 60px;
+  border: 1px solid #ffffff0d;
+  width: 70%;
+}
+.thermostatWrap .tempSlider,
+.thermostatWrap .tempSlider::-webkit-slider-runnable-track {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background-color: #ffffff24;
+  background: linear-gradient(to right, #506eff, #2bc016, #f1c40f, #ba1200);
+  height: 2px;
+  border-radius: 1rem;
+  box-shadow: inset 0px 1px 1px 0px rgba(0, 0, 0, 0.5);
+  -webkit-transition: 0.2s;
+  transition: 0.2s;
+}
+.thermostatWrap .tempSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 6vmin;
+  height: 4vmin;
+  border-radius: 0.2rem;
+  border: 1px solid #777;
+  border-color: #444 #000 #000 #444;
+  background: linear-gradient(to right bottom, #222 0%, #000 100%);
+  margin-top: 1px;
+  cursor: pointer;
+  transform: translateY(-50%);
+  -webkit-transition: 0.2s;
+  transition: 0.2s;
+}
+.thermostatWrap .tempSlider::-webkit-slider-thumb:hover {
+  box-shadow: inset 0px 0px 15px 0px rgba(255, 255, 255, 0.1);
+}
+.thermostatWrap .tempSlider::-webkit-slider-thumb:hover:active {
+  border-color: #555;
+}
+
+
+
+
 
 
 

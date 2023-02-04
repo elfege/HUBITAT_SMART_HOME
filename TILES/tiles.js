@@ -10,11 +10,12 @@ let modesUrl;
 let labelLength = 35;
 let allDevices = [];
 
+
+
 // const modes = "http://" + ip + "/apps/api/" + appNumber + "/modes?/all??access_token=" + access_token;
 
 jQuery(function () {
   console.log("dom loaded");
-  // allDevices = initialize(access_token, ip, appNumber);
   console.log(JSON.stringify(allDevices));
   //delete all comments so they don't show in dev tools
   $("*").contents().filter(function () {
@@ -24,32 +25,38 @@ jQuery(function () {
   console.log("allDevices:", allDevices);
 
 });
+getSettings()
+  .then(() => {
+    initialize(access_token, ip, appNumber)
+      .then(() => {
+        console.log(allDevices);
+      });
+  })
+  .catch(() => {
+    overlayOn("SOMETHING WENT WRONG");
+    setTimeout(restart, 2000);
+  })
 
-getCredentials().then(() => {
-  console.log(`
-  ---
-  access_token => ${access_token}
-  ip => ${ip}
-  appNumber => ${appNumber}
-  everythingUrl => ${everythingUrl}
-  ---
-  `);
-  initialize(access_token, ip, appNumber).then(() => {
-    console.log(allDevices);
-  });
-});
-
-async function getCredentials() {
-  const response = await axios.get("\\credentials.json");
+async function getSettings() {
+  const response = await axios.get("\\settings.json");
   console.log("response.data => ", response.data);
+
+  // let { access_token, ip, appNumber, ...other } = response.data
+
+  console.log("access_token: ", access_token)
+  console.log("ip: ", ip)
+  console.log("appNumber: ", appNumber)
+
+
   access_token = response.data.access_token;
   ip = response.data.ip;
   appNumber = response.data.appNumber;
+
+
   everythingUrl = "http://" + ip + "/apps/api/" + appNumber + "/devices/all?access_token=" + access_token;
   modesUrl = "http://" + ip + "/apps/api/" + appNumber + "/modes/all?access_token=" + access_token;
   getMode(modesUrl)
 }
-
 async function initialize(access_token, ip, appNumber) {
   console.log("initialize...");
 
@@ -75,13 +82,17 @@ async function initialize(access_token, ip, appNumber) {
     })
 
     allDevices.forEach((e, index) => {
+
       const id_From_Hub = e.id;
 
       const isLock = e.capabilities.find(el => el === "Lock");
       const isLight = e.name.toLowerCase().includes("light") || e.label.toLowerCase().includes("light");
-      const isSwitchLevel = e.capabilities.find(el => el === "SwitchLevel");
-      const isSwitch = e.capabilities.find(el => el === "Switch") && !isSwitchLevel;
+      const isSwitchLevel = e.capabilities.includes("SwitchLevel");
+      const isSwitch = e.capabilities.includes("Switch") && !isSwitchLevel;
+      const isWindow = e.label.toLowerCase().includes("window")
+      const isthermostat = e.capabilities.includes("Thermostat")
       let notAButton = !e.capabilities.find(el => el.toLowerCase().includes("button"));
+
       notAButton = notAButton
         ? notAButton
         : e.type.toLowerCase().includes("button")
@@ -96,7 +107,11 @@ async function initialize(access_token, ip, appNumber) {
             ? "light"
             : "otherSwitch";
 
-      if (notAButton && (isLight || isLock || isSwitchLevel)) {
+      if (e.label.toLowerCase().includes("window")) {
+        let { name, ...other } = e
+        console.log(name, other)
+      }
+      if (notAButton && (isLight || isLock || isSwitchLevel || isSwitch)) {
         if (isLight) {
           const id_html = id_From_Hub + "light";
 
@@ -182,7 +197,7 @@ async function initialize(access_token, ip, appNumber) {
             .append($("<button>")
               .addClass("btn btn-primary tiles")
               .attr({ id: `${id_html}`, "data-id_From_Hub": id_From_Hub, "data-device-type": "lock" })
-              .text(e.label.toLowerCase().replace("lock", ""))
+              .text(trimLabel(e.label.toLowerCase().replace("lock", "")))
               .css("text-transform", "capitalize"));
 
           const state = e.attributes.lock;
@@ -217,10 +232,11 @@ async function initialize(access_token, ip, appNumber) {
             });
           });
         }
-      } else {
-        /* ALL OTHER DEVICES */
-        /************************CREATE OTHER SWITCHES********************************/
-        if (isSwitch && notAButton) {
+
+        /************************ALL OTHER DEVICES + all dimmers as switch buttons********************************/
+
+        if (!isLight && !isLock && (isSwitch || isSwitchLevel)) {
+
           const id_html = id_From_Hub + "switch";
 
           $("#switches").append($("<button>").addClass("btn btn-primary tiles").attr({ id: id_html, "data-id_From_Hub": id_From_Hub, "data-device-type": `${deviceType}` }).text(trimLabel(e.label, labelLength)));
@@ -242,17 +258,75 @@ async function initialize(access_token, ip, appNumber) {
           });
 
           updateDeviceState(id_From_Hub, id_html, "switch", notAButton);
+
         }
+      }
+      if (isthermostat) {
+        $("#thermostats").append(`
+          <section class="thermostatWrap">
+            <span class="spanThermostat"> ${e.label}</span>
+            <div class="thermostat"> 
+            <div class="temperature" id=temperature${id_From_Hub} role="slider" aria-valuenow="72" aria-valuemin="0" aria-valuemax="100"></div> 
+            </div>
+            <div class="sliderWrapper"><input class="tempSlider" id=thermostat${id_From_Hub} type="range" value="72" min="0" max="100" /></div>
+          </section> 
+        `)
+
+        const radiusPercent = $(`#temperature${id_From_Hub}`);
+        const slider = $(`#thermostat${id_From_Hub}`)
+
+        const increment = (radius) => {
+          const value = `${radius}%`;
+          radiusPercent.attr("aria-valuenow", value);
+          radiusPercent.css("--radius", value);
+          radiusPercent.html(parseFloat(value));
+        };
+
+        const currentValue = e.attributes.thermostatSetpoint
+
+        console.log(e.label, " value => ", currentValue)
+        increment(currentValue);
+
+        // change ui while sliding
+        slider.on("input", (evt) => {
+          console.log("evt ============> ",evt.target.value)
+          
+          increment(evt.target.value);
+        });
+
+        //send command once mouse is up 
+        slider.on("change", (evt) => {
+          const url = `http://${ip}/apps/api/${appNumber}/devices/${id_From_Hub}/setLevel/${evt.target.value}?access_token=${access_token}`;
+          console.log(url)
+          // TODO : thermostats specific commands... 
+          // sendCommand(url);
+        })
+
+        
+
+
+
+
+
       }
 
 
     });
+
   }).then(resp => {
     $("#loading_message_container").remove();
     $("#master_container").removeAttr("hidden");
   }).catch(error => {
     console.log("error: ", error);
-    setTimeout(restart, 1000);
+
+    // $("div").remove()
+    $("body").append($("<div class='col-lg-4'>").text(`
+    Hubitat isn't responding.
+    \n${JSON.stringify(error)}
+    `)
+      .css("color", "white"))
+    overlayOn("Page will reload in 2 seconds...")
+    setTimeout(restart, 2000);
   });
 }
 async function sendCommand(cmdurl) {
@@ -289,14 +363,31 @@ async function getMode(url) {
 
 
 }
-
 async function setMode(mode, id) {
   console.log("setting location mode to ", mode)
+
   const url = "http://" + ip + "/apps/api/" + appNumber + "/modes/" + id + "?access_token=" + access_token
   axios.get(url)
     .then(resp => console.log(resp))
     .catch(err => console.log("Mode Update failed => ", err))
+
+  //other hubs?
+  const response = await axios.get("\\settings.json");
+
+  for (let i = 0; i < Object.values(response.data.otherHubs).length; i++) {
+
+    const ip_ = Object.values(response.data.otherHubs)[i]
+    const appNumb = Object.values(response.data.otherHubsAppNumbers)[i]
+    const token = Object.values(response.data.otherHubsTokens)[i]
+    console.log("updating mode for ip:", ip_, " index: ", i, " appNumb:", appNumb, " token:", token)
+
+    const u = "http://" + ip_ + "/apps/api/" + appNumb + "/modes/" + id + "?access_token=" + token
+    axios.get(u)
+      .then(resp => console.log(resp))
+      .catch(err => console.log("Mode Update failed => ", err))
+  }
 }
+
 
 //used only when document is loaded for the first time
 async function updateDeviceState(id_From_Hub, id_html, type, notAButton, value) {
@@ -312,6 +403,8 @@ async function updateDeviceState(id_From_Hub, id_html, type, notAButton, value) 
     })
       ?.currentValue;
 
+
+    //only devices with switch attribute, without level attribute
     if (type !== "switch&Level" && type !== "lock") {
       const clsRemove = state === "on"
         ? "off"
@@ -320,11 +413,18 @@ async function updateDeviceState(id_From_Hub, id_html, type, notAButton, value) 
       $(`#${id_html}`).addClass(state);
     }
 
+    // if the switch is also a dimmer, update slider with the dimmer's switch attribute value
     if (type === "switch&Level") {
-      let color = value > 1 && state === "on"
-        ? "yellow"
-        : "white";
-      $(`#${id_From_Hub}dimSpan`).css("color", color);
+      let color = value > 0 && state === "on"
+        ? $(":root").css("--onColor")
+        : $(":root").css("--offColorSlider");
+
+      let spanDimmerColor = value > 0 && state === "on"
+        ? $(":root").css("--spanDimmerOn")
+        : $(":root").css("--spanDimmerOff");
+
+      $(`#${id_From_Hub}dimSpan`).css("color", spanDimmerColor);
+
       $(`#${id_html}`).roundSlider();
       const Obj = $(`#${id_html}`).data("roundSlider");
 
@@ -335,27 +435,27 @@ async function updateDeviceState(id_From_Hub, id_html, type, notAButton, value) 
     }
   });
 }
-
 function trimLabel(label, length) {
-  label = label.replace(")", "");
-  label = label.replace("(", "");
-  label = label.replace("-", "");
-  label = label.replace("OFFLINE", "");
-  label = label.replace("on Home 1", "");
-  label = label.replace("on Home 2", "");
-  label = label.replace("on Home 3", "");
-  label = label.replace("on HOME 1", "");
-  label = label.replace("on HOME 2", "");
-  label = label.replace("on HOME 3", "");
-  label = label.replace("temperature", "temp.");
-  label = label.replace("Temperature", "temp.");
+  // console.log("triming ", label)
+  label = label.replace(")", "")
+    .replace("(", "")
+    .replace("-", "")
+    .replace("OFFLINE", "")
+    .replace("on Home 1", "")
+    .replace("on Home 2", "")
+    .replace("on Home 3", "")
+    .replace("on HOME 1", "")
+    .replace("on HOME 2", "")
+    .replace("on HOME 3", "")
+    .replace("temperature", "temp.")
+    .replace("Temperature", "temp.");
 
   if (label.length > length) {
     label = label.substr(0, length);
   }
+  // console.log("trim result: ", label)
   return label;
 }
-
 function WebSocket_init(ip) {
   console.log("ip => ", ip);
 
@@ -368,7 +468,7 @@ function WebSocket_init(ip) {
   // Listen for messages
   socket.addEventListener("message", event => {
     const evt = JSON.parse(event.data);
-    // console.log(evt.displayName, evt.name, "is", evt.value);
+    console.log(evt.displayName, evt.name, "is", evt.value);
 
     const isDimCapable = allDevices.find(el => el.id === `${evt.deviceId}`)
       ?.capabilities
@@ -415,9 +515,9 @@ function WebSocket_init(ip) {
           $(`#bulb${evt.deviceId}`).attr("src", "images/lightOff.png")
         }
         console.log("updating state class for ", device);
-        console.log("removing class ", clsRemove);
+        // console.log("removing class ", clsRemove);
         device.removeClass(clsRemove);
-        console.log("Adding class ", evt.value);
+        // console.log("Adding class ", evt.value);
         device.addClass(evt.value);
       }
 
@@ -439,25 +539,26 @@ function WebSocket_init(ip) {
     }
   });
   socket.addEventListener("close", event => {
-    console.log("connexion to ", origin, " closed... reloading");
-    setTimeout(restart, 1000);
+    overlayOn("connexion to server closed... The hub is probably reloading or shut down. Please wait about 60s.  ");
+
+    setTimeout(restart, 60000);
   });
   socket.addEventListener("failed", event => {
-    console.log("connexion to ", origin, " failed... reloading");
-    setTimeout(restart, 100);
+    overlayOn("connexion to server failed... The hub is probably reloading or shut down. Please wait about 60s.  ");
+
+    setTimeout(restart, 60000);
   });
 }
 
-//recurrent call by websocket event listener
+
+//called by websocket event listener
 function updateDimmerState(device, deviceId, evtName, value) {
   const state = parseInt(value) > 0
     ? "on"
     : "off";
   const color = state === "on"
-    ? "yellow"
-    : "white";
-
-
+    ? $(":root").css("--onColor")
+    : $(":root").css("--offColorSlider");
 
   const devAsDimSpan = $(`#${deviceId}dimSpan`);
 
@@ -508,20 +609,25 @@ function updateDimmerState(device, deviceId, evtName, value) {
     Obj.option("value", value);
   }
 }
-
-
-
 jQuery(() => {
-  $("#lightsToggle").click(togglePanels);
-  $("#switchesToggle").click(togglePanels);
-  $("#dimmersToggle").click(togglePanels);
-  $("#locksToggle").click(togglePanels);
-  $("#showAll").click(togglePanels);
+  $("#lightsToggle").on("click", togglePanels);
+  $("#switchesToggle").on("click", togglePanels);
+  $("#dimmersToggle").on("click", togglePanels);
+  $("#locksToggle").on("click", togglePanels);
+  $("#thremostatsToggle").on("click", togglePanels);
+  $("#showAll").on("click", togglePanels);
+
+
 
   function togglePanels(e) {
+
+    const background = $(":root").css("--baseBackground")
+
     switch (this.id) {
       case "lightsToggle":
         console.log("case: ", "lightsToggle");
+
+        $(document.body).css("background", background)
 
         $("#lightsCol").removeAttr("hidden");
         $("#otherSwitchesCol").attr("hidden", true);
@@ -534,6 +640,8 @@ jQuery(() => {
 
       case "switchesToggle":
         console.log("case: ", "switchesToggle");
+
+        $(document.body).css("background", background)
 
         $("#otherSwitchesCol").removeAttr("hidden");
         $("#lightsCol").attr("hidden", true);
@@ -549,55 +657,132 @@ jQuery(() => {
       case "dimmersToggle":
         console.log("case: ", "dimmersToggle");
 
+        if (smartDevice) {
+          $("body").css("background", "url(/images/klein_explosion.jpg)  no-repeat center center fixed")
+        }
+        else {
+          $("body").css("background", "url(/images/klein_explosion.jpg)  no-repeat ")
+        }
+
         $("#dimmersCol").removeAttr("hidden");
         $("#lightsCol").attr("hidden", true);
         $("#otherSwitchesCol").attr("hidden", true);
         $("#locksCol").attr("hidden", true);
+        $("#thermostatsCol").attr("hidden", true);
 
         $("#lightsToggle").removeClass("active");
         $("#switchesToggle").removeClass("active");
         $("#dimmersToggle").addClass("active");
         $("#locksToggle").removeClass("active");
+        $("#thremostatsToggle").removeClass("active");
         break;
 
       case "locksToggle":
         console.log("case: ", "locksToggle");
 
+        if (smartDevice) {
+          $("body").css("background", `${$(":root").css("--locksBackground")}  no-repeat center center fixed`)
+        }
+        else {
+          $("body").css("background", `${$(":root").css("--locksBackground")} no-repeat`)
+        }
+
+        // $(document.body).css("background", $(":root").css("--locksBackground"))
+
         $("#locksCol").removeAttr("hidden");
         $("#lightsCol").attr("hidden", true);
         $("#dimmersCol").attr("hidden", true);
         $("#otherSwitchesCol").attr("hidden", true);
+        $("#thermostatsCol").attr("hidden", true);
 
         $("#locksToggle").addClass("active");
         $("#lightsToggle").removeClass("active");
         $("#switchesToggle").removeClass("active");
         $("#dimmersToggle").removeClass("active");
+        $("#thremostatsToggle").removeClass("active");
+        break;
+
+      case "thremostatsToggle":
+        $(document.body).css("background", $(":root").css("--thermostatsBackground"))
+
+        $("#thermostatsCol").removeAttr("hidden");
+        $("#locksCol").attr("hidden", true);
+        $("#lightsCol").attr("hidden", true);
+        $("#dimmersCol").attr("hidden", true);
+        $("#otherSwitchesCol").attr("hidden", true);
+
+        $("#thremostatsToggle").addClass("active");
+        $("#locksToggle").removeClass("active");
+        $("#lightsToggle").removeClass("active");
+        $("#switchesToggle").removeClass("active");
+        $("#dimmersToggle").removeClass("active");
+
         break;
 
       case "showAll":
+
+        if (smartDevice) {
+          $("body").css("background", "url(/images/klein_explosion.jpg)  no-repeat center center fixed")
+        }
+        else {
+          $("body").css("background", "url(/images/klein_explosion.jpg)  no-repeat ")
+        }
+
         $("#lightsCol").removeAttr("hidden");
         $("#otherSwitchesCol").removeAttr("hidden");
         $("#dimmersCol").removeAttr("hidden");
         $("#locksCol").removeAttr("hidden");
+        $("#thermostatsCol").removeAttr("hidden");
 
         $("#lightsToggle").addClass("active");
         $("#switchesToggle").addClass("active");
         $("#dimmersToggle").addClass("active");
         $("#locksToggle").addClass("active");
+        $("#thremostatsToggle").addClass("active");
         break;
 
     }
+    $("body").css({
+      "-webkit-background-size": "cover",
+      "-moz-background-size": "cover",
+      "-o-background-size": "cover",
+      "background-size": "cover",
+      "background-size" :"100vw 100vh",
+      "background-attachment":"fixed"
+    })
   }
 
-  $("#lightsToggle").click();
+
+
+  // $("#dimmersToggle").trigger("click")
+  $("#lightsToggle").trigger("click")
+  // $("#thremostatsToggle").trigger("click")
+  // $("#locksToggle").trigger("click")
+
 });
+
+
+function overlayOn(text) {
+  const o = $("#overlay")
+  o.css("display", "block");
+  $("#OverlayText").html(text + "  ")
+  $("#OverlayText").append($("<button>").text("RELOAD").on("click", restart))
+
+}
+
+function overlayOff() {
+  document.getElementById("overlay").style.display = "none";
+}
+
 
 //reload every 10 hours to refresh with recent modifications (new devices, UI changes, etc.)
 setTimeout(restart, 10 * 60 * 60 * 1000);
 
+
 function restart() {
-  location.reload();
+  // location.reload();
 }
+
 
 /*
        structure of message:

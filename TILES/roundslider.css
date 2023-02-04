@@ -62,7 +62,7 @@
     position: absolute;
     top: 0;
     overflow: hidden;
-    opacity:0.9;
+    opacity:1;
 }
 
 .rs-control .rs-quarter div.rs-block {
@@ -200,7 +200,7 @@
 
 .rs-handle.rs-move {
     cursor: move;
-    background-color: yellow;
+    background-color: rgb(6, 19, 120);
 }
 
 .rs-readonly .rs-handle.rs-move {

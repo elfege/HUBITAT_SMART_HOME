@@ -81,10 +81,6 @@ def pageSetup() {
         {
 
             input "speaker", "capability.audioNotification", title: "Select your speakers", multiple:true, required:false, submitOnChange: true 
-            input "musicPlayer", "capability.musicPlayer", title: "Select your audio notification device", multiple:true, required:false, submitOnChange: true
-
-            input "volumeLevel", "number", title: "Set the volume level", range: "0..100",required:true, submitOnChange: true 
-            input "volumeRestore", "number", title: "restore to this volume level", range: "0..100", required:false, defaultValue: 50
             if(speaker)
             {
                 input "soundName", "enum", title: "Select a sound", options:["bells", "buzzer", "church_bell", "doorbell1", "doorbell2","doorbell3"] 
@@ -93,6 +89,11 @@ def pageSetup() {
             else {
                 input "uri", "text", title:"add an audio file uri", required:true 
             }
+            input "musicPlayer", "capability.musicPlayer", title: "Select your audio notification device", multiple:true, required:false, submitOnChange: true
+
+            input "volumeLevel", "number", title: "Set the volume level", range: "0..100",required:true, submitOnChange: true 
+            input "volumeRestore", "number", title: "restore to this volume level", range: "0..100", required:false, defaultValue: 50
+            
         }
 
         section("modes")        

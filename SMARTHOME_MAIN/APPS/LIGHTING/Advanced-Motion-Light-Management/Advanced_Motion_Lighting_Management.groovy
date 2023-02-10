@@ -422,7 +422,6 @@ def appButtonHandler(btn) {
         case "pause": atomicState.paused = !atomicState.paused
             log.debug "atomicState.paused = $atomicState.paused"
             if (atomicState.paused) {
-                pause_scheds_and_subscriptions()
                 break
             }
             else {
@@ -484,27 +483,19 @@ def holdableButtonHandler(evt){
         atomicState.pauseDueToButtonEvent = atomicState.paused
         logging """
         atomicState.paused = $atomicState.paused
-        atomicState.pauseDueToButtonEvent
+        atomicState.pauseDueToButtonEvent = $atomicState.pauseDueToButtonEvent
         """
         if (atomicState.paused) {
             atomicState.buttonPausedTime = now()
-            def Time = pauseDuration * 60
-
-            pause_scheds_and_subscriptions()
-
-
+            schedule("0 0/1 * * * ?", checkPauseButton)
+            logging("--------- checkPauseButton scheduled to run every 1 minute")
             log.trace "APP PAUSED FOR $pauseDuration MINUTES"
         }
         else {
             log.trace "RESUMING APP AT USER'S REQUEST DUE TO BUTTON EVENT"
-
-            unschedule(cancelPauseButton)
             unschedule(checkPauseButton)
-            updated()
         }
     }
-
-
 
     master()
 }
@@ -526,15 +517,7 @@ def toggleLightsFromButtonEvt(evtName){
         }
     }
 }
-def pause_scheds_and_subscriptions(){
-    unschedule() // unschedule all tasks
-    unsubscribe() // unsubscribe from events 
-    subscribe_to_pause_related_events() // except for these, of course...
-     //scheduled resume conditions
-    def duration = pauseDuration * 60
-    runIn(duration, cancelPauseButton)
-    schedule("0 0/1 * * * ?", checkPauseButton) // check every minute in case hub rebooted in the meantime
-}
+
 def switchHandler(evt){
     if (atomicState.pauseDueToButtonEvent) {
         checkPauseButton()
@@ -724,7 +707,7 @@ def master(){
 
     if (InRestrictedModeOrTime()) return
 
-    log.warn "atomicState.lastRun = $atomicState.lastRun"
+    logging "atomicState.lastRun = $atomicState.lastRun"
     atomicState.lastRun = atomicState.lastRun == null ? now() : atomicState.lastRun
     if (atomicState.lastRun < 1500) {
         log.warn "events are too close, delaying this run of master loop"
@@ -809,13 +792,19 @@ def master(){
 }
 
 def checkPauseButton(){
+
+    log.debug("check pause")
+
+    logging("""
+    atomicState.pauseDueToButtonEvent = $atomicState.pauseDueToButtonEvent
+    now() - atomicState.buttonPausedTime > pauseDuration : ${now() - atomicState.buttonPausedTime > pauseDuration * 60 * 1000}
+    """)
+
     if (atomicState.pauseDueToButtonEvent && now() - atomicState.buttonPausedTime > pauseDuration * 60 * 1000) {
         atomicState.paused = false
-        log.warn "(periodic schedule) PAUSE BUTTON TIME IS UP! Resuming operations (runIn method seems to have failed)"
         atomicState.pauseDueToButtonEvent = false
+        log.warn "PAUSE BUTTON TIME IS UP! Resuming operations"        
         unschedule(checkPauseButton)
-        updated() // resubscribe to events
-        //master() // feedback loop
     }
     else if (atomicState.pauseDueToButtonEvent) {
         logging("APP PAUSED BY BUTTON EVENT")
@@ -832,18 +821,7 @@ def checkLuxCancel(){
     else if (atomicState.LuxCanceledbyButtonEvt) {
         descriptiontext "LUX SENNSITIVITY PAUSED BY BUTTON EVENT"
     }
-    else {
-        log.error """NO CONDITION MET at checkPauseButton()!
-        atomicState.paused = $atomicState.paused
-        atomicState.pauseDueToButtonEvent = $atomicState.pauseDueToButtonEvent
-
-        """        
-    }
-}
-def cancelPauseButton(){
-    atomicState.paused = false
-    log.warn "(runIn version) PAUSE BUTTON TIME IS UP! Resuming operations"
-    updated()
+    
 }
 def resetLuxCancel(){
     atomicState.LuxCanceledbyButtonEvt = false

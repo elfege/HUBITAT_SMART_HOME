@@ -21,7 +21,7 @@ metadata {
         capability "ContactSensor"
         capability "Refresh" 
 
-        capability "DoorControl"
+        // capability "DoorControl"
 
 
         command "open"

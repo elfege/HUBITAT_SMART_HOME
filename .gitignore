@@ -2,8 +2,14 @@ SMARTHOME_OLD/
 SMARTHOME1/
 SMARTHOME2/
 SMARTHOME3/
+V1/
 
 **/.hubitat
 **/.vscode
 
 **/_SYNCAPP/
+
+credentials.js
+credentials.txt
+credentials.json
+settings.json

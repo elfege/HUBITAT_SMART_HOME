@@ -18,7 +18,8 @@ metadata {
         capability "Configuration"
         capability "Switch"
         capability "Refresh"
-        capability "DoorControl"
+
+        // capability "DoorControl"
 
         command "open"
         command "close"

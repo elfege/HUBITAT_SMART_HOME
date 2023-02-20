@@ -16,7 +16,7 @@ let allDevices = [];
 
 jQuery(function () {
   console.log("dom loaded");
-  console.log(JSON.stringify(allDevices));
+  // console.log(JSON.stringify(allDevices));
   //delete all comments so they don't show in dev tools
   $("*").contents().filter(function () {
     return this.nodeType == 8;
@@ -29,7 +29,7 @@ getSettings()
   .then(() => {
     initialize(access_token, ip, appNumber)
       .then(() => {
-        console.log(allDevices);
+        // console.log(allDevices);
       });
   })
   .catch(() => {
@@ -91,6 +91,8 @@ async function initialize(access_token, ip, appNumber) {
       const isSwitch = e.capabilities.includes("Switch") && !isSwitchLevel;
       const isWindow = e.label.toLowerCase().includes("window")
       const isthermostat = e.capabilities.includes("Thermostat")
+      const isPowerMeterOnly = e.capabilities.includes("PowerMeter") && !isSwitch
+
       let notAButton = !e.capabilities.find(el => el.toLowerCase().includes("button"));
 
       notAButton = notAButton
@@ -109,7 +111,7 @@ async function initialize(access_token, ip, appNumber) {
 
       if (e.label.toLowerCase().includes("window")) {
         let { name, ...other } = e
-        console.log(name, other)
+        // console.log(name, other)
       }
       if (notAButton && (isLight || isLock || isSwitchLevel || isSwitch)) {
         if (isLight) {
@@ -192,7 +194,7 @@ async function initialize(access_token, ip, appNumber) {
         if (isLock) {
           const id_html = id_From_Hub + "lock";
 
-          console.log("/************************CREATE LOCKS ********************************/");
+          // console.log("/************************CREATE LOCKS ********************************/");
           $("#rowLocks").append($("<div>").addClass("col-lg-fill"))
             .append($("<button>")
               .addClass("btn btn-primary tiles")
@@ -284,13 +286,13 @@ async function initialize(access_token, ip, appNumber) {
 
         const currentValue = e.attributes.thermostatSetpoint
 
-        console.log(e.label, " value => ", currentValue)
+        // console.log(e.label, " value => ", currentValue)
         increment(currentValue);
 
         // change ui while sliding
         slider.on("input", (evt) => {
-          console.log("evt ============> ",evt.target.value)
-          
+          console.log("evt ============> ", evt.target.value)
+
           increment(evt.target.value);
         });
 
@@ -301,13 +303,21 @@ async function initialize(access_token, ip, appNumber) {
           // TODO : thermostats specific commands... 
           // sendCommand(url);
         })
-
-        
-
-
-
-
-
+      }
+      if (isPowerMeterOnly) {
+        console.log(e.label, " is a power meter")
+        const v = e.attributes.power
+        if (v !== null && v !== undefined) {
+          const nav = $("#row-nav-buttons")
+          nav.prepend(`
+            <div id="power${id_From_Hub}" class="col-fluid m-1 block">
+              <button id="pwr${id_From_Hub}" class="btn btn-outline-warning bt-block navButton m-0">POWER</button>
+            </div>
+            `)
+          const value = `${v} Watts`
+          console.log(value)
+          $(`#pwr${id_From_Hub}`).text(value)
+        }
       }
 
 
@@ -339,14 +349,14 @@ async function getMode(url) {
   axios.get(modesUrl)
     .then(modes => {
       const all = modes.data
-      console.log("modes: ", all)
+      // console.log("modes: ", all)
       const currentMode = all.find(e => e.active).name
       console.log("currentMode => ", currentMode)
       $("#currentMode").text(currentMode)
 
       // const drop = $("#modesDrop")
       for (m of all) {
-        console.log("***********", m.name)
+        // console.log("***********", m.name)
         $("#modesDrop").append(
           $("<a>").attr({
             "id": `${m.name}Mode`,
@@ -482,6 +492,13 @@ function WebSocket_init(ip) {
 
     if (evt.name === "power") {
       $(`#${evt.deviceId}switch`).text(`${evt.displayName} \n ${evt.value}W`);
+
+      const mainPow = document.getElementById(`pwr${evt.deviceId}`)
+      console.log("*********mainPow = ", mainPow)
+      if (mainPow !== null) {
+        console.log("----------------MAIN POWER METER EVT-----------------")
+        $(`#pwr${evt.deviceId}`).text(`${evt.value} Watts`) //update main power meter's value, if any
+      }
     } else if (evt.name === "lock") {
       const classToRemove = evt.value === "locked"
         ? "btn btn-warning bi bi-unlock"
@@ -514,8 +531,6 @@ function WebSocket_init(ip) {
         else {
           $(`#bulb${evt.deviceId}`).attr("src", "images/lightOff.png")
         }
-        console.log("updating state class for ", device);
-        // console.log("removing class ", clsRemove);
         device.removeClass(clsRemove);
         // console.log("Adding class ", evt.value);
         device.addClass(evt.value);
@@ -537,6 +552,8 @@ function WebSocket_init(ip) {
         console.log(`***************${evt.deviceId}`);
       }
     }
+
+
   });
   socket.addEventListener("close", event => {
     overlayOn("connexion to server closed... The hub is probably reloading or shut down. Please wait about 60s.  ");
@@ -747,8 +764,8 @@ jQuery(() => {
       "-moz-background-size": "cover",
       "-o-background-size": "cover",
       "background-size": "cover",
-      "background-size" :"100vw 100vh",
-      "background-attachment":"fixed"
+      "background-size": "100vw 100vh",
+      "background-attachment": "fixed"
     })
   }
 
@@ -766,7 +783,7 @@ function overlayOn(text) {
   const o = $("#overlay")
   o.css("display", "block");
   $("#OverlayText").html(text + "  ")
-  $("#OverlayText").append($("<button>").text("RELOAD").on("click", restart))
+  $("#OverlayText").append($("<button>").addClass("btn btn-primary").text("RELOAD").on("click", restart))
 
 }
 
@@ -780,7 +797,7 @@ setTimeout(restart, 10 * 60 * 60 * 1000);
 
 
 function restart() {
-  // location.reload();
+  location.reload();
 }
 
 

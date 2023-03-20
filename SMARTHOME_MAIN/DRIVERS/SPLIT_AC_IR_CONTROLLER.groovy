@@ -44,6 +44,8 @@ metadata {
         command "reset"
         command "off"
         command "on"
+        command "getTemperature"
+        command "getHumidity"
 
         attribute "heatingSetpoint", "string"
         attribute "coolingSetpoint", "string"
@@ -322,115 +324,71 @@ def getTemperature(){
     }
 
     def uri =  "http://"+IP+"/apps/api/"+APInumber+"/devices/"+tempSensor+"?access_token="+accessToken
+
     //http://192.168.10.69/apps/api/1035/devices/1835?access_token=ae3f6fe1-10d5-44b9-841c-81ef66260314
     //http://192.168.10.69/apps/api/1035/devices/1835?access_token=ae3f6fe1-10d5-44b9-841c-81ef66260314
     logging "Sending  URI request to $uri"
-    def DATA = []
+  
     def value = null
     def name = null
     try {
         httpGet(uri) { resp ->
             if (resp.success) {  
-                //logging "resp.data = $resp.data"
-                DATA = resp.data
+                // log.debug "resp.data = $resp.data"
+                def attributes = resp.data.attributes
+                value = attributes.find{it -> it.name == "temperature"}.currentValue                
+                log.info "temperature: ${value}"
+                sendEvent(name: "temperature", value: value)
             }
             if (resp.data) logging "${resp.data}"
         }
     } catch (Exception e) {
         log.warn "getTemperature() URI HttpGet call failed: ${e.message}"
-        createEvent(name: "temperature", value: "API ERROR")
+        sendEvent(name: "temperature", value: "API ERROR")
     }
-
-    int s = DATA.attributes.size()
-    logging "DATA = ${DATA}"
-    int i = 0
-    for(s!=0; i<s; i++) // search for the attribute "humidity" and its corresponding value
-    {
-        def a = DATA.attributes[i]
-        if(a.name == "temperature") 
-        {
-            name = a.name
-            value = a.value
-            if(!value)
-            {
-                value = a.currentValue
-            }
-            logging "temperature = ${value}"
-            // logging "//sendEvent(name: ${name}, value: $value)"
-    
-            break // first index is last reported value by the device 
-
-            //return value
-        }
-    }
+  
 }
 def getHumidity(){
     if(!IP || !APInumber || !humSensor) { 
         log.warn "missing device... getHumidity() canceled" 
         return
     }
-    def uri = "http://"+IP+"/apps/api/"+APInumber+"/devices/"+humSensor+"/events?access_token="+accessToken
+
+    def uri =  "http://"+IP+"/apps/api/"+APInumber+"/devices/"+humSensor+"?access_token="+accessToken
 
     logging "Sending  URI request to $uri"
-    def DATA = []
+    
     def value = null
     def name = null
     try {
         httpGet(uri) { resp ->
             if (resp.success) {  
-                //logging "resp.data = $resp.data"
-                DATA = resp.data
-
+                logging "${resp.data}"
+                def attributes = resp.data.attributes
+                value = attributes.find{it -> it.name == "humidity"}.currentValue
+                log.info "humidity: ${value}"
+                sendEvent(name: "humidity", value: value)
             }
-            if (resp.data) logging "${resp.data}"
         }
     } catch (Exception e) {
         log.warn "getHumidity URI HttpGet call failed: ${e.message}"
-        createEvent(name: "humidity", value: "API ERROR")
+        sendEvent(name: "humidity", value: "API ERROR")
     }
-
-    int s = DATA.size()
-    logging "DATA = ${DATA}"
-    int i = 0
-    for(s!=0; i<s; i++) // search for the attribute "humidity" and its corresponding value
-    {
-        def a = DATA[i]
-        if(a.name == "humidity") 
-        {
-            name = a.name
-            value = a.value
-            if(!value)
-            {
-                value = a.currentValue
-            }
-            logging "humidity = ${value}"
-            // logging "//sendEvent(name: ${name}, value: $value)"
-    
-            break // first index is last reported value by the device 
-
-            //return value
-        }
-    }
-
-    //return "null"
-
 }
 def getsupportedattributes(){
     def a = ["heatingSetpoint","coolingSetpoint","coolingSetpoint","thermostatSetpoint","thermostatMode","fanSpeed","low","medium","high","lastUpdated"]
     return a
 }
 def refresh() {  
+    log.debug("Refresh...")
     state.refreshRequest = true
     sendEthernet("refresh")
-    if(device.currentValue("thermostatMode") == "off" && device.currentValue("thermostatFanMode") != "on")
-    {
-
-    }
-    if(tempSensorURI)
+   
+    if(tempSensor)
     {
         getTemperature()
     }
-    if(humSensorURI)
+    if(humSensor)
     {
         getHumidity()
     }

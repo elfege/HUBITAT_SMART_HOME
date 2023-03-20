@@ -616,7 +616,7 @@ def disableZwave(){
 }
 def reboot(){
     log.warn "----------------- REBOOTING ${location} ---------------------- "
-    def text = atomicState.severeLoad > 5 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
+    def text = atomicState.severeLoad >= 1 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
     log.warn formatText(text, "white", "red")
 
     if(workWithRemoteHub){sendGetCommand("/rebooting")}

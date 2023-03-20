@@ -1003,6 +1003,7 @@ def operationConsistency(){
         }
     }
 }
+
 def pageNameUpdate(){
     closeBoolQuestions()
     def pauseVar = atomicState.failedSensors ? "FAILED SENSORS" : "paused"

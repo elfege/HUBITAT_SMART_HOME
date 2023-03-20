@@ -421,13 +421,6 @@ def appButtonHandler(btn) {
     switch (btn) {
         case "pause": atomicState.paused = !atomicState.paused
             log.debug "atomicState.paused = $atomicState.paused"
-            if (atomicState.paused) {
-                break
-            }
-            else {
-                updated()
-                break
-            }
         case "update":
             atomicState.paused = false
             updated()
@@ -795,15 +788,12 @@ def checkPauseButton(){
 
     log.debug("check pause")
 
-    logging("""
-    atomicState.pauseDueToButtonEvent = $atomicState.pauseDueToButtonEvent
-    now() - atomicState.buttonPausedTime > pauseDuration : ${now() - atomicState.buttonPausedTime > pauseDuration * 60 * 1000}
-    """)
+    logging("""atomicState.pauseDueToButtonEvent = $atomicState.pauseDueToButtonEvent now() - atomicState.buttonPausedTime > pauseDuration : ${now() - atomicState.buttonPausedTime > pauseDuration * 60 * 1000}""")
 
     if (atomicState.pauseDueToButtonEvent && now() - atomicState.buttonPausedTime > pauseDuration * 60 * 1000) {
         atomicState.paused = false
         atomicState.pauseDueToButtonEvent = false
-        log.warn "PAUSE BUTTON TIME IS UP! Resuming operations"        
+        log.warn "PAUSE BUTTON TIME IS UP! Resuming operations"
         unschedule(checkPauseButton)
     }
     else if (atomicState.pauseDueToButtonEvent) {
@@ -821,7 +811,7 @@ def checkLuxCancel(){
     else if (atomicState.LuxCanceledbyButtonEvt) {
         descriptiontext "LUX SENNSITIVITY PAUSED BY BUTTON EVENT"
     }
-    
+
 }
 def resetLuxCancel(){
     atomicState.LuxCanceledbyButtonEvt = false

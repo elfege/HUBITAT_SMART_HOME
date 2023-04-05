@@ -22,9 +22,13 @@ metadata {
         capability "SmokeDetector"
         capability "Sensor"
         capability "Refresh"
+        capability "GasDetector"
               
         attribute "smoke", "string"
-        
+        attribute "clear", "string"
+        attribute "tested", "string"
+        attribute "detected", "string"
+
 		fingerprint profileID: "0104", deviceID: "12", inClusters: "0000,0003,0500,0009", outClusters: "0003,0019"      
     }
 }
@@ -72,7 +76,7 @@ private Map getGasResult(value) {
     def descriptionText = value ? "${device.displayName} has detected GAS!" : "${device.displayName} is clear!"
     log.debug descriptionText
 	return [
-			name			: 'smoke',
+			name			: 'naturalGas',
 			value			: value ? 'detected' : 'clear',
             isStateChange: true,
 			descriptionText : descriptionText

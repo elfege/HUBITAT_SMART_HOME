@@ -343,9 +343,9 @@ def init() {
 
     configureRemote()
 
+    subscribe(location, "zigbeeStatus", hubEventHandler)
     subscribe(location, "systemStart", hubEventHandler) // manage bugs and hub crashes
     subscribe(location, "severeLoad", locationEventHandler)
-
 
     atomicState.timer = 5
     schedule("0 0/${atomicState.timer} * * * ?", cronMaster) 
@@ -457,10 +457,17 @@ def hubEventHandler(evt){
 
     unschedule()
     unsubscribe() // temporarily stop all instances to prevent loop reboots
+    atomicState.pausedRemoteReboot = true
+
+    if(evt.name.contains("is offline"))
+    {
+        reboot() // reboot without delay when that happens. 
+        return 
+    }   
 
     log.warn "Hub has just restarted! ${app.label} will resume in 2 minutes..."
     atomicState.lastReboot = now()
-    runIn(120, updated) // restart this app 2 minutes after complete reboot
+    runIn(120, updated) // restart this app 2 minutes after reboot is complete
     atomicState.pausedRemoteReboot = false
 }
 

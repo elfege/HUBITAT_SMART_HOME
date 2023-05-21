@@ -633,6 +633,7 @@ jQuery(() => {
   $("#locksToggle").on("click", togglePanels);
   $("#thremostatsToggle").on("click", togglePanels);
   $("#showAll").on("click", togglePanels);
+  $("#refreshValues").on("click", refreshValues);
 
 
 
@@ -789,6 +790,25 @@ function overlayOn(text) {
 
 function overlayOff() {
   document.getElementById("overlay").style.display = "none";
+}
+
+async function refreshValues() {
+  console.log("REFRESHING ALL DEVICES VALUES")
+  console.log("allDevices:", allDevices)
+
+  for (const device of allDevices) {
+    const url = `http://${ip}/apps/api/${appNumber}/devices/${device.id}/refresh?access_token=${access_token}`
+
+    if (device.capabilities.includes("Refresh")) {
+      
+      try {
+        const response = await axios.get(url)
+        console.log(`${device.name} Refresh successful : ${response.data}`)
+      } catch (error) {
+        console.log("Error refreshing:", error)
+      }
+    }
+  }
 }
 
 

@@ -200,8 +200,8 @@ def initialize() {
     if(scheduleReminders)
     {
         // sends notification without building new data
-        def t = scheduleReminders
-        schedule("0 */$t * * * ?", sendNotification) //“At minute 0 past every Nth hour.”
+        def dTime = scheduleReminders ? scheduleReminders*3600  : 1*3600 
+        schedule("0 */$dTime * * * ?", sendNotification) //“At minute 0 past every Nth hour.”
     }
     if(checkData)
     {
@@ -218,13 +218,13 @@ def initialize() {
     if(pollDevices6)
     {
         // poll / refresh devices
-        def t = 6 // default value, not customizable
+        def t = 6 * 60  // default value, not customizable
         schedule("0 */$t * * * ?", Poll) //“At minute 0 past every Nth hour.”
     }    
     else if(pollDevices12)
     {
         // poll / refresh devices
-        def t = 12 // default value, not customizable
+        def t = 12 * 60// default value, not customizable
         schedule("0 */$t * * * ?", Poll) //“At minute 0 past every Nth hour.”
     }     
 }

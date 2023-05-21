@@ -86,11 +86,11 @@ def pageSetup() {
                 input "soundName", "enum", title: "Select a sound", options:["bells", "buzzer", "church_bell", "doorbell1", "doorbell2","doorbell3"] 
                 input "prioritySpeaker", "capability.audioNotification", title: "Select a priority speaker", multiple:false, required:false, submitOnChange: true 
             }
-            else {
+           
+            input "musicPlayer", "capability.musicPlayer", title: "Select your music players", multiple:true, required:false, submitOnChange: true
+            if(musicPlayer || !speaker) {
                 input "uri", "text", title:"add an audio file uri", required:true 
             }
-            input "musicPlayer", "capability.musicPlayer", title: "Select your audio notification device", multiple:true, required:false, submitOnChange: true
-
             input "volumeLevel", "number", title: "Set the volume level", range: "0..100",required:true, submitOnChange: true 
             input "volumeRestore", "number", title: "restore to this volume level", range: "0..100", required:false, defaultValue: 50
             
@@ -182,7 +182,7 @@ def appButtonHandler(btn) {
         if(!atomicState.paused)  
         {
             if(speaker) playSound()
-            if(musicPlayer) playTrack()
+            if(musicPlayer) play_Track()
         }
         else
         {
@@ -220,7 +220,7 @@ def mainHandler(evt){
         if(speaker) playSound()
         
         logging "music Players = ${musicPlayer?.join(", ")}"
-        if(musicPlayer) playTrack()
+        if(musicPlayer) play_Track()
     }
 
 }
@@ -250,7 +250,7 @@ def otherSpeakers(){
 /***************************/
 
 /* NOTIFICATION DEVICES */
-def playTrack(){
+def play_Track(){
     for(int i=0; i < musicPlayer.size(); i++)
     {
         def device = musicPlayer[i]

@@ -531,15 +531,18 @@ def master(String data){
             if(elapsed > 30000)
             {
 
-                if(atomicState.swtEvt > 2 && now() - atomicState.lastSwtEvent > 60000)
+                if(atomicState.swtEvt > 5 && now() - atomicState.lastSwtEvent > 60000)
                 {
-                    log.warn "Hub is no longer responding to events! REBOOTING"
+                    log.warn "Hub is no longer responding to switch events! REBOOTING"
                     reboot()
                 }
 
                 atomicState.swtCmd = now()
                 testSwitch() // leave time to atomicState.swtCmd value to be written 
                 atomicState.swtEvt += 1
+            }
+            else {
+                atomicState.swtEvt = 0
             }
         }
 
@@ -625,7 +628,8 @@ def reboot(){
     log.warn "----------------- REBOOTING ${location} ---------------------- "
     def text = atomicState.severeLoad >= 1 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
     log.warn formatText(text, "white", "red")
-
+    atomicState.lastReboot = now()
+    
     if(workWithRemoteHub){sendGetCommand("/rebooting")}
     if(!atomicState.noReboot)
     {

@@ -95,10 +95,10 @@ def MainPage() {
             input "logwarndebug", "bool", title: "Warning logs", submitOnChange:true
             input "description", "bool", title: "Description Text", submitOnChange:true
 
-            
-           
-            
-
+            atomicState.enabledebug = now()
+            atomicState.enableDescriptionTime = now()
+            atomicState.EnableWarningTime = now()
+            atomicState.EnableTraceTime = now()
         }
     }
 }
@@ -2111,7 +2111,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
 
                 
 
-                log.debug """
+                logging """
 <br>timeToRefreshMeters = ${timeToRefreshMeters}
 <br>timeIsUp = ${timeIsUp}
 <br>timeIsUpOff = ${timeIsUpOff}
@@ -3710,7 +3710,7 @@ def getNeed(target, simpleModeActive, inside){
     def need0 = ""
     def need1 = ""
     def need = []
-    def amplThreshold = 2
+    def amplThreshold = 3
     def amplitude = Math.abs(inside - target)
     def lo = celsius ? getCelsius(50) : 50
     def hi = celsius ? getCelsius(75) : 75
@@ -3718,12 +3718,21 @@ def getNeed(target, simpleModeActive, inside){
     atomicState.swing = swing
 
     def loCoolSw = celsius ? getCelsius(60) : 60
-    //DEPRECATED FOR NOW def coolswing = insideHum < loCoolSw ? target + swing : target - swing // if too humid, swing down the threshold when cooling
+
     boolean amplitudeTooHigh = amplitude >= amplThreshold // amplitude between inside temp and target / preventing amplitude paradox during mid-season
 
-    boolean swamp = insideHum > 60 && inside > target + swing && !inWindowsModes // prevent the swamp effect: not so hot outside, but very humid so cooling might be needed: overrides simple mode!
-    
-    boolean needCool = (swamp ? true : (
+    boolean swamp = insideHum >= 50 && inside > target + swing && (!inWindowsModes || contactClosed) // prevent the swamp effect: not so hot outside, but very humid so cooling might be needed. NB: overrides simple mode!
+    boolean toohot = inside >= target && amplitudeTooHigh // usefull when inside's inertial heat gets too strong during shoulder season. 
+
+    // remember toohot event so as to continue to override normal eval until target is reached
+    if(toohot && !atomicState.wasTooHot){
+        atomicState.wasTooHot = true
+    }
+    if(inside <= target && atomicState.wasTooHot){ // once and only once target is reached, and if there was an override previously set up, cancel this cooling decision's override
+        atomicState.wasTooHot = false
+    }
+
+    boolean needCool = atomicState.userWantsCooler ? true : (swamp ? true : toohot || atomicState.wasTooHot ? true : (
         !simpleModeActive || simpleModeActive && simpleModeSimplyIgnoresMotion ? 
         (inWindowsModes ? 
             outsideTemperature >= outsideThres && inside >= target + swing : 
@@ -3731,9 +3740,10 @@ def getNeed(target, simpleModeActive, inside){
                 ) :
                     inside >= target + swing))
 
-    needCool = atomicState.userWantsCooler || inside > target + 4 ? true : needCool
+    
 
     logtrace """<div style="background:black;color:white;display:inline-block:position:relative;left:-20%">
+    <br>toohot = $toohot 
     <br>swamp = $swamp
 <br> insideHum = $insideHum
 <br> humidity = $humidity

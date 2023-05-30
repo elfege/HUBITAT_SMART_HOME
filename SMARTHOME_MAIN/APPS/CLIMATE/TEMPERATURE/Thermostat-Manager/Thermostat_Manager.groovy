@@ -95,12 +95,7 @@ def MainPage() {
             input "logwarndebug", "bool", title: "Warning logs", submitOnChange:true
             input "description", "bool", title: "Description Text", submitOnChange:true
 
-            atomicState.EnableDebugTime = now()
-            atomicState.enableDescriptionTime = now()
-            atomicState.EnableWarningTime = now()
-            runIn(1800,disablelogging)
-            runIn(1800,disabledescription)
-            runIn(1800,disablewarnings)
+            
            
             
 
@@ -1131,19 +1126,15 @@ def updated() {
 }
 def initialize(){
     log.info "initializing"
-    if(enabledebug)
-    {
-        logwarn "debug enabled"      
-        atomicState.EnableDebugTime = now()
-        runIn(1800,disablelogging)
-        atomicState.enableDescriptionTime = now()
-        runIn(86400, disabledescription)
-        descriptionText "debug will be disabled in 30 minutes"
-    }
-    else 
-    {
-        logwarn "debug disabled"
-    }
+    atomicState.EnableDebugTime = now()
+    atomicState.enableDescriptionTime = now()
+    atomicState.EnableWarningTime = now()
+    atomicState.EnableTraceTime = now()
+    runIn(1800,disablelogging)
+    runIn(1800,disabledescription)
+    runIn(1800,disablewarnings)
+    runIn(1800, disabletrace)
+    
 
     updateAllHeatSourcesBooleans()
 
@@ -1159,17 +1150,17 @@ def initialize(){
     atomicState.openByApp = true
     atomicState.closedByApp = true
     atomicState.lastPlay = atomicState.lastPlay != null ? atomicState.lastPlay : now()
-    atomicState.overrideTime = now() as long
-        atomicState.resendAttempt = now() as long
-        atomicState.offAttempt = now() as long
+    atomicState.overrideTime = now()
+    atomicState.resendAttempt = now()
+    atomicState.offAttempt = now()
 
-        atomicState.lastMotionEvent = now() as long
-        atomicState.lastNotification = now() as long
-        atomicState.motionEvents = 0
-    atomicState.lastTimeBsTrue = now() as long
+    atomicState.lastMotionEvent = now()
+    atomicState.lastNotification = now()
+    atomicState.motionEvents = 0
+    atomicState.lastTimeBsTrue = now()
 
-    atomicState.userWantsWarmerTimeStamp = now() as long
-    atomicState.userWantsCoolerTimeStamp = now() as long
+    atomicState.userWantsWarmerTimeStamp = now()
+    atomicState.userWantsCoolerTimeStamp = now()
 
         atomicState.setPointOverride = false
 
@@ -1418,7 +1409,7 @@ def temperatureHandler(evt){
         if(location.mode in restricted){
             descriptionText "location in restricted mode, doing nothing"
              def critical = criticalcold ? criticalcold : 65
-                    if(thermostat.currentValue("temperature") < critical) 
+                    if(getInsideTemp() < critical) 
                     {
                         atomicState.override = false // cancel if it gets too cold
                         atomicState.antifreeze = true
@@ -1439,7 +1430,7 @@ def simpleModeContactHandler(evt){
 
         atomicState.lastBSeventStamp = new Date().format("h:mm:ss a", location.timeZone) // formated time stamp for debug purpose
 
-        if(now() - atomicState.lastBSevent > 60000) // prevent false positives due to floating state of the $simpleModeName Mode trigger due to the mattress's weight (still working on this...)
+        if((now() - atomicState.lastBSevent) > 60000) // prevent false positives due to floating state of the $simpleModeName Mode trigger due to the mattress's weight (still working on this...)
         {
             atomicState.ButtonSupercedes = false // if there's a new contact event, this means it is working as expected, therefore no need for the button to supercede the sensor
         }
@@ -1758,13 +1749,7 @@ def mainloop(source){
 
     descriptionText "mainloop called by $source"
 
-    atomicState.EnableDebugTime = !atomicState.EnableDebugTime ? now() : atomicState.EnableDebugTime
-    atomicState.enableDescriptionTime = !atomicState.enableDescriptionTime ? now() : atomicState.enableDescriptionTime
-    atomicState.EnableWarningTime = !atomicState.EnableWarningTime ? now() : atomicState.EnableWarningTime
-
-    if(now() - atomicState.EnableDebugTime >= 30 * 60 * 1000) disablelogging()
-    if(now() - atomicState.enableDescriptionTime >= 30 * 60 * 1000) disabledescription()
-    if(now() - atomicState.EnableWarningTime >= 30 * 60 * 1000) disablewarnings()
+    
 
     
 
@@ -1791,7 +1776,7 @@ def mainloop(source){
 
             if(overrideDur != 0 && overrideDur != null)
             {
-                if(now() - timeStamp > timeLimit)
+                if((now() - timeStamp) > timeLimit)
                 {
                     logwarn "END OF OVERRIDE"
                     atomicState.override = false
@@ -1816,7 +1801,7 @@ def mainloop(source){
                 {
                     logwarn "OVERRIDE - AUTO MODE - remaining time: ${getRemainTime(overrideDur, atomicState.overrideTime)}"
                     def critical = criticalcold ? criticalcold : 65
-                    if(thermostat.currentValue("temperature") < critical) 
+                    if(getInsideTemp() < critical) 
                     {
                         atomicState.override = false // cancel if it gets too cold
                         atomicState.antifreeze = true
@@ -2039,11 +2024,11 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
             }
         }
 
-        if(enabledebug && now() - atomicState.EnableDebugTime > 1800000){
+        if(enabledebug && (now() - atomicState.EnableDebugTime) > 1800000){
             descriptionText "Debug has been up for too long..."
             disablelogging() 
         }
-        if(description && now() - atomicState.enableDescriptionTime > 86400000){
+        if(description && (now() - atomicState.enableDescriptionTime) > 86400000){
             descriptionText "Description text has been up for too long..."
             disabledescription() 
         }
@@ -2113,43 +2098,64 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 atomicState.resendAttempt = atomicState.resendAttempt ? atomicState.resendAttempt : now()
                 atomicState.offAttempt = atomicState.offAttempt ? atomicState.offAttempt : now()
                 // here we manage possible failure for a thermostat to have received the z-wave/zigbee or http command
-                long timeElapsedSinceLastResend = now() - atomicState.resendAttempt
-                long timeElapsedSinceLastOff = now() - atomicState.offAttempt // when device driver returns state off while in fact signal didn't go through
-                long threshold = 3 * 60 * 1000 // give power meter 3 minutes to have its power measurement refreshed before attempting new request 
-                boolean timeIsUp = timeElapsedSinceLastResend > threshold
-                boolean timeIsUpOff = timeElapsedSinceLastOff > threshold
+                def timeElapsedSinceLastResend = now() - atomicState.resendAttempt
+                atomicState.timeElapsedSinceLastOff = now() - atomicState.offAttempt // when device driver returns state off while in fact signal didn't go through
+                atomicState.threshold = 3 * 60 * 1000 // give power meter 3 minutes to have its power measurement refreshed before attempting new request 
+                boolean timeIsUp = timeElapsedSinceLastResend > atomicState.threshold
+                boolean timeIsUpOff = atomicState.timeElapsedSinceLastOff > atomicState.threshold
                 def pwVal = pw.currentValue("power")
                 boolean pwLow = pwVal < 100 // below 100 watts we assume there's no AC compression nor resistor heat currently at work
-                boolean timeToRefreshMeters = need == "off" ? timeElapsedSinceLastOff > 10000 && !pwLow : timeElapsedSinceLastResend > 10000 && pwLow
-                logging("time since last Resend Attempt = ${timeElapsedSinceLastResend/1000} seconds & threshold = ${threshold/1000}sec")
-                logging("time since last OFF Attempt = ${timeElapsedSinceLastOff/1000} seconds & threshold = ${30}sec")
+                boolean timeToRefreshMeters = need == "off" ? atomicState.timeElapsedSinceLastOff > 10000 && !pwLow : timeElapsedSinceLastResend > 10000 && pwLow
+                logging("time since last Resend Attempt = ${timeElapsedSinceLastResend/1000} seconds & atomicState.threshold = ${atomicState.threshold/1000}sec")
+                logging("time since last OFF Attempt = ${atomicState.timeElapsedSinceLastOff/1000} seconds & atomicState.threshold = ${30}sec")
 
+                
+
+                log.debug """
+<br>timeToRefreshMeters = ${timeToRefreshMeters}
+<br>timeIsUp = ${timeIsUp}
+<br>timeIsUpOff = ${timeIsUpOff}
+<br>ignoreMode = ${ignoreMode}
+<br>pwLow = ${pwLow}                
+<br>offrequiredbyuser = ${offrequiredbyuser}
+<br>now() - atomicState.resendAttempt => ${now() - atomicState.resendAttempt} (atomicState.threshold is ${atomicState.threshold/1000/60} minutes)
+<br>need = $need
+<br>cmd = $cmd
+
+                """
                 //this must not run in ignoreMode 
-                if(timeToRefreshMeters && !timeIsUp && !timeIsUpOff && !ignoreMode) // make sure to attempt a refresh before sending more commands
+                if(timeToRefreshMeters /*&& !timeIsUp && !timeIsUpOff && !ignoreMode*/) // make sure to attempt a refresh before sending more commands
                 {
-                    descriptionText "<i style=color:red;backgroundColor:red;>DEPRECATED</i> : pwLow = $pwLow refreshing $pw because power is $pwVal while it should be ${need == "off" ? "below 100 Watts":"above 100 Watts"}"
+                    descriptionText "<i style=color:red;backgroundColor:red;></i> : pwLow = $pwLow refreshing $pw because power is $pwVal while it should be ${need == "off" ? "below 100 Watts":"above 100 Watts"}"
                     pollPowerMeters()
                 }
-                else if(!ignoreMode && timeIsUp && pwLow && (need != "off" || !offrequiredbyuser))
+
+                
+                if(!ignoreMode && timeIsUp && pwLow && (need != "off" || !offrequiredbyuser))
                 {
-                    descriptionText "$app.label is resending ${cmd}(${target}) due to inconsistency in power value"
+                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency in power value</div>"
                     atomicState.resendAttempt = now() 
                     atomicState.setpointSentByApp = true
                     runIn(3, resetSetByThisApp)
 
                     if(cmd in ["setCoolingSetpoint", "setHeatingSetpoint", "setThermostatSetpoint"])
                     {
+                        
+                        thermostat.setThermostatMode(need)
 
                         descriptionText "$thermostat $cmd 4gh5ze"
                         boolean inpowerSavingMode = location.mode in powersavingmode
                         if(ignoreSetPoint && !inpowerSavingMode)
                         {
-                            logtrace "Target ($target) temp not sent to $thermostat at user's request"
+                            logtrace "Target ($target) temp not sent to $thermostat at user's request 654frg"
+                            
                         }
                         else
                         {
                             thermostat."${cmd}"(target) // resend cmd
                         }
+                        
+                        
 
 
                     }
@@ -2177,7 +2183,6 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 else if(timeIsUpOff && need == "off" && !pwLow && !doorsContactsAreOpen())
                 {
 
-                    atomicState.offAttempt = now() 
                     if(!fanCirculateAlways)
                     {                        
                         if(okToTurnOff() && !atomicState.userWantsWarmer && !atomicState.userWantsCooler)
@@ -2277,7 +2282,8 @@ ${thermostat.currentValue("thermostatOperatingState") == currentOperatingNeed}""
             double swing = UserSwing ? UserSwing.toDouble() : 0.5 // swing is the target amplitude set at the level of the thermostat directly (hardware setting) - user must specify, default is 0.5
             double undesirableOffset = 2
             // the problem is when the thermostat returns a temp that is too close to the target temp while the alt sensor is still too far from it
-            double thermostatTemp = thermostat.currentValue("temperature").toDouble() 
+
+            double thermostatTemp = getInsideTemp() 
             //boolean insideTempNotOk = need == "cool" ? inside > target + swing : need == "heat" ? inside < target - swing : false 
             // if need = cool and thermostatTemp >= target + swing that means the thermostat will stop cooling
             // if need = heat and thermostatTemp <= target - swing that means the thermostat will stop heating
@@ -2306,7 +2312,7 @@ thermTempTooCloseToHeatTargetdWhileInsideNotGood = $thermTempTooCloseToHeatTarge
             // check cooler performance and turn thermostat back on (override preferCooler bool) if needed 
             atomicState.coolerTurnedOnTimeStamp = atomicState.coolerTurnedOnTimeStamp != null ? atomicState.coolerTurnedOnTimeStamp : 31*60*1000
             def efficiencyOffset = 2
-            boolean coolerNotEfficientEnough = efficiencyOverride && preferCooler && now() - atomicState.coolerTurnedOnTimeStamp > 30*60*1000 && inside >= target + efficiencyOffset
+            boolean coolerNotEfficientEnough = efficiencyOverride && preferCooler && (now() - atomicState.coolerTurnedOnTimeStamp) > 30*60*1000 && inside >= target + efficiencyOffset
             boolean boost = userBoostOffset && inside >= target + userBoostOffset 
             
             logging """
@@ -2346,7 +2352,7 @@ userBoostOffset = $userBoostOffset
                     atomicState.lastSetpointMessage = atomicState.lastSetpointMessage ? atomicState.lastSetpointMessage : now()
                     def timeBeforeNewtOverrideBigMessage = (delayBtwMessages - (now() - atomicState.lastSetpointMessage))/1000/60 
                     timeBeforeNewtOverrideBigMessage = timeBeforeNewtOverrideBigMessage.toDouble().round(2)
-                    if(now() - atomicState.lastSetpointMessage > delayBtwMessages)
+                    if((now() - atomicState.lastSetpointMessage) > delayBtwMessages)
                     {
                         m = """SET POINT OVERRIDE - make sure your main thermostat is not too close to a window. 
 If so, this app will attempt to keep your room at your target temperature ($target) by temporarily changing setpoints on your thermostat. 
@@ -2461,7 +2467,7 @@ thermMode != need = ${thermMode != need}
 
                 if((need != "off" || !offrequiredbyuser) || forceCommand || (need == "off" && (sensor || offrequiredbyuser)))
                 {                
-                    if((!OperatingStateOk || now() - atomicState.lastSetTime > 5 * 60 * 1000) || need == "off" || forceCommand)
+                    if((!OperatingStateOk || (now() - atomicState.lastSetTime) > 5 * 60 * 1000) || need == "off" || forceCommand)
                     {
                         atomicState.coolerTurnedOnTimeStamp = atomicState.coolerTurnedOnTimeStamp != null ? atomicState.coolerTurnedOnTimeStamp : 31*60*1000
 
@@ -2571,14 +2577,14 @@ thermMode != need = ${thermMode != need}
 
                         logging "THERMOSTAT SET TO $need mode (587gf)"
                     }
-                    else if(now() - atomicState.lastSetTime < 30 * 60 * 1000)
+                    else if((now() - atomicState.lastSetTime) < 30 * 60 * 1000)
                     {
                         logging "THERMOSTAT CMD NOT SENT due to the fact that a cmd was already sent less than 30 minutes ago"
                     }
 
                     if(need == "off")
                     {
-                        atomicState.offAttempt = now() as long
+                        atomicState.offAttempt = now()
 
                             }
                 }
@@ -2671,7 +2677,7 @@ need = $need
                         }
                     }
 
-                    atomicState.resendAttempt = now() // needs to be updated here otherwise it'll resend immediately after since last one was long ago at this point
+                    // atomicState.resendAttempt = now() // needs to be updated here otherwise it'll resend immediately after 
 
                 }
                 else if((need != "off" || !offrequiredbyuser) && !thermTempDiscrepancy)
@@ -2732,7 +2738,7 @@ thermosat kept off ${preferCoolerLimitTemperature ? "unless outside temperature 
         {
             atomicState.dontcheckthermstateCount += 1
             logwarn "cooler not efficient enough 5zr4z8h"
-            thermostat.setThermostatMode("cool") // will run as long as inside > target + efficiencyOffset
+            thermostat.setThermostatMode("cool") // will run as inside > target + efficiencyOffset
             atomicState.resendAttempt = now()
         }
     }
@@ -2801,7 +2807,7 @@ def sendNotification(){
 
     def dTime = 5*60*1000 // every 5 minutes
 
-    if(now() - atomicState.lastNotification >= dTime)
+    if((now() - atomicState.lastNotification) >= dTime)
     {
         atomicState.lastNotification = now()
 
@@ -3198,7 +3204,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         boolean tooColdInside = inside <= target - 8 
         //logwarn "tooColdInside = $tooColdInside : inside = $inside && target = $target"
         //closing error management for safety, if cmd didn't go through for whatever reason and temp went too low, force close the windows
-        boolean exception = someAreOpen && ((atomicState.closedByApp && now() - lastClosingTime > 30 && tooColdInside) || (!outsideWithinRange && tooColdInside))
+        boolean exception = someAreOpen && ((atomicState.closedByApp && (now() - lastClosingTime) > 30 && tooColdInside) || (!outsideWithinRange && tooColdInside))
         long elapsed = now() - lastClosingTime
         def elapsedseconds = elapsed/1000
         def elapsedminutes = elapsed/1000/60
@@ -3362,7 +3368,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                         need1 = "off"
                         atomicState.lastContactOpenEvt = atomicState.lastContactOpenEvt ? atomicState.lastContactOpenEvt : now()
                         def delayB4TurningOffThermostat = openDelay ? openDelay * 1000 : 0
-                        if(contactsAreOpen() && now() - atomicState.lastContactOpenEvt > delayB4TurningOffThermostat) 
+                        if(contactsAreOpen() && (now() - atomicState.lastContactOpenEvt) > delayB4TurningOffThermostat) 
                         {
                             if(!fanCirculateAlways)
                             {
@@ -3422,7 +3428,8 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                     }
                     else
                     {
-                        logwarn "$windows.join(", ") were not closed by this app - ignoring request to turn on any of ${windows?.join(", ")}" 
+                        log.debug "windows => $windows"
+                        logwarn "${windows.join(", ")} were not closed by this app - ignoring on/open request" 
                     }
                 }
                 else
@@ -3664,8 +3671,8 @@ def getNeed(target, simpleModeActive, inside){
 
     atomicState.lastTimeCool = atomicState.lastTimeCool == null ? 3 * 60 * 1000 + 1 : atomicState.lastTimeCool 
     atomicState.lastTimeHeat = atomicState.lastTimeHeat == null ? 3 * 60 * 1000 + 1 : atomicState.lastTimeHeat 
-    atomicState.userWantsWarmer = atomicState.userWantsWarmer == null || now() - atomicState.userWantsWarmerTimeStamp >= 120 * 60 * 1000 ? false : atomicState.userWantsWarmer
-    atomicState.userWantsCooler = atomicState.userWantsCooler == null || now() - atomicState.userWantsCoolerTimeStamp >= 120 * 60 * 1000 ? false : atomicState.userWantsCooler
+    atomicState.userWantsWarmer = atomicState.userWantsWarmer == null || (now() - atomicState.userWantsWarmerTimeStamp) >= 120 * 60 * 1000 ? false : atomicState.userWantsWarmer
+    atomicState.userWantsCooler = atomicState.userWantsCooler == null || (now() - atomicState.userWantsCoolerTimeStamp) >= 120 * 60 * 1000 ? false : atomicState.userWantsCooler
 
     def humidity = outsideTemp?.currentValue("humidity") 
     def insideHum = getInsideHumidity() // backup for windows and value used for negative swing variation when cooling   
@@ -3687,8 +3694,8 @@ def getNeed(target, simpleModeActive, inside){
     <br> doorsOverrideMotion = $doorsOverrideMotion 
     <br> atomicState.userWantsWarmerTimeStamp = $atomicState.userWantsWarmerTimeStamp 
     <br> atomicState.userWantsCoolerTimeStamp = $atomicState.userWantsCoolerTimeStamp 
-    <br> now() - atomicState.userWantsWarmerTimeStamp => ${now() - atomicState.userWantsWarmerTimeStamp} >= ${120 * 60 * 1000} ==> ${now() - atomicState.userWantsWarmerTimeStamp >= 120 * 60 * 1000} 
-    <br> now() - atomicState.userWantsCoolerTimeStamp => ${now() - atomicState.userWantsCoolerTimeStamp} >= ${120 * 60 * 1000} ==> ${now() - atomicState.userWantsCoolerTimeStamp >= 120 * 60 * 1000}     
+    <br> now() - atomicState.userWantsWarmerTimeStamp => ${(now() - atomicState.userWantsWarmerTimeStamp)} >= ${120 * 60 * 1000} ==> ${(now() - atomicState.userWantsWarmerTimeStamp) >= 120 * 60 * 1000} 
+    <br> now() - atomicState.userWantsCoolerTimeStamp => ${(now() - atomicState.userWantsCoolerTimeStamp)} >= ${120 * 60 * 1000} ==> ${(now() - atomicState.userWantsCoolerTimeStamp) >= 120 * 60 * 1000}     
     <br> current mode = $location.mode 
     <br> ---------------------------- 
     </div>
@@ -3736,6 +3743,7 @@ def getNeed(target, simpleModeActive, inside){
 <br> outsideTemperature = $outsideTemperature
 <br> outsideThres + 5 = ${outsideThres + 5}
 <br> needCool = $needCool
+<br> thermMode = $thermMode
 <br> simpleModeActive = $simpleModeActive
 <br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
 <br> atomicState.userWantsCooler = $atomicState.userWantsCooler
@@ -3935,7 +3943,7 @@ inside > criticalcold :  ${inside > criticalcold}
         def remainsOff = need1 == "cool" ? thermostatHeat : thermostatCool
         if((remainsOff.currentValue("thermostatMode") != "off" || keep2ndThermOffAtAllTimes) && (!atomicState.otherThermWasTurnedOff || keep2ndThermOffAtAllTimes)) 
         {
-            if(keep2ndThermOffAtAllTimes && now() - atomicState.keepOffAtAllTimesRun > 5 * 60 * 1000) { //prevent sending too many requests when user enabled this fail safe option
+            if(keep2ndThermOffAtAllTimes && (now() - atomicState.keepOffAtAllTimesRun) > 5 * 60 * 1000) { //prevent sending too many requests when user enabled this fail safe option
                 atomicState.keepOffAtAllTimesRun = now()
                 remainsOff.off()
             }
@@ -3994,7 +4002,7 @@ inside > criticalcold :  ${inside > criticalcold}
     {
         logwarn "user wants a warmer room, shoulder season timed override ignored. Switching to heating mode"
     }
-    else if(need1 == "heat" && now() - atomicState.lastTimeCool < 3 * 60 * 60 * 1000 && inside > target - 2)
+    else if(need1 == "heat" && (now() - atomicState.lastTimeCool) < 3 * 60 * 60 * 1000 && inside > target - 2)
     {
         logwarn "last cooling request was too close to switch to heating mode now"
         need0 = "off"
@@ -4256,7 +4264,7 @@ def getInsideTemp(){
 
     descriptionText "${sensor?"average":""} temperature in this room is: $inside"
 
-    logtrace "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${sensor.join(", ")} ${sensor.collect{it.currentValue("temperature")}.join("°F, ")}°F": "${thermostat.currentValue("temperature")}°F"}"
+    logtrace "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${sensor.join(", ")} ${sensor.collect{it.currentValue("temperature")}.join("°F, ")}°F": "${getInsideTemp()}°F"}"
 
 
 
@@ -4358,7 +4366,7 @@ def getLastMotionEvents(Dtime, testType){
 
     // eventsSince() can be messy // hubitat still doesn't acknowledge the issue despite several tickets and screenshots. 
     atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
-    if(testType == "motionTest" && now() - atomicState.lastMotionEvent > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
+    if(testType == "motionTest" && (now() - atomicState.lastMotionEvent) > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
     {
         atomicState.activeMotionCount = 0 // time is up, reset this variable
         //events = 0
@@ -4686,7 +4694,7 @@ def pollPowerMeters(){
 
     atomicState.polls = atomicState.polls == null ? 1 : atomicState.polls + 1
     atomicState.lastPoll = atomicState.lastPoll ? atomicState.lastPoll : now()
-    if(now() - atomicState.lastPoll > 1000 * 60 * 60) atomicState.polls = 0
+    if((now() - atomicState.lastPoll) > 1000 * 60 * 60) atomicState.polls = 0
 
     logtrace "polling power meters. $atomicState.polls occurences in the last hour..."
     // if(atomicState.polls > 50)
@@ -4729,31 +4737,64 @@ def pollPowerMeters(){
     atomicState.lastPoll = now()
 }
 def logging(message){
+    check_logs_timer()
     if(enabledebug) log.debug message 
-
-    atomicState.EnableDebugTime = atomicState.EnableDebugTime == null ? atomicState.EnableDebugTime = now() : atomicState.EnableDebugTime
-    atomicState.enableDescriptionTime = atomicState.enableDescriptionTime == null ? atomicState.enableDescriptionTime = now() : atomicState.enableDescriptionTime
 }
 def logtrace(message){
+    check_logs_timer()
     if(tracedebug) log.trace message
 }
 def logwarn(message){
+    check_logs_timer()
     if(logwarndebug) log.warn message
 }
 def descriptionText(message){
+    check_logs_timer()
     if(description) log.info message
 }
 def disablelogging(){
-    logwarn "debug logging disabled..."
+    log.warn "debug logging disabled..."
     app.updateSetting("enabledebug",[type:"bool", value:"false"])
 }
 def disabledescription(){
-    logwarn "description text disabled..."
+    log.warn "description text disabled..."
     app.updateSetting("description",[type:"bool",value:"false"])
 }
 def disablewarnings(){
-    logwarn "warnings disabled..."
+    log.warn "warnings disabled..."
     app.updateSetting("logwarndebug",[type:"bool",value:"false"])
+}
+def disabletrace(){
+    log.warn "trace disabled..."
+    app.updateSetting("tracedebug",[type:"bool",value:"false"])
+}
+def check_logs_timer(){
+    if(atomicState.lastCheckTimer == null || (now() - atomicState.lastCheckTimer) >= 6000){
+        atomicState.lastCheckTimer = now()
+
+        atomicState.EnableDebugTime = atomicState.EnableDebugTime == null ? now() : atomicState.EnableDebugTime
+        atomicState.enableDescriptionTime = atomicState.enableDescriptionTime == null ? now() : atomicState.enableDescriptionTime
+        atomicState.EnableWarningTime = atomicState.EnableWarningTime == null ? now() : atomicState.EnableWarningTime
+        atomicState.EnableTraceTime = atomicState.EnableTraceTime == null ? now() : atomicState.EnableTraceTime
+        
+        atomicState.lastlog = atomicState.lastlog ? atomicState.lastlog : now()
+        show = false // change this value for debugging. 
+        if((now() - atomicState.lastlog) >= 3000 && show){
+        atomicState.lastlog = now()
+        log.debug """
+        <br>end debug ? ${(now() - atomicState.EnableDebugTime) >=  30 * 30 * 1000}
+        <br>end descr ? ${(now() - atomicState.enableDescriptionTime) >=  30 * 30 * 1000}
+        <br>end warn ? ${(now() - atomicState.EnableWarningTime) >=  30 * 30 * 1000}
+    
+
+        """
+        }
+
+        if((now() - atomicState.EnableDebugTime) >= 30 * 60 * 1000 && enabledebug) disablelogging()
+        if((now() - atomicState.enableDescriptionTime) >= 30 * 60 * 1000 && description) disabledescription()
+        if((now() - atomicState.EnableWarningTime) >= 30 * 60 * 1000 && logwarndebug) disablewarnings()
+        if((now() - atomicState.EnableTraceTime) >= 30 * 60 * 1000 && tracedebug) disabletrace()
+    }
 }
 def formatText(title, textColor, bckgColor){
     return  """<div style=\

@@ -57,6 +57,10 @@ metadata {
         input "ip", "text", title: "Arduino IP Address", description: "ip", required: true, displayDuringSetup: true
         input "port", "text", title: "Arduino Port", description: "port", required: true, displayDuringSetup: true
         input "mac", "text", title: "Arduino MAC Addr", description: "mac", required: true, displayDuringSetup: true
+        input name: "enabledebug", type: "bool", title: "Enable debug logging?", defaultValue: true
+        input name: "enabledescription", type: "bool", title: "Enable description text?", defaultValue: true
+
+        state.enableDebugTime = now()
     }
 
 }
@@ -65,21 +69,21 @@ metadata {
 // parse events into attributes
 def parse(String description) {
 
-    //log.debug "Parsing '${description}'"
+    //logging "Parsing '${description}'"
     def msg = parseLanMessage(description)
     def headerString = msg.header
 
 
     if (!headerString) {
-        log.debug "headerstring was null for some reason :("
+        logging "headerstring was null for some reason :("
     }
     def bodyString = msg.body
 
-    log.debug "bodyString ===================== $bodyString"
+    logging "bodyString ===================== $bodyString"
 
 
     if(!bodyString){
-        log.debug "bodyString is null for some reason"
+        logging "bodyString is null for some reason"
     }
     else {
         def parts = bodyString.split(" ")
@@ -101,7 +105,7 @@ def parse(String description) {
         if(name != "rssi")
         {
 
-            log.debug "sending event: name: $name, value: $value 56df"
+            descriptionText "sending event: name: $name, value: $value 56df"
 
 
             sendEvent(name: name, value: value, isStateChange: true)
@@ -118,11 +122,11 @@ def parse(String description) {
 }
 
 def on(){
-    log.debug "Executing 'switch on'"
+    descriptionText "Executing 'switch on'"
     sendEthernet("on")
 }
 def off(){
-    log.debug "Executing 'switch off'"
+    logging "Executing 'switch off'"
     sendEthernet("off")
 }
 def feed(){
@@ -130,111 +134,111 @@ def feed(){
 }
 def stop(){
     sendEvent(name: "feeder", value: "stop")
-    log.debug "Executing 'stop'"   
+    descriptionText "Executing 'stop'"   
     sendEthernet("stop")
 }
 def unload(){
     sendEvent(name: "feeder", value: "unload")
-    log.debug "Executing 'unload'"   
+    descriptionText "Executing 'unload'"   
     sendEthernet("unload")
 }
 def lock(){
     sendEvent(name: "feeder", value: "lock")
-    log.debug "Executing 'lock'"   
+    descriptionText "Executing 'lock'"   
     sendEthernet("lock")
 }
 def unlock(){
     sendEvent(name: "feeder", value: "unlock")
-    log.debug "Executing 'unlock'"   
+    descriptionText "Executing 'unlock'"   
     sendEthernet("unlock")
 }
 def opencan(){
     sendEvent(name: "feeder", value: "opencan")
-    log.debug "Executing 'opencan'"   
+    descriptionText "Executing 'opencan'"   
     sendEthernet("opencan")
 }
 def push(){
     sendEvent(name: "feeder", value: "push")
-    log.debug "Executing 'push'"   
+    descriptionText "Executing 'push'"   
     sendEthernet("push")
 }
 def pull(){
     sendEvent(name: "feeder", value: "pull")
-    log.debug "Executing 'pull'"   
+    descriptionText "Executing 'pull'"   
     sendEthernet("pull")
 }
 def verticalpush(){
     sendEvent(name: "feeder", value: "verticalpush")
-    log.debug "Executing 'verticalpush'"   
+    descriptionText "Executing 'verticalpush'"   
     sendEthernet("verticalpush")
 }
 def verticalpull(){
     sendEvent(name: "feeder", value: "verticalpull")
-    log.debug "Executing 'verticalpull'"   
+    descriptionText "Executing 'verticalpull'"   
     sendEthernet("verticalpull")
 }
 def verticalpushsensor(){
      sendEvent(name: "feeder", value: "verticalpullsensor")
-    log.debug "Executing 'verticalpullsensor'"   
+    descriptionText "Executing 'verticalpullsensor'"   
     sendEthernet("verticalpullsensor")
 }
 def verticaldownstep(){
     sendEvent(name: "feeder", value: "verticaldownstep")
-    log.debug "Executing 'verticaldownstep'"   
+    descriptionText "Executing 'verticaldownstep'"   
     sendEthernet("verticaldownstep")
 }
 def verticalupstep(){
     sendEvent(name: "feeder", value: "verticalupstep")
-    log.debug "Executing 'verticalupstep'"   
+    descriptionText "Executing 'verticalupstep'"   
     sendEthernet("verticalupstep")
 }
 def poplid(){
     sendEvent(name: "feeder", value: "poplid")
-    log.debug "Executing 'poplid'"   
+    descriptionText "Executing 'poplid'"   
     sendEthernet("poplid")
 }
 def compress(){
     sendEvent(name: "feeder", value: "compress")
-    log.debug "Executing 'compress'"   
+    descriptionText "Executing 'compress'"   
     sendEthernet("compress")
 }
 def decompress(){
     sendEvent(name: "feeder", value: "decompress")
-    log.debug "Executing 'decompress'"   
+    descriptionText "Executing 'decompress'"   
     sendEthernet("decompress")
 }
 def pushupperholder(){
     sendEvent(name: "feeder", value: "pushupperholder")
-    log.debug "Executing 'pushupperholder'"   
+    descriptionText "Executing 'pushupperholder'"   
     sendEthernet("pushupperholder")
 }
 def cosinusplus(){
     sendEvent(name: "feeder", value: "cosinusplus")
-    log.debug "Executing 'cosinusplus'"   
+    descriptionText "Executing 'cosinusplus'"   
     sendEthernet("cosinusplus")
 }
 def cosinusminus(){
     sendEvent(name: "feeder", value: "cosinusminus")
-    log.debug "Executing 'cosinusminus'"   
+    descriptionText "Executing 'cosinusminus'"   
     sendEthernet("cosinusminus")
 }
 def cosinuspush(){
     sendEvent(name: "feeder", value: "cosinuspush")
-    log.debug "Executing 'cosinuspush'"   
+    descriptionText "Executing 'cosinuspush'"   
     sendEthernet("cosinuspush")
 }
 def cosinuspull(){
     sendEvent(name: "feeder", value: "cosinuspull")
-    log.debug "Executing 'cosinuspull'"   
+    descriptionText "Executing 'cosinuspull'"   
     sendEthernet("cosinuspull")
 }
 def toggledebug(){
     sendEvent(name: "feeder", value: "toggledebug")
-    log.debug "Executing 'toggledebug'"   
+    descriptionText "Executing 'toggledebug'"   
     sendEthernet("toggledebug")
 }
 def reset() {
-    log.debug "Executing 'reset'"
+    descriptionText "Executing 'reset'"
     sendEvent(name: "reset", value: "reset")
     sendEthernet("reset")
 }
@@ -245,24 +249,26 @@ def refresh(){
     sendEthernet("refresh")
 }
 def configure() {
-    log.debug "Executing 'configure'"
+    logging "Executing 'configure'"
     state.lastDeclaredEvent = now()
-    log.debug "state.lastDeclaredEvent = ${now()}"
+    logging "state.lastDeclaredEvent = ${now()}"
 
     updateDeviceNetworkID()
 }
 
 def updateDeviceNetworkID() {
-    log.debug "Executing 'updateDeviceNetworkID'"
+    logging "Executing 'updateDeviceNetworkID'"
     // if(device.deviceNetworkId!=mac) {
-    log.debug "setting deviceNetworkID = ${mac}"
+    logging "setting deviceNetworkID = ${mac}"
     device.setDeviceNetworkId("${mac}")
     // }
 }
 def updated() {
+
+
     if (!state.updatedLastRanAt || now() >= state.updatedLastRanAt + 5000) {
         state.updatedLastRanAt = now()
-        log.debug "Executing 'updated'"
+        logging "Executing 'updated'"
         runIn(3, updateDeviceNetworkID)
     }
     else {
@@ -274,11 +280,11 @@ def getHostAddress() {
     def ip = settings.ip
     def port = settings.port
 
-    log.debug "Using ip: ${ip} and port: ${port} for device: ${device.id}"
+    logging "Using ip: ${ip} and port: ${port} for device: ${device.id}"
     return ip + ":" + port
 }
 def sendEthernet(message) {
-    log.debug "Executing 'sendEthernet' ${message}"
+    logging "Executing 'sendEthernet' ${message}"
     new hubitat.device.HubAction(
         method: "POST",
         path: "/${message}?",
@@ -290,7 +296,7 @@ def sendEthernet(message) {
 
 def sendGet(cmd, ip) // sends request to ESP8266 which serves as redundency to reset the Atmega in case of total failure
 {
-    log.debug "sending $cmd to $ip"
+    logging "sending $cmd to $ip"
     def deviceNetworkId = "479694101:50"  //  "19216810241:80"
     //def ip = "192.168.10.241:80"
 
@@ -299,12 +305,29 @@ def sendGet(cmd, ip) // sends request to ESP8266 which serves as redundency to r
             if (resp.success) {
                 sendEvent(name: "switch", value: "on", isStateChange: true)
             }
-            if (resp.data) log.debug "${resp.data}"
+            if (resp.data) logging "${resp.data}"
         }
     } catch (Exception e) {
         log.warn "Call to on failed: ${e.message}"
     }
 
-    //sendHubCommand(new hubitat.device.HubAction("""GET /$cmd HTTP/1.1\r\nHOST: $ip\r\n\r\n""", physicalgraph.device.Protocol.LAN, "${deviceNetworkId}"))
+}
 
+def logging(String message){
+
+    state.enableDebugTime = state.enableDebugTime ? state.enableDebugTime : now()
+
+    if(enabledebug){
+        if(now() - state.enableDebugTime >= 30 * 60 * 1000)
+        log.debug message
+    }
+}
+def descriptionText(String message){
+    if(enabledescription){
+        log.info message 
+    }
+}
+def disablelogging(){
+    device.updateSetting("enabledebug",[value:"false",type:"bool"])
+    log.warn "logging disabled!"
 }

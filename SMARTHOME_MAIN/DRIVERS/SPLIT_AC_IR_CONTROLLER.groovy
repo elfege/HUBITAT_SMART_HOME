@@ -64,6 +64,8 @@ metadata {
         input "port", "text", title: "Arduino Port", description: "port", required: true, displayDuringSetup: true
         input "mac", "text", title: "Arduino MAC Addr", description: "mac", required: true, displayDuringSetup: true
         input name: "enabledebug", type: "bool", title: "Enable debug logging?", defaultValue: true
+        input name: "enabledescription", type: "bool", title: "Enable description text?", defaultValue: true
+
 
         input "tempSensor", "text", title: "Maker API device number for a temperature sensor", required: false
         input "humSensor", "text", title: "Maker API device number for a humidity sensor", required: false
@@ -427,7 +429,7 @@ def updated() {
     }
     if(enablelogging){
         runIn(1800, disablelogging)
-        textdescription("disablelogging scheduled to run in ${1800/60} minutes")
+        descriptionText("disablelogging scheduled to run in ${1800/60} minutes")
     }
   
 
@@ -441,7 +443,7 @@ def logging(String message){
         log.debug message
     }
 }
-def textdescription(String message){
+def descriptionText(String message){
     if(enabledescription){
         log.info message 
     }

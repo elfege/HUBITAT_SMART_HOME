@@ -95,7 +95,8 @@ def MainPage() {
             input "logwarndebug", "bool", title: "Warning logs", submitOnChange:true
             input "description", "bool", title: "Description Text", submitOnChange:true
 
-            atomicState.enabledebug = now()
+            
+            atomicState.EnableDebugTime = now()
             atomicState.enableDescriptionTime = now()
             atomicState.EnableWarningTime = now()
             atomicState.EnableTraceTime = now()
@@ -1397,7 +1398,7 @@ def motionHandler(evt){
         atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
         if(evt.value == "active")
         {
-            atomicState.activeMotionCount += 1 // eventsSince() can be messy // hubitat still doesn't acknowledge the issue despite several tickets and screenshots. 
+            atomicState.activeMotionCount += 1 // eventsSince() can be messy 
             atomicState.lastMotionEvent = now() // initialized at install or update
             // so this is a workaround in the meantime
         }
@@ -2911,12 +2912,8 @@ def resetCmdForce(){
     atomicState.forceAttempts = 0   
 }
 def setDimmer(val){
-    
-
     if(simpleModeIsActive()) return 
-
     logtrace "setDimmer $val"
-
     if(!atomicState.setPointOverride)
     {
         if(dimmer)
@@ -2939,10 +2936,7 @@ def setDimmer(val){
     {
         logtrace "SETPOINT OVERRIDE DUE TO THERMOSTAT DISCREPANCY NOT CHANGING DIMMER VALUE"
     }
-
     atomicState.setPointOverride = false
-
-
 }
 def virtualThermostat(need, target){
 
@@ -3176,6 +3170,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         boolean someAreOpen = contactCapable ? (windows.findAll{it?.currentValue("contact") == "open"}?.size() > 0) : (windows.findAll{it?.currentValue("switch") == "on"}?.size() > 0)
         boolean withinRange = outsideTemperature < outsidetempwindowsH && outsideTemperature > outsidetempwindowsL // strict temp value
 
+        
         boolean outsideWithinRange = withinRange && !tooHumid // same as withinRange but with humidity
 
         atomicState.lastOpeningTime = atomicState.lastOpeningTime != null ? atomicState.lastOpeningTime : now() // make sure value is not null
@@ -3194,7 +3189,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
 
         double lastOpeningTime = (now() - atomicState.lastOpeningTime) / 1000 / 60 
         lastOpeningTime = lastOpeningTime.round(2)
-        boolean openSinceLong = lastOpeningTime > 30 && someAreOpen // been open for more than 15 minutes
+        boolean beenOpenForLong = lastOpeningTime > 30 && someAreOpen // been open for more than 15 minutes
 
         atomicState.lastClosingTime = atomicState.lastClosingTime ? atomicState.lastClosingTime : (atomicState.lastClosingTime = now()) // make sure value is not null
         double lastClosingTime = (now() - atomicState.lastClosingTime) / 1000 / 60 
@@ -3217,14 +3212,17 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         boolean enoughTimeBetweenOpenAndClose = ((now() - atomicState.lastOpeningTime) / 1000 / 60) > 10.0 || inside < target - swing //-> give it a chance to cool down the place
         boolean enoughTimeBetweenCloseAndOpen = ((now() - atomicState.lastClosingTime) / 1000 / 60) > timeBtwWinOp //-> don't reopen too soon after closing
 
-        boolean needToClose = (enoughTimeBetweenOpenAndClose  && ((inside > target + (swing * 3) && openSinceLong) || inside < target - swing || insideTempIsHopeLess)) || !outsideWithinRange
+        boolean needToClose = (enoughTimeBetweenOpenAndClose  && ((inside > target + (swing * 3) && beenOpenForLong) || inside < target - swing || insideTempIsHopeLess)) || !outsideWithinRange
         boolean needToOpen = (enoughTimeBetweenCloseAndOpen && (inside > target + swing && !needToClose)) && outsideWithinRange //|| amplitudeTooHigh) // timer ok, too hot inside + within range (acounting for humidity) and no discrepency
 
         atomicState.otherWindowsOpenByApp = atomicState.otherWindowsOpenByApp == null ? false : atomicState.otherWindowsOpenByApp
         boolean synchronize = doorsManagement && doorsContactsAreOpen() && otherWindows.any{it.currentValue("switch") == "on"} && !atomicState.otherWindowsOpenByApp
-        if(synchronize) atomicState.otherWindowsOpenByApp = true
-        needToOpen = synchronize
-        needToClose = synchronize ? false : needToClose
+        if(synchronize) 
+        {
+            atomicState.otherWindowsOpenByApp = true
+            needToOpen = synchronize
+            needToClose = synchronize ? false : needToClose
+        }
 
         logging """<br>NEED TO OPEN? --------------------------- $needToOpen
         <br>doorsManagement = $doorsManagement
@@ -3234,6 +3232,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         <br>synchronize = $synchronize
         """
 
+        
 
         if((INpwSavingMode || !Active()) && outsideWithinRange)
         {
@@ -3282,7 +3281,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         <br> outsidetempwindowsH = $outsidetempwindowsH
         <br> lastOpeningTime = $lastOpeningTime minutes ago ${outsideTempHasDecreased ? 'value was reset to 0 because outsideTempHasDecreased = true (outsideTempHasDecreased = $outsideTempHasDecreased' : ''}
         <br> lastClosingTime = $lastClosingTime minutes ago
-        <br> openSinceLong = $openSinceLong
+        <br> beenOpenForLong = $beenOpenForLong
         <br> temperature at last window opening = $atomicState.outsideTempAtTimeOfOpening
         <br> now() = ${now()}
         <br> atomicState.lastOpeningTime = $atomicState.lastOpeningTime 
@@ -3296,7 +3295,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         </div>
         """
 
- /*  def causeClosing = "${needToClose ? "WINDOWS CLOSED OR CLOSING BECAUSE: ${enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && openSinceLong ? "enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && openSinceLong" : inside < target - swing ? "inside < target - $swing" : !outsideWithinRange ? "!outsideWithinRange" : insideTempIsHopeLess ? "insideTempIsHopeLess" : !someAreOpen ? "Already closed" : atomicState.lastNeed == "heat" ? atomicState.lastNeed : "FIRE THE DEVELOPER IF THIS MESSAGE SHOWS UP"}":""}"*/
+ /*  def causeClosing = "${needToClose ? "WINDOWS CLOSED OR CLOSING BECAUSE: ${enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && beenOpenForLong ? "enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && beenOpenForLong" : inside < target - swing ? "inside < target - $swing" : !outsideWithinRange ? "!outsideWithinRange" : insideTempIsHopeLess ? "insideTempIsHopeLess" : !someAreOpen ? "Already closed" : atomicState.lastNeed == "heat" ? atomicState.lastNeed : "FIRE THE DEVELOPER IF THIS MESSAGE SHOWS UP"}":""}"*/
 
         logging(windowsLog)
 
@@ -3428,7 +3427,6 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                     }
                     else
                     {
-                        log.debug "windows => $windows"
                         logwarn "${windows.join(", ")} were not closed by this app - ignoring on/open request" 
                     }
                 }
@@ -4143,7 +4141,7 @@ x / outside = $outside
 theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}
 
 """
-    log.info "db variation amplitude = ${y}"
+    descriptionText "db variation amplitude = ${y}"
 
 
 
@@ -4354,10 +4352,11 @@ If this message still shows within an hour, check your thermostat configuration.
 }
 def getLastMotionEvents(Dtime, testType){
 
+    
     int events = 0
 
     /******************************IF ANY ACTIVE, THEN NO NEED FOR COLLECTION***********************************************/
-    //this is faster to check if a sensor is still active than to collect past events, so return true if it's the case    
+    //this is faster to check if a sensor is still active than to collect past events
     if(motionSensors.any{it -> it.currentValue("motion") == "active"})
     {
         logging "Sensor still active: ${motionSensors.findAll{it.currentValue("motion") == "active"}}"
@@ -4367,25 +4366,19 @@ def getLastMotionEvents(Dtime, testType){
     }
 
 
-    /******************************COLLECTION**********************************************************/
+    /******************************COLLECTION  O(n)!!!**********************************************************/
     collection = motionSensors.collect{it.eventsSince(new Date(now() - Dtime)).findAll{it.value == "active"}}.flatten()
     events = collection.size()
     /**************************************************************************************************/
 
     if(testType == "motionTest")logtrace "$events active events collected within the last ${Dtime/1000/60} minutes (eventsSince)"
 
-    // eventsSince() can be messy // hubitat still doesn't acknowledge the issue despite several tickets and screenshots. 
-    atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
-    if(testType == "motionTest" && (now() - atomicState.lastMotionEvent) > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
-    {
-        atomicState.activeMotionCount = 0 // time is up, reset this variable
-        //events = 0
-    }
-    else if(events < atomicState.activeMotionCount && testType == "motionTest") // whichever the greater takes precedence
+    // eventsSince() can be messy 
+    
+    if(events < atomicState.activeMotionCount && testType == "motionTest") // whichever the greater takes precedence
     {
         events = atomicState.activeMotionCount
     }
-
     if(events > atomicState.activeMotionCount && testType == "motionTest") // whichever the greater takes precedence
     {
         atomicState.activeMotionCount = events
@@ -4517,7 +4510,7 @@ boolean doorsContactsAreOpen(){
         return false
     }
 
-    descriptionText """------------------ doors: $doorsContacts open ?: ${listOpen.join(", ")}"""
+    descriptionText "------------------ doors: $doorsContacts open ?: ${listOpen.join(', ')}"
     return Open
 }
 boolean Active(){
@@ -4546,8 +4539,8 @@ boolean Active(){
                     def m = "LOW BATTERY: \r\n\r\n - ${devicesWithLowBattery.join("\r\n - ")}"
                     if(devicesWithLowBattery.size() == motionSensors.size())
                     {
-                        logwarn formatText(m,"white", "red")
-                        m = "All motion sensors batteries are low! Motion test returns true as a safety measure. Make sure to replace the battery of the following devices: \r\n\r\n - ${devicesWithLowBattery.join("\r\n - ")}"
+                        log.warn formatText(m,"white", "red")
+                        m = "All motion sensors' batteries are DEAD! Motion test returns true as a safety measure. Make sure to replace the battery of the following devices: \r\n\r\n - ${devicesWithLowBattery.join("\r\n - ")}"
                         logwarn formatText(m,"white", "grey")
                         return true
                     }
@@ -4569,11 +4562,25 @@ boolean Active(){
         {
             logtrace("motion returns true because outside of motion modes")
         }
+    
+
+        // this must happen outside of getLastMotionEvents() collection, because the latter isn't called when outside of motion modes.  
+        atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
+
+        // log.debug "now() - atomicState.lastMotionEvent > 1000 => ${(now() - atomicState.lastMotionEvent) > 1000}"
+        if((now() - atomicState.lastMotionEvent) > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
+        {
+            
+            atomicState.activeMotionCount = 0 // time is up, reset this variable
+            // log.debug "atomicState.activeMotionCount set to $atomicState.activeMotionCount"
+            //events = 0
+        }
     }
     else 
     {
         logging("user did not select any motion sensor")
     }
+
     logging "motion test returns $result"
     return result
 }
@@ -4788,10 +4795,12 @@ def check_logs_timer(){
         atomicState.EnableTraceTime = atomicState.EnableTraceTime == null ? now() : atomicState.EnableTraceTime
         
         atomicState.lastlog = atomicState.lastlog ? atomicState.lastlog : now()
-        show = false // change this value for debugging. 
+        show = true // change this value for debugging. 
+        
         if((now() - atomicState.lastlog) >= 3000 && show){
         atomicState.lastlog = now()
         log.debug """
+        ----------------------------------------
         <br>end debug ? ${(now() - atomicState.EnableDebugTime) >=  30 * 30 * 1000}
         <br>end descr ? ${(now() - atomicState.enableDescriptionTime) >=  30 * 30 * 1000}
         <br>end warn ? ${(now() - atomicState.EnableWarningTime) >=  30 * 30 * 1000}

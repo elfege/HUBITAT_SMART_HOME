@@ -4795,7 +4795,7 @@ def check_logs_timer(){
         atomicState.EnableTraceTime = atomicState.EnableTraceTime == null ? now() : atomicState.EnableTraceTime
         
         atomicState.lastlog = atomicState.lastlog ? atomicState.lastlog : now()
-        show = true // change this value for debugging. 
+        show = false // change this value for debugging. 
         
         if((now() - atomicState.lastlog) >= 3000 && show){
         atomicState.lastlog = now()

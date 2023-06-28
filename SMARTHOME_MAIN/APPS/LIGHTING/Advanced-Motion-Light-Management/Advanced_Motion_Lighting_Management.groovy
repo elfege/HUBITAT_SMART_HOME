@@ -619,7 +619,10 @@ def contactHandler(evt){
 
     if (evt.value == "open") {
 
-        if (switches.any{ it -> it.currentValue("switch") == "off" }) switches.on()
+        if (switches.any{ it -> it.currentValue("switch") == "off" }) {
+            switches.on()
+            logging("siwtches on 5dfrj")
+        }
 
         if (powerOnWithContactOnly) {
             if (location.mode in noTurnOnMode && !ignoreModes) {
@@ -627,7 +630,10 @@ def contactHandler(evt){
                 return
             }
             if (switchOnWithContactOnly) {
-                if (powerswitch?.currentValue("switch") == "off") powerswitch?.on() // user might have requested contact event based only, so we can't rely on on() method only (which will test for this condition)
+                if (powerswitch?.currentValue("switch") == "off"){
+                    logging("siwtches on 34ghj4")
+                    powerswitch?.on() // user might have requested contact event based only, so we can't rely on on() method only (which will test for this condition)
+                }
             }
         }
 
@@ -985,7 +991,7 @@ def on(){
             {
                 if (powerswitch?.currentValue("switch") == "off") {
                     powerswitch?.on()
-                    log.warn "turnging on ${powerswitch.join(", ")}"
+                    log.warn "turnging on ${powerswitch.join(", ")} 1r2hk"
                 }
             }
             if (keepSomeSwitchesOffInCertainModes && location.mode in modeSpecificSwitches) {

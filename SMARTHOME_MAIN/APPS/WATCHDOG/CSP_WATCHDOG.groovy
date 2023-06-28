@@ -84,10 +84,19 @@ log.debug "name: ${hub.name}"*/
         section(menuHeader("Method 2: Virtual Switch trigger - this method provides better reactivity"))
         {
             input "swt", "capability.switch", title: "(optional) Select a control virtual switch",description:"Select a VIRTUAL switch", required:false, submitOnChange:true
-            if(swt)
+            
+            input "trueSwitches", "capability.switch", title: "<a style='color:red; font-weight:900;'>Highly recommended but make sure to not select ANY hub mesh device!</a> Select a reasonnable number (2 or 3) of real physical Z-wave switches to prevent full queue errors and grid locks", required: false, multiple:true
+            if(swt || trueSwitches)
             {
-                paragraph "This app will monitor the reaction time between the cmd and the event declaration to check your hub's reactivity."
-                input "repeatswitch", "number", title: "Set reboot sensitivity (number of failed tests before reboot)", required: true, range: "3.. 100", submitOnChange:true
+                if(swt){
+                    paragraph "This app will monitor the reaction time between the cmd and the event declaration to check your hub's reactivity."
+                    input "repeatswitch", "number", title: "Set reboot sensitivity (number of failed tests before reboot)", required: true, range: "3.. 100", submitOnChange:true
+                }
+
+                if(trueSwitches){
+                    paragraph """You have selected ${trueSwitches.join(", ")} as a physical switches. It will be polled on a regular interval and then the app will reboot if an error is returned."""
+                    
+                }
             }
         }
         section(menuHeader("Method 3: Local Remote Hub Trigger - this method is great for those whom use a second hub"))
@@ -341,6 +350,15 @@ def init() {
         atomicState.swtCmd = now()
     }
 
+    if(trueSwitches){
+        subscribe(trueSwitches, "switch", trueSwitchHandler)
+        atomicState.lastTrueSwtEvent = now() 
+        atomicState.trueSwtPoll = now()
+
+        // Schedule polling every minute
+        schedule("0 */1 * * * ?", "testTrueSwitches") // we're using both cron and master loop with elapsed time calc because cron can fail when we would precisely need this feature to work
+    }
+
     configureRemote()
 
     subscribe(location, "zigbeeStatus", hubEventHandler)
@@ -355,6 +373,7 @@ def init() {
 def locationModeChangeHandler(evt){
     logging("$evt.name is now in $evt.value mode")   
 }
+
 def switchHandler(evt){
     log.info "$evt.device is $evt.value"
 
@@ -421,6 +440,10 @@ elapsed = $elapsed (absoluteLimit is $absoluteLimit)
         reboot()
         return
     }
+}
+def trueSwitchHandler(){
+    logging "$evt.device was turned $evt.value"
+    master("trueSwitch")
 }
 def mainHandler(evt){    
     //log.info "${evt.name}: $evt.device is $evt.value --------------------"
@@ -546,8 +569,25 @@ def master(String data){
             }
         }
 
+        if(trueSwitches) {
+            atomicState.lastTrueSwtEvent = atomicState.lastTrueSwtEvent == null ? now() : atomicState.lastTrueSwtEvent 
+            atomicState.trueSwtPoll = atomicState.trueSwtPoll == null ? now() : atomicState.trueSwtPoll
+            
+            def elapsed = now() - atomicState.trueSwtPoll
+            logging("elapsed time between swt cmd and execution = ${elapsed}")
 
 
+            if(elapsed > 3000)
+            {
+                atomicState.trueSwtPoll = now()
+                testTrueSwitches()
+                
+            }
+        }
+
+
+
+        
 
         logging("***${new Date().format("h:mm:ss a", location.timeZone)}**** Origin: $data")
 
@@ -589,6 +629,71 @@ def master(String data){
                 }
             }
         }
+    }
+}
+
+def testTrueSwitches(){
+
+    /* TEST DESCRIPTION: 
+    
+    1) poll devices to trigger events (important in case we just rebooted or had a long period of inactivity) 
+    
+    IMPORTANT TO REMEMBER: This action is the reason this can't work with mesh devices. 
+    
+    2) If the last activity was more than X minutes ago, it means that, despite polling, the device remains unresponsive, which is likely to be a zwave failure issue. 
+
+    */
+
+    def cmd =  device.hasCommand("poll") ? "poll()" : device.hasCommand("refresh") ? "refresh()" : null
+
+    if(cmd == null) {
+        log.warn "$device has neither 'poll()' nor 'refresh()' command"
+        return // cancel operation because this might induce fals positives. 
+    }
+
+    // check device responds to refresh or poll commands. 
+    try {
+        logging("polling $device")
+        device.cmd
+        // If no exception was thrown, the device is responsive
+        log.info "${device.displayName} is responsive to polling commands."
+
+    } catch (Exception e) {
+        // If an exception was thrown, the device is unresponsive
+        log.warn formatText("${device.displayName} is unresponsive (polling).", "red", "black")
+        atomicState.trueSwtEvt += 1
+    }
+
+    
+    def lastActivityCount = 0 // must equal the size of trueSwitches to trigger the alarm threshold count
+    
+    trueSwitches.each { device ->        
+        
+        logging "deviceNetworkId for $device ======> ${device.deviceNetworkId}"
+        //since it most cases it'll respond to refresh/poll commands even when zwave is down, try the getDateLastActivity() method
+        try {
+            
+            // Check if there's been reported activity in the last X minutes
+            def X = 25 * 60 * 1000
+            def lastActivity = device.eventsSince(new Date(now() - X)).size() 
+            logging "${device}'s lastActivity => $lastActivity"
+                                   
+            if (lastActivity == 0) {
+                log.warn formatText("${device.displayName} has not reported any activity for more than ${X / 60 / 1000} minutes and might be unresponsive.", "blue", "yellow")
+                lastActivityCount += 1
+                log.debug "lastActivityCount => $lastActivityCount"
+                if(lastActivityCount >= trueSwitches.size()) {
+                    log.warn formatText("ZWAVE is stuck! REBOOTING", "black", "red")
+                    // reboot()
+                } 
+            } else {
+                logging "${device.displayName} has been reporting activity within the last ${X / 60 / 1000} minutes."
+            }
+        } catch (Exception e) {
+            // If an exception was thrown, the device is unresponsive
+            log.warn "${device.displayName} is unresponsive (getDateLastActivity) error message => $e."
+        }logging
+        
     }
 }
 

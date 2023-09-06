@@ -95,6 +95,7 @@ log.debug "name: ${hub.name}"*/
 
                 if(trueSwitches){
                     paragraph """You have selected ${trueSwitches.join(", ")} as a physical switches. It will be polled on a regular interval and then the app will reboot if an error is returned."""
+                    input "notification", "capability.notification", title: "Select notification devices", multiple:true, required:false, submitOnChange: true 
                     
                 }
             }
@@ -644,30 +645,23 @@ def testTrueSwitches(){
 
     */
 
-    def cmd =  device.hasCommand("poll") ? "poll()" : device.hasCommand("refresh") ? "refresh()" : null
-
-    if(cmd == null) {
-        log.warn "$device has neither 'poll()' nor 'refresh()' command"
-        return // cancel operation because this might induce fals positives. 
-    }
-
-    // check device responds to refresh or poll commands. 
-    try {
-        logging("polling $device")
-        device.cmd
-        // If no exception was thrown, the device is responsive
-        log.info "${device.displayName} is responsive to polling commands."
-
-    } catch (Exception e) {
-        // If an exception was thrown, the device is unresponsive
-        log.warn formatText("${device.displayName} is unresponsive (polling).", "red", "black")
-        atomicState.trueSwtEvt += 1
-    }
-
     
+    
+
     def lastActivityCount = 0 // must equal the size of trueSwitches to trigger the alarm threshold count
     
-    trueSwitches.each { device ->        
+    trueSwitches.each { device ->   
+
+        def cmd =  device.hasCommand("poll") ? "poll()" : device.hasCommand("refresh") ? "refresh()" : null
+
+        if(cmd == null) {
+            log.warn "$device has neither 'poll()' nor 'refresh()' command"
+            return // cancel operation because this might induce fals positives. 
+        }
+
+        device.cmd // poll the device. 
+
+        // now see if there's been activity. If there hasn't been any, AND on all devices, then reboot. 
         
         logging "deviceNetworkId for $device ======> ${device.deviceNetworkId}"
         //since it most cases it'll respond to refresh/poll commands even when zwave is down, try the getDateLastActivity() method
@@ -677,22 +671,34 @@ def testTrueSwitches(){
             def X = 25 * 60 * 1000
             def lastActivity = device.eventsSince(new Date(now() - X)).size() 
             logging "${device}'s lastActivity => $lastActivity"
-                                   
+
+// lastActivity = 0 // TEST
+
             if (lastActivity == 0) {
                 log.warn formatText("${device.displayName} has not reported any activity for more than ${X / 60 / 1000} minutes and might be unresponsive.", "blue", "yellow")
                 lastActivityCount += 1
                 log.debug "lastActivityCount => $lastActivityCount"
+
+// lastActivityCount = 10 // TEST
+
                 if(lastActivityCount >= trueSwitches.size()) {
-                    log.warn formatText("ZWAVE is stuck! REBOOTING", "black", "red")
-                    // reboot()
+                    def hub = location.hubs[0]
+                    def unformatedMessage = "Z-wave mesh down. Rebooting $hub.name"
+                    notification?.deviceNotification(unformatedMessage)
+
+                    def message = formatText(unformatedMessage, "black", "red")
+                    log.warn message
+
+                    
+                    reboot()
                 } 
             } else {
                 logging "${device.displayName} has been reporting activity within the last ${X / 60 / 1000} minutes."
             }
         } catch (Exception e) {
             // If an exception was thrown, the device is unresponsive
-            log.warn "${device.displayName} is unresponsive (getDateLastActivity) error message => $e."
-        }logging
+            log.error "(error from $app.label's inner code). error message => $e."
+        }
         
     }
 }

@@ -81,7 +81,11 @@ def pageSetup(){
             input "sensor", "capability.relativeHumidityMeasurement", title: "pick a sensor", required:true, multiple: false
             input "threshold", "number", title:"Select humidity threshold above which $SWITCH will be turned off", required: true, 
                 range: "10..100", defaultValue: "50", submitOnChange:true
+
+            input "humidity_level", "capability.switchLevel", title: "Adjust desired humidity level with a virtual dimmer", required: false, multiple: false, submitOnChange:true 
         }
+
+        
 
         section("save power with sensors")
         {
@@ -177,6 +181,10 @@ def initialize() {
     subscribe(SWITCH, "switch", switchHandler)
     subscribe(sensor, "humidity", humidityHandler)
 
+    if(humidity_level){
+        subscribe(humidity_level, "level", humidityLevelHandler)
+    }
+
     if(usemotion && motionSensors)
     {
         int i = 0
@@ -245,6 +253,16 @@ def appButtonHandler(btn) {
         break
     }
 }
+
+def humidityLevelHandler(evt){
+    log.debug "$evt.device set to $evt.value"
+
+    app.updateSetting("threshold",[value:evt.value,type:"number"])
+
+    master()
+}
+
+
 def switchHandler(evt){
     log.debug "$evt.device turned $evt.value"
     if(atomicState.lastUpdated == null || (now() - atomicState.lastUpdated > 2 * 24 * 60 * 60 * 1000 || atomicState.installed == false))
@@ -291,6 +309,7 @@ def master(){
     else 
     {
         def thres = threshold.toInteger()
+        log.debug "threshold is: $thres"
         boolean anyIsOff  = SWITCH.any{it -> it.currentValue("switch") == "off"}
         boolean anyIsOn = SWITCH.any{it -> it.currentValue("switch") == "on"}
         boolean anyContactOpen = contacts.any{it -> it.currentValue("contact") == "open"}

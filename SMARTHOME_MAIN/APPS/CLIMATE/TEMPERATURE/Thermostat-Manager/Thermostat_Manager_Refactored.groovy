@@ -48,14 +48,7 @@ def MainPage() {
             //label title: "Assign a name",description:"$atomicState.appLabel", required: false, submitOnChange:true // can't use this because it shows html font tags
             input "appLabel", "text", title: "Assign a name to this instance of $app.name", submitOnChange:true
             app.updateLabel(appLabel)
-            input "celsius", "bool", title: "Celsius", submitOnChange:true
-            if(celsius)
-            {
-                convert_db_to_celsius()
-            }
-            else {
-                if(atomicState.currentUnit == "celsius") convert_db_to_fahrenheit() // will run only if db was already converted to celsius, F being default. 
-            }
+            input "celsius", "bool", title: "Celsius"
         }
         section()
         {
@@ -220,24 +213,7 @@ def methods(){
             input "method", "enum", title:"select the method you want $app.name to use to adjust your thermostats cooling and heating set points", options:["normal","auto"],submitOnChange:true
             if(method == "auto")
             {
-                atomicState.confirmed = atomicState.confirmed == null ? true : atomicState.confirmed
                 paragraph formatText("auto method: the app sets your target temperature based on several learning functions by taking humidity levels and outside temperature into consideration", "black", "white")
-                input "RESET", "button", title: "RESET", submitOnChange:true
-                if(atomicState.confirmed == "no"){ 
-                    paragraph """<div style='
-                    z-index: 9999;
-                    padding: 20px;
-                    border-radius: 10px; 
-                    font-size:25px; 
-                    color:white; 
-                    background: rgba(0, 0, 0, 0.5); 
-                    position:relative; 
-                    margin:auto;
-                    '>
-                    Are you sure? You will lose everything your app has learned over time!</div>"""
-                    input "reset_confirmed", "button", title: "YES", submitOnChange:true
-                    input "no_reset", "button", title: "NO", submitOnChange:true                    
-                }
             }
             else 
             {
@@ -245,13 +221,13 @@ def methods(){
             }
             if(method == "auto")
             {    
-                atomicState.currentUnit = atomicState.currentUnit ? atomicState.currentUnit : false
+                atomicState.converted = atomicState.converted ? atomicState.converted : false
                 if(maxAutoHeat != "null" && minAutoHeat != "null" && minAutoCool != "null" && maxAutoCool != "null")
                 {   
                     input "convertToCelsius", "bool", title: "Convert all these values to Celsius (if you forgot to select this option on the main page)", submitOnChange:true
-                    if(convertToCelsius && !atomicState.currentUnit)
+                    if(convertToCelsius && !atomicState.converted)
                     {
-                        atomicState.currentUnit = true
+                        atomicState.converted = true
                         atomicState.maxAutoHeatRestore = maxAutoHeat // backup to prevent loop down conversions
                         atomicState.minAutoHeatRestore = minAutoHeat
                         atomicState.minAutoCoolRestore = minAutoCool
@@ -263,12 +239,10 @@ def methods(){
                         app.updateSetting("minAutoHeat", [type:"number",value:getCelsius(minAutoHeat.toInteger())])
                         app.updateSetting("minAutoCool", [type:"number",value:getCelsius(minAutoCool.toInteger())])
                         app.updateSetting("maxAutoCool", [type:"number",value:getCelsius(maxAutoCool.toInteger())])
-
-                        convert_db_to_celsius()
                     }
-                    else if(!convertToCelsius && atomicState.currentUnit)
+                    else if(!convertToCelsius && atomicState.converted)
                     {
-                        atomicState.currentUnit = false
+                        atomicState.converted = false
                         descriptionText """restoring values: 
 
 atomicState.maxAutoHeatRestore = $atomicState.maxAutoHeatRestore
@@ -281,12 +255,12 @@ atomicState.maxAutoCoolRestore = $atomicState.maxAutoCoolRestore
                         app.updateSetting("minAutoCool", [type:"number",value:atomicState.minAutoCoolRestore])
                         app.updateSetting("maxAutoCool", [type:"number",value:atomicState.maxAutoCoolRestore]) 
                     }
-                    else if(convertToCelsius && atomicState.currentUnit)
+                    else if(convertToCelsius && atomicState.converted)
                     {
                         descriptionText "already converted, doing nothing"   
                     }
 
-                    descriptionText "atomicState.currentUnit = $atomicState.currentUnit"
+                    descriptionText "atomicState.converted = $atomicState.converted"
                 }
                 input "maxAutoHeat", "number", title: "Highest heating set point", defaultValue:celsius?getCelsius(78):78, submitOnChange:true
                 input "minAutoHeat", "number", title: "Lowest heating set point", defaultValue:celsius?getCelsius(70):70, submitOnChange:true
@@ -1048,11 +1022,7 @@ def operationConsistency(){
 }
 def pageNameUpdate(){
     closeBoolQuestions()
-
-    def failedSensorsList = atomicState.disabledSensors ? atomicState.disabledSensors.join(", ") : "None"
-    def pauseVar = atomicState.disabledSensors && !atomicState.disabledSensors.isEmpty() ? "FAILED SENSORS: ${failedSensorsList}" : "paused"
-
-    // def pauseVar = atomicState.failedSensors ? "FAILED SENSORS" : "paused"
+    def pauseVar = atomicState.failedSensors ? "FAILED SENSORS" : "paused"
     def batteryVar = "LOW BATTERY"
     def previousLabel = app.label // save current label
 
@@ -1282,72 +1252,31 @@ def initialize(){
         schedule("0 0/5 * * * ?", pollPowerMeters)
     }
 
+    /* UNCOMMENT, RUN THE UPDATED(), THEN COMMENT OUT AGAIN TO RESET THE LEARNING BASE *****/
+    //atomicState.db = null
+    /*******************************************************************************/
+    if(atomicState.db == null)
+    {
+        logwarn "DB RESET !"
+        atomicState.db = ['-40':113,'-30':103,'-20':93,'-10':83,'0':73,'10':63,'15':58,'20':53,'25':48,'30':43,'35':38,'40':33,'45':28,'50':23,'55':18,'60':13,'65':8,'70':3,'75':0,'80':-5,'85':-9,'90':-12,'95':-17,'100':-21,'105':-26,'110':-30,'115':-35,'120':-40,'125':-45,'130':-50]
+    }
+
     if(celsius)
     {
-        convert_db_to_celsius() // can run only once or after converted back to F
+        def db = [:]
+        atomicState.db.eachWithIndex { 
+            key, val, index ->
+            db += ["${getCelsius(key.toInteger())}":val]
+        }
+        log.debub "DB CELSIUS = $db"
+        atomicState.db = db
     }
-    else {
-        convert_db_to_fahrenheit() // will run only if was converted to celsius before
-    }
-
-
 
     schedule("0 0/1 * * * ?", mainloop)
 
     descriptionText "END OF INITIALIZATION"
-    
+
 }
-
-def reset_db(){
-    logwarn "DB RESET !"
-    atomicState.db = [
-        '70-30-40-20': 68, // insideTemp-outsideTemp-insideHumidity-outsideHumidity: targetTemp
-        '70-40-40-20': 69,
-        '70-50-40-20': 70,
-        '70-60-40-20': 71,
-        '70-70-40-20': 72
-    ]
-    if(!celsius) atomicState.currentUnit = "Fahrenheit" 
-}
-
-def convert_db_to_celsius() {
-    atomicState.currentUnit = atomicState.currentUnit == null ? "Fahrenheit" : atomicState.currentUnit 
-
-    if (celsius && atomicState.currentUnit == "Fahrenheit") {
-        def db = [:]
-        atomicState.db.each { key, val ->
-            def parts = key.split("-")
-            def convertedKeyParts = parts.collect { getCelsius(it.toInteger()).toString() }
-            def convertedKey = convertedKeyParts.join("-")
-
-            def convertedVal = getCelsius(val.toInteger())
-            db[convertedKey] = convertedVal
-        }
-        log.debug "DB Celsius = $db"
-        atomicState.db = db
-        atomicState.currentUnit = "Celsius"
-    }
-}
-
-def convert_db_to_fahrenheit() {
-    atomicState.currentUnit = atomicState.currentUnit == null ? "Fahrenheit" : atomicState.currentUnit 
-
-    if (!celsius && atomicState.currentUnit != "Fahrenheit") {
-        def db = [:]
-        atomicState.db.each { key, val ->
-            def parts = key.split("-")
-            def convertedKeyParts = parts.collect { getFahrenheit(it.toInteger()).toString() }
-            def convertedKey = convertedKeyParts.join("-")
-
-            def convertedVal = getFahrenheit(val.toInteger())
-            db[convertedKey] = convertedVal
-        }
-        log.debug "DB Fahrenheit = $db"
-        atomicState.db = db
-        atomicState.currentUnit = "Fahrenheit"
-    }
-}
-
 
 /************************************************EVT HANDLERS***************************************************/
 def modeChangeHandler(evt){
@@ -1426,16 +1355,7 @@ def appButtonHandler(btn) {
         Poll()
         pollPowerMeters()
         break
-        case "RESET":
-        atomicState.confirmed = "no"
-        break
-        case "reset_confirmed":
-        atomicState.confirmed = "yes" 
-        reset_db()
-        break
-        case "no_reset": 
-        atomicState.confirmed = "na"
-        break 
+
     }
 }
 def contactHandler(evt){
@@ -1514,7 +1434,7 @@ def dimmerHandler(evt){
             return
         } 
 
-        log.debug "new dimmer level is $evt.value method = $method && setpointSentByApp = $atomicState.setpointSentByApp"
+        descriptionText "new dimmer level is $evt.value method = $method && setpointSentByApp = $atomicState.setpointSentByApp"
 
         // learning from user's input for the auto method
         learn(evt.value) // will also respond to thermostat inputs because it is ran before testing if it's set by the app or not
@@ -3611,7 +3531,6 @@ def getTarget(simpleModeActive){
     {
         target = getAutoVal()
         logtrace "getAutoVal() returned $target"
-        return target 
     }
     else
     {
@@ -4052,32 +3971,70 @@ inside > criticalcold :  ${inside > criticalcold}
     return need
 
 }
-def getAutoVal() {
-    // Use learned data to determine the target temperature
-    def outside = getOutsideTemp() // Assuming you have a function that gets the current outside temperature
-    def inside = getInsideTemp() // Assuming you have a function that gets the current inside temperature
-    def insideHumidity = getInsideHumidity() // Assuming you have a function that gets the current inside humidity
-    def outsideHumidity = getOutsideHumidity() // Assuming you have a function that gets the current outside humidity
+def getAutoVal(){
 
-    def conditionsKey = "${inside}-${outside}-${insideHumidity}-${outsideHumidity}"
-    def learnedTarget = atomicState.db[conditionsKey]
-    
-    if (learnedTarget != null) {
-        return learnedTarget // Return the target based on learned data
-        log.debug "Learned target applied: $learnedTarget"
-    } else {
-        // Fallback to dry-bulb temperature if no learned data is available
-        return defaultSetpoint()
+    def outside = outsideTemp?.currentValue("temperature") 
+    def need = outside >= getOutsideThershold() ? "cool" : "heat"
+    def result = celsius ? getCelsius(73):73 // just a temporary default value  
+    def defaultV = result
+    //def humidity = outsideTemp?.currentValue("humidity") // outside humidity
+    def humidity = getInsideHumidity() // in auto mode we evaluate based only on inside humidity
+    humidity = humidity != null ? humidity : 50 // assume 50 as a temporary value to prevent errors when a sensor has just been installed by user and humidity value has yet to be parsed
+
+    def humThres = getHumidityThreshold() // linear equation: hum thres varies with outside temp
+
+    def variation = getVariationAmplitude(outside, need)
+
+    logging "variation amplitude = $variation | absolute need (auto method, not from getNeed()) is $need outside: $outside "
+
+    result = need == "cool" ? humidity >= humThres ? outside - (variation + 1) : outside - variation : need == "heat" ? humidity >= humThres ? outside + variation + 1 : outside + variation : "ERROR"
+
+    //result = need == "cool" ? outside - Math.abs(variation) : need == "heat" ? outside + Math.abs(variation) : "ERROR"
+
+    //log.error "result = $result"
+
+    if(result == "ERROR") { 
+        log.error """ERROR at getAutoVal()
+need = $need
+atomicState.lastNeed = $atomicState.lastNeed
+humidity inside = $humidity 
+humThres = $humThres
+outside = $outside
+"""     
+        return defaultV
     }
-}
 
-def getOutsideTemp(){
-    return outsideTemp.currentValue("temperature")
-}
-def getOutsideHumidity(){
-    return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
-}
+    logging """need = $need
+atomicState.lastNeed = $atomicState.lastNeed
+humidity inside = $humidity 
+insideHum = $insideHum
+humThres = $humThres
+outside = $outside"""
 
+    def hiCool = celsius ? getCelsius(77) : 77
+    def loCool = celsius ? getCelsius(70) : 70
+    def hiHeat = celsius ? getCelsius(75) : 75
+    def loHeat = celsius ? getCelsius(70) : 70
+    def maxAH = maxAutoHeat != null ? maxAutoHeat : hiHeat
+    def minAC = minAutoCool != null ? minAutoCool : loCool
+    def minAH = minAutoHeat != null ? minAutoHeat : loHeat
+    def maxAC = maxAutoCool != null ? maxAutoCool : hiCool
+
+    logging """
+maxAH = $maxAH
+minAC = $minAC
+minAH = $minAH
+maxAC = $maxAC
+"""
+
+    result = result > maxAH && need == "heat" ? maxAH : result // in this scope need is always either "cool" or "heat", never "off" so these conditions won't be ignored
+    result = result < minAC && need == "cool" ? minAC : result
+    result = result < minAH && need == "heat" ? minAH : result
+    result = result > maxAC && need == "cool" ? maxAC : result
+
+    descriptionText "target temperature (auto) in this room is: $result (${humidity > humThres ? "humid condition true" : "humid condition false"}(${humidity}%) | outside temp: $outside) "
+    return result
+}
 def getVariationAmplitude(outside, need){
 
     def y = 0 // value to find
@@ -4086,7 +4043,7 @@ def getVariationAmplitude(outside, need){
 
     y = 314.734*Math.log(16.2364-0.018708*x)-839.624 // 
 
-    logtrace "atomicState.db //= ${atomicState.db}"
+    logtrace "atomicState.db //= ${atomicState.db.sort{it.value.toInteger()}}"
 
     // we want to find the temperature value (key) that is the closest to current temperature. For that, we find the minimum difference between current temp and list of temps
     def differences = []
@@ -4094,13 +4051,10 @@ def getVariationAmplitude(outside, need){
 
     atomicState.db.eachWithIndex { 
         key, val, index ->
-        def parts = key.split("-")
-        def outsideTempFromKey = parts[1].toInteger() // Assuming the 2nd part is the outside temperature
-        def diff = Math.abs(x - outsideTempFromKey).toInteger()
+        def diff = Math.abs(x - key.toInteger()).toInteger()
         differences += diff
         childMap."$diff" = key // remember the key in a separate map
     }
-
     def minD = differences.min() // closest temperature in db to current temperature
     //descriptionText "childMap = $childMap"
     def keySearch = childMap."$minD"
@@ -4111,10 +4065,11 @@ def getVariationAmplitude(outside, need){
     y = Math.abs(y)
 
     logging """
-    y = ${Math.abs(y)}
-    x / outside = $outside
-    theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}"""
+y = ${Math.abs(y)}
+x / outside = $outside
+theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}
 
+"""
     descriptionText "db variation amplitude = ${y}"
 
     return y
@@ -4400,89 +4355,27 @@ def getFahrenheit(int value){
     descriptionText "${value}F converted to ${F}F"
     return F.toInteger()
 }
-/************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
-// Function to gather and store user temperature settings along with current conditions
-def learn(val) {
+/************************************************A.I. LEARNING (beta) ******************************************************/
+def learn(val){
+    def outside = outsideTemp.currentValue("temperature")
+    def amplitude = outside.toInteger() - val.toInteger()
+    logwarn "atomicState.lastNeed = $atomicState.lastNeed"
 
-    
+    if(!atomicState.setpointSentByApp)
+    {
+        descriptionText "LEARNING $outside : $amplitude => new target: ${atomicState.lastNeed == "cool" ? outside - amplitude : atomicState.lastNeed == "heat" ? outside + Math.abs(amplitude) : null} "
 
-    // Fetch the current conditions
-    def insideTemperature = getInsideTemperature()
-    def outsideTemperature = outsideTemp.currentValue("temperature")
-    def insideHumidity = getInsideHumidity()
-    def outsideHumidity = outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : null
+        def db = atomicState.db
+        db."${outside}" = amplitude
 
-    // Create a unique key based on the current conditions
-    def conditionsKey = "${insideTemperature}-${outsideTemperature}-${insideHumidity}-${outsideHumidity}"
-
-    // Store the user's requested temperature value in the database
-    atomicState.db[conditionsKey] = val
-
-    log.debug "new db: ${atomicState.db}"
+        atomicState.db = db
+        descriptionText "Updated map : $atomicState.db"
+    }
+    else
+    {
+        logging "not learning from this entry ($val) because it doesn't seem to be coming from a user's input"
+    }
 }
-
-// Function to predict the setpoint based on current conditions
-def predictSetpoint() {
-    // Fetch the current conditions
-    def currentInsideTemp = getInsideTemperature()
-    def currentOutsideTemp = outsideTemp.currentValue("temperature")
-    def currentInsideHumidity = getInsideHumidity()
-    def currentOutsideHumidity = outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : null
-
-    // Create a key based on the current conditions
-    def currentConditionsKey = "${currentInsideTemp}-${currentOutsideTemp}-${currentInsideHumidity}-${currentOutsideHumidity}"
-
-    // Retrieve the closest matching setpoint from the database, if available
-    return atomicState.db[currentConditionsKey] ?: defaultSetpoint()
-}
-
-// Hypothetical helper functions to get the current indoor temperature and humidity
-def getInsideTemperature() {
-    return getInsideTemp()
-}
-
-// Function to calculate the Wet-Bulb temperature as the default setpoint
-def defaultSetpoint() {
-    /*
-        Wet-Bulb Temperature Calculation:
-
-        The Wet-Bulb temperature is calculated using the following approximation:
-
-            Wet-Bulb Temperature = T - ((T - Td) / 3)
-
-        Where:
-            - T is the dry-bulb temperature (i.e., the regular air temperature)
-            - Td is the dew point temperature
-
-        The dew point temperature (Td) can be approximated using:
-
-            Td = T - ((100 - RH) / 5)
-
-        Where:
-            - RH is the relative humidity
-
-        This gives us an estimate of the Wet-Bulb temperature, which is a function of both the air temperature and humidity.
-*/
-
-    // Fetch the current indoor temperature and humidity
-    def currentInsideTemp = getInsideTemperature()
-    def currentInsideHumidity = getInsideHumidity()
-
-    // Calculate the dew point temperature
-    def dewPoint = currentInsideTemp - ((100 - currentInsideHumidity) / 5)
-
-    // Calculate the Wet-Bulb temperature
-    def wetBulbTemp = currentInsideTemp - ((currentInsideTemp - dewPoint) / 3)
-    
-    log.debug "wetbulbTem is: $wetBulbTemp"
-    return adjustWetBulbTemperature(wetBulbTemp, currentInsideTemp)
-}
-def adjustWetBulbTemperature(wetbulbTemp, drybulbTemp) {
-    def adjustedTemp = (0.71 * drybulbTemp) + (0.34 * wetbulbTemp)
-    log.debug "adjusted wet bulb temp: ${adjustedTemp}"
-    return adjustedTemp
-}
-
 
 /************************************************BOOLEANS******************************************************/
 boolean contactsAreOpen(){

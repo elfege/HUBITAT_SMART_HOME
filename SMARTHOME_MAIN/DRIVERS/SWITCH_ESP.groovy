@@ -112,28 +112,32 @@ def parse(String description) {
 
 
 def on(){
-    log.debug "Executing 'on'"
+    log.debug "Sending 'on'"
     sendEthernet("on")
+    log.debug "Sending 'L' for mebo'"
+    sendEthernet("L") // for mebo aux power switch
 }
 def off(){
-    log.debug "Executing 'off'"
+    log.debug "Sending 'off'"
     sendEthernet("off")
+    log.debug "Sending 'H' for mebo'"
+    sendEthernet("H") // for mebo aux power switch
 }
 
 def reboot(){
-    log.debug "Executing 'rebootrobot'"
+    log.debug "Sending 'rebootrobot'"
     sendEthernet("reboot")
 }
 
 def reset() {
-    log.debug "Executing 'reset'"
+    log.debug "Sending 'reset'"
     sendEthernet("reset")
 }
 
 
 def battery()
 {
-    log.debug "Executing 'chargeon'"
+    log.debug "Sending 'chargeon'"
     sendEthernet("togglecharge")  
 }
 
@@ -153,12 +157,41 @@ private getHostAddress() {
 
 
 def sendEthernet(message) {
-    log.debug "Executing 'sendEthernet' ${message}"
+    log.debug "Sending 'sendEthernet' ${message}"
     new hubitat.device.HubAction(
         method: "POST",
         path: "/${message}?",
         headers: [ HOST: "${getHostAddress()}" ]
     )
+
+    try {
+    def uri = "http://${getHostAddress()}/${message}"
+    log.debug "http GET => $uri"
+    httpGet(uri) { resp ->
+        if (resp.success) {
+            log.debug "switch on"
+            createEvent(name: "switch", value: "on", isStateChange: true)
+        }
+        if (resp.data) log.debug "${resp.data}"
+    }
+     } catch (Exception e) {
+        log.warn "Call to on failed: ${e.message}"
+    }
+
+    try {
+        // without the port for when it's a direct get request (without using STAnything library)
+        def uri = "http://${settings.ip}/${message}"
+        log.debug "http GET => $uri"
+        httpGet(uri) { resp ->
+        if (resp.success) {
+            log.debug "switch on"
+            createEvent(name: "switch", value: "on", isStateChange: true)
+        }
+        if (resp.data) log.debug "${resp.data}"
+    }
+     } catch (Exception e) {
+        log.warn "Call to on failed: ${e.message}"
+    }
 }
 
 def updateDeviceNetworkID() {

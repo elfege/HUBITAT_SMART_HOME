@@ -1355,6 +1355,35 @@ def reset_db(){
     log.debug "kdTree => ${kdTree}"
 }
 
+
+// def reset(){
+//     logwarn "DB RESET !"
+//     db = [:]  // Clear the existing database
+
+//     // Define the limited ranges for temperature and humidity
+//     def indoorTempRange = [65, 70, 75]
+//     def outdoorTempRange = [30, 50, 70, 90, 100]
+//     def indoorHumidityRange = [20, 40, 60]
+//     def outdoorHumidityRange = [20, 50, 80, 100]
+
+//     // Generate combinations and populate the database with default values
+//     indoorTempRange.each { indoorTemp ->
+//         outdoorTempRange.each { outdoorTemp ->
+//             indoorHumidityRange.each { indoorHumidity ->
+//                 outdoorHumidityRange.each { outdoorHumidity ->
+//                     def conditionsKey = "${indoorTemp}-${outdoorTemp}-${indoorHumidity}-${outdoorHumidity}"
+//                     // Set a default value; this could be improved with more specific default values
+//                     db[conditionsKey] = (indoorTemp + outdoorTemp) / 2
+//                 }
+//             }
+//         }
+//     }
+
+//     atomicState.currentUnit = "Fahrenheit"
+//     return db 
+// }
+
+
 def convert_db_to_celsius() {
     atomicState.currentUnit = atomicState.currentUnit == null ? "Fahrenheit" : atomicState.currentUnit 
 
@@ -4101,50 +4130,33 @@ inside > criticalcold :  ${inside > criticalcold}
 
 }
 def getAutoVal() {
-    // Get current conditions
+    // Use learned data to determine the target temperature
     def outside = getOutsideTemp()
-    log.warn "outside =========> $outside"
     def inside = getInsideTemp()
-    log.warn "inside =========> $inside"
     def insideHumidity = getInsideHumidity()
-    log.warn "insideHumidity =========> $insideHumidity"
     def outsideHumidity = getOutsideHumidity()
-    log.warn "outsideHumidity =========> $outsideHumidity"
 
-    // Create the conditions array and key
-    def conditions = [inside, outside, insideHumidity, outsideHumidity]
-    def conditionsKey = conditions.join('-')
-
-    // First, try to get a direct lookup from the hash table
-    def learnedTarget = atomicState.hashTable[conditionsKey]
-    log.warn "learnedTarget => $learnedTarget"
-
+    def conditionsKey = "${inside}-${outside}-${insideHumidity}-${outsideHumidity}"
+    def learnedTarget = atomicState.db[conditionsKey]
+    
     if (learnedTarget != null) {
         log.debug "Learned target applied: $learnedTarget"
         return learnedTarget // Return the target based on learned data
-    } else if (useDryBulbEquation) {
+    } else if(useDryBulbEquation){
         // Fallback to dry-bulb temperature if no learned data is available
         def drybulbval = defaultSetpoint()
-        log.warn "drybulbval fallback value => ${drybulbval}"
+        log.warn "drybulbval => ${drybulbval}"
         return drybulbval
-    } else {
-        // If nothing else, use the k-d tree to find the nearest neighbor
-        def nearestConditions = findNearestNeighbor(conditions)
-        def nearestConditionsKey = nearestConditions.join('-')
-        def nearestTarget = atomicState.hashTable[nearestConditionsKey]
+    }
+    else {
+        // fall back to dimmer's level if user didn't select the math option
+        // until there's enough data
         
-        if (nearestTarget != null) {
-            log.debug "Nearest target applied: $nearestTarget"
-            return nearestTarget
-        } else {
-            // Fallback to dimmer's level if all else fails and there's insufficient data
-            def level = dimmer.currentValue("level")
-            log.warn "******* level: ${level}"
-            return level
-        }
+        def level = dimmer.currentValue("level")
+        log.warn "******* level: ${level}"
+        return level
     }
 }
-
 
 def getOutsideTemp(){
     return outsideTemp.currentValue("temperature")
@@ -4506,8 +4518,6 @@ def learn(val) {
   
     // Also add to k-d tree
     addToKdTree(conditions)
-
-    log.debug "new hashTable: ${atomicState.hashTable}"
 }
 
 // Function to add a point to the k-d tree (for demonstration purposes)
@@ -4596,9 +4606,8 @@ def defaultSetpoint() {
     // Calculate the Wet-Bulb temperature
     def wetBulbTemp = currentInsideTemp - ((currentInsideTemp - dewPoint) / 3)
     
-    log.debug "wetBulbTemp is: $wetBulbTemp"
-    return wetBulbTemp  
-    // return adjustWetBulbTemperature(wetBulbTemp, currentInsideTemp)
+    log.debug "wetbulbTem is: $wetBulbTemp"
+    return adjustWetBulbTemperature(wetBulbTemp, currentInsideTemp)
 }
 def adjustWetBulbTemperature(wetbulbTemp, drybulbTemp) {
     def adjustedTemp = (0.7 * drybulbTemp) + (0.32 * wetbulbTemp)

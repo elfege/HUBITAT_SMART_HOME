@@ -89,7 +89,7 @@ def pageSetup(){
 
         section("save power with sensors")
         {
-            input "usemotion", "bool", title: "Keep ${SWITCH.join(", ")} off when there's no motion", submitOnChange: true, defaultValue:false
+            input "usemotion", "bool", title: "Keep ${SWITCH ? SWITCH.join(", ") : "switches"} off when there's no motion", submitOnChange: true, defaultValue:false
             if(usemotion)
             {
                 input "motionSensors", "capability.motionSensor", title: "Select your motion sensor(s)", despcription: "pick a motion sensor", required:false, multiple:true, submitOnChange:true   

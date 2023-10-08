@@ -1,6 +1,4 @@
 import java.text.SimpleDateFormat
-import groovy.json.JsonSlurper
-import groovy.json.JsonOutput
 
 definition(
     name: "Thermostat Manager",
@@ -1299,11 +1297,17 @@ def initialize(){
         convert_db_to_fahrenheit() // will run only if was converted to celsius before
     }
 
+    // Hash table for direct lookups
     
-    def hashTableJson = readFromFile("hash_table.txt")
-    if (hashTableJson == null || hashTableJson.isEmpty()) {
+    if (atomicState.hashTable == null){
+        atomicState.hashTable = [:]
         reset_db()
-        log.warn("Hash table file was empty. Database has been reset and populated.")
+    }
+
+    // Simplified k-d tree for nearest-neighbor searches
+    if (atomicState.kdTree == null){
+        atomicState.kdTree = []
+        reset_db()
     }
     
 
@@ -1398,7 +1402,7 @@ def appButtonHandler(btn) {
         break
         case "reset_confirmed":
         atomicState.confirmed = "yes" 
-        log.debug "**********************************RESETING DATABASE*****************************"
+        log.debug "**********************************RESETING OBJECT*****************************"
         reset_db()
         break
         case "no_reset": 
@@ -1561,7 +1565,7 @@ any found with same current value: ${thermostatB?.any{it -> it.currentValue(evt.
 
             userWants(evt.value.toInteger(), inside)
 
-            def currDim = !dimmer ? atomicState.lastThermostatInput : getDimmerValue()
+            def currDim = !dimmer ? atomicState.lastThermostatInput : dimmer?.currentValue("level")
             def thermMode = thermostat?.currentValue("thermostatMode")
 
             // this will be true only if thermostat is heating or cooling; therefore, dimmer won't be adjusted if off 
@@ -1613,7 +1617,7 @@ evt.value = $currDim"""
             }
             if(currDim == evt.value)
             {
-                descriptionText "${dimmer ? "dimmer" : "atomicState.lastThermostatInput"} value ok (${dimmer ? '${getDimmerValue()}' : "atomicState.lastThermostatInput"} = ${evt.value}"
+                descriptionText "${dimmer ? "dimmer" : "atomicState.lastThermostatInput"} value ok (${dimmer ? '${dimmer?.currentValue("level")}' : "atomicState.lastThermostatInput"} = ${evt.value}"
             }
         }
         else
@@ -1876,7 +1880,7 @@ def mainloop(source){
         /********************** ANTI FREEZE SAFETY TESTS *************************/
         // first make sure dimmer is within safe parameters. Accidental modifications with Alexa or Siri can make it problematic...         
         // def Crit = criticalcold ? criticalcold : 65
-        // if(getDimmerValue() <= Crit - 1 && !simpleModeActive)
+        // if(dimmer?.currentValue("level") <= Crit - 1 && !simpleModeActive)
         // {
         //     def safeVal = criticalcold && criticalhot ? (criticalcold + criticalhot) / 2 : 72
         //     safeVal = safeVal < 70 ? 70 : safeVal >=73 ? 72 : safeVal
@@ -3582,8 +3586,8 @@ def getTarget(simpleModeActive){
     }
     else
     {
-        //logwarn "dimmer = $dimmer dimmer?.currentValue(level) = ${getDimmerValue()}"
-        target = !dimmer ? atomicState.lastThermostatInput.toInteger() : getDimmerValue().toInteger()
+        //logwarn "dimmer = $dimmer dimmer?.currentValue(level) = ${dimmer?.currentValue("level")}"
+        target = !dimmer ? atomicState.lastThermostatInput.toInteger() : dimmer?.currentValue("level").toInteger()
     }
 
     // safety checkup for when alexa misinterpret a command to a light dimmer and applies it to the dimmer used by this app
@@ -3599,7 +3603,7 @@ minAutoCool = $minAutoCool
 maxHi = $maxHi
 minLow = $minLow
 atomicState.lastThermostatInput = $atomicState.lastThermostatInput 
-dimmer value = ${getDimmerValue()}
+dimmer value = ${dimmer?.currentValue("level")}
 heatingSetpoint = ${thermostat.currentValue("heatingSetpoint")}
 coolingSetpoint = ${thermostat.currentValue("coolingSetpoint")}
 boolean problem = $target >= $maxHi ? ${target >= maxHi} : $target <= $minLow ? ${target <= minLow} : false
@@ -3629,7 +3633,7 @@ problem =$problem
         target = celsius ? getCelsius(74) : 74 // safe value
 
     }
-    logtrace "simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion ****** target = $target************ dimmerLevel = ${getDimmerValue()}"
+    logtrace "simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion ****** target = $target************ dimmerLevel = ${dimmer?.currentValue("level")}"
 
     if(simpleModeActive && !simpleModeSimplyIgnoresMotion)
     {
@@ -4345,178 +4349,284 @@ def getFahrenheit(int value){
 }
 /************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
 
-
-
-def readFromFile(fileName) {
-    def host = "localhost"  // or "127.0.0.1"
-    def port = "8080"  
-    def path = "/local/" + fileName
-    def uri = "http://" + host + ":" + port + path
-
-    log.trace "HTTP GET URI ====> $uri"
-
-    def fileData = null
-    
-    try {
-        httpGet(uri) { resp ->
-            log.debug "HTTP Response Code: ${resp.status}"
-            log.debug "HTTP Response Headers: ${resp.headers}"
-            if (resp.success) {
-                log.debug "HTTP GET successful."
-                fileData = resp.data.text
-                log.debug "resp.data =================================> \n\n ${resp.data}"
-            } else {
-                log.warn "HTTP GET failed. Response code: ${resp.status}"
-            }
-        }
-    } catch (Exception e) {
-        log.warn "HTTP GET call failed: ${e.message}"
-    }
-    
-    log.trace "HTTP GET RESPONSE DATA: ${fileData}"
-    return fileData
-}
-
-
-
-
-// HashMap writeToFile(fileName, data) {
-//     def host = "127.0.0.1:8080"
-//     def path = "/local/" + fileName
-//     def uri = "http://" + host + path
-
-//     log.trace "HTTP PUT URI -------------------> $uri"
-
-//     log.debug "WRITING DATA ====> \n\n $data"
-
-//     def hubAction = new hubitat.device.HubAction(
-//         method: "PUT",
-//         path: path,
-//         body: "${data}",
-//         headers: [
-//             HOST: host,
-//             'Content-Type': 'text/plain'
-//         ]
-//     )
-//     try {
-//         // Execute the PUT request
-//         sendHubCommand(hubAction)
-//         log.debug "HTTP PUT was successful."
-//     } catch (Exception e) {
-//         log.error "HTTP PUT failed: ${e.message}"
-//     }
-// }
-
-Boolean writeToFile(String fileName, String data) {
-    // Create boundary and payload
-    String boundary = "----CustomBoundary"
-    String payloadTop = "--${boundary}\r\nContent-Disposition: form-data; name=\"uploadFile\"; filename=\"${fileName}\"\r\nContent-Type: text/plain\r\n\r\n"
-    String payloadBottom = "\r\n--${boundary}--"
-
-    String fullPayload = "${payloadTop}${data}${payloadBottom}"
-
-    try {
-        def hubAction = new hubitat.device.HubAction(
-            method: "POST",
-            path: "/hub/fileManager/upload",
-            headers: [
-                HOST: "127.0.0.1:8080",
-                'Content-Type': "multipart/form-data; boundary=${boundary}"
-            ],
-            body: fullPayload
-        )
-        
-        // Assuming sendHubCommand is available in your code
-        sendHubCommand(hubAction)
-        
-        log.debug "HTTP POST was successful."
-        return true
-    } catch (Exception e) {
-        log.error "HTTP POST failed: ${e.message}"
-        return false
-    }
-}
-
-
-
-
-
-def serializeHashTable(hashTable) {
-    return JsonOutput.toJson(hashTable)
-}
-
-def deserializeHashTable(jsonString) {
-
-    log.trace "deserializeHashTable ====> $jsonString"
-
-    JsonSlurper jsonSlurper = new JsonSlurper()
-    return jsonSlurper.parseText(jsonString)
-}
-
 // Function to learn from a new setpoint
-def learn() {
-    def conditions = getConditions()
-    def dimmerValue = getDimmerValue()  // Replace with your actual function to get dimmer value
-    
-    // Calculate grid ID (simplified example)
-    def gridID = conditions.join("-")
-    
-    // Read existing hash table
-    def hashTableJson = readFromFile("hash_table.txt")
+def learn(val) {
+    def conditions = getConditions().collect { it as int }
 
-    log.debug "hashTableJson ===> $hashTableJson"
+    def conditionsKey = conditions.join('-')
 
-    def hashTable = deserializeHashTable(hashTableJson)
+    log.debug "Learning with conditionsKey: $conditionsKey and value: $val"
+
+    log.warn "Update the hash table with the new value..."
+    atomicState.hashTable[conditionsKey] = val
+
     
-    // Update hash table
-    hashTable[gridID] = dimmerValue
-    
-    // Write updated hash table back to file
-    def newHashTableJson = serializeHashTable(hashTable)
-    writeToFile("hash_table.txt", newHashTableJson)
+
+    // Rebuild the k-d tree from the updated hash table
+    def allConditions = atomicState.hashTable.keySet().collect { it.split('-').collect { it.toDouble().round() } }
+    atomicState.kdTree = buildKdTree(allConditions)
+
+    log.debug "New hashTable: ${atomicState.hashTable}"
+    log.debug "New kdTree: ${atomicState.kdTree}"
 }
 
 
 // Reset database function
-def reset_db() {    
-    // Initialize an empty hash table
-    def hashTable = [:]
-    log.warn "DATABASE DROPPED !"
+def reset_db() {
+    log.warn "DB RESET !"
 
+    // Initialize hashTable and kdTree
+    def hashTable = [:]
+    def allConditions = []
+
+    // Define the limited ranges for temperature and humidity as integers
     def indoorTempRange = [65, 70, 75]
     def outdoorTempRange = [30, 50, 70, 90, 100]
     def indoorHumidityRange = [20, 40, 60]
     def outdoorHumidityRange = [20, 50, 80, 100]
 
-    for (indoorTemp in indoorTempRange) {
-        for (outdoorTemp in outdoorTempRange) {
-            for (indoorHumidity in indoorHumidityRange) {
-                for (outdoorHumidity in outdoorHumidityRange) {
-                    def conditions = [indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity]
+    // Generate combinations and populate the database with default integer values
+    indoorTempRange.each { indoorTemp ->
+        outdoorTempRange.each { outdoorTemp ->
+            indoorHumidityRange.each { indoorHumidity ->
+                outdoorHumidityRange.each { outdoorHumidity ->
+                    def conditions = [indoorTemp as int, outdoorTemp as int, indoorHumidity as int, outdoorHumidity as int]
                     def conditionsKey = conditions.join('-')
-                    def initialValue = calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity)
-                    hashTable[conditionsKey] = Math.round(initialValue)
+                    // Set a default integer value
+                    def defaultValue = (indoorTemp + outdoorTemp) / 2 as int
+
+                    // Replace or add the value in the hash table
+                    hashTable[conditionsKey] = defaultValue
+
+                    // Collect all conditions
+                    allConditions.add(conditions)
                 }
             }
         }
     }
-    def newHashTableJson = serializeHashTable(hashTable)
-    writeToFile("hash_table.txt", newHashTableJson)
-    log.warn("Database has been reset and populated.")
+
+    // Build k-d tree from all conditions
+    def kdTree = buildKdTree(allConditions)
+
+    // Save to atomicState
+    atomicState.hashTable = hashTable
+    atomicState.kdTree = kdTree
+
+    log.debug "Hash table and k-d tree restored to default integer values."
+    log.debug "hashTable => ${hashTable}"
+    log.debug "kdTree => ${kdTree}"
 }
 
 
-// HELPER FUNCTION TO CALCULATE COMFORT SCORE
-def calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity) {
-    // Higher weight to indoor conditions
-    return (0.6 * indoorTemp + 0.2 * indoorHumidity + 0.1 * outdoorTemp + 0.1 * outdoorHumidity) / 4
+// Function to build a k-d tree from a list of points
+def buildKdTree(points, depth = 0) {
+    if (points.size() == 0) {
+        return null
+    }
+
+    def k = points[0].size()
+    def axis = depth % k
+
+    // Log the conditions being used for k-d tree construction
+    def conditionsForTree = points.collect { it.join('-') }
+    log.debug "Building k-d tree with conditions: $conditionsForTree"
+
+    // Sort the points and find the median
+    points.sort { it[axis] }
+    def median = (points.size() / 2).toInteger()
+
+    // Create node and construct subtrees
+    def node = [
+        "point": points[median],
+        "value": atomicState.hashTable[points[median].join('-')],
+        "left": buildKdTree(points[0..<(median)], depth + 1),
+        "right": buildKdTree(points[(median + 1)..<(points.size())], depth + 1)
+    ]
+
+    return node
 }
 
 
 
+// Function to add a point to the k-d tree 
+def addToKdTree(node, point, depth = 0) {
+    if (node == null) {
+        return [
+            "point": point,
+            "value": atomicState.hashTable[point.join('-')],
+            "left": null,
+            "right": null
+        ]
+    }
 
+    // Alternate between dimensions
+    def k = point.size()
+    def axis = depth % k
+
+    if (point[axis] < node.point[axis]) {
+        node.left = addToKdTree(node.left, point, depth + 1)
+    } else {
+        node.right = addToKdTree(node.right, point, depth + 1)
+    }
+
+    return node
+}
+
+// Function to find the nearest neighbor in the k-d tree
+def findNearestNeighbor(node, point, depth = 0, best = null) {
+    if (node == null || !(node instanceof Map) || !node.containsKey('point')) {
+        log.error "Unexpected node type or structure: ${node?.class.name}, value: ${node}"
+        return best
+    }
+
+    log.warn "point ===> $point"
+    log.debug "Node type: ${node?.class.name}, Node value: ${node}, Point: ${point}"
+
+    // Calculate distance to current node
+    def dist = distance(point, node.point)
+
+    // Check if this node is closer
+    if (best == null || dist < distance(point, best.point)) {
+        best = node
+    }
+
+    // Alternate between dimensions
+    def k = point.size()
+    def axis = depth % k
+
+    def next_best = null
+    def opposite_subtree = null
+
+    if (point[axis] < node.point[axis]) {
+        next_best = findNearestNeighbor(node.left, point, depth + 1, best)
+        opposite_subtree = node.right
+    } else {
+        next_best = findNearestNeighbor(node.right, point, depth + 1, best)
+        opposite_subtree = node.left
+    }
+
+    if (next_best != null && distance(point, next_best.point) < distance(point, best.point)) {
+        best = next_best
+    }
+
+    // Check if there could be any points on the other side of the splitting plane that are closer to the target
+    if (Math.abs(point[axis] - node.point[axis]) < distance(point, best.point)) {
+        best = findNearestNeighbor(opposite_subtree, point, depth + 1, best)
+    }
+
+    return best
+}
+
+// Function to calculate the distance between two points (for demonstration purposes)
+def distance(p1, p2) {
+    return p1.zip(p2).collect{ it -> Math.pow(it[0] - it[1], 2) }.sum()
+}
+def predictSetpoint() {
+    def currentConditions = getConditions()
+    def currentConditionsKey = currentConditions.join('-')
+  
+    // First try a direct lookup in the hash table
+    def setpoint = atomicState.hashTable[currentConditionsKey]
+  
+    if (setpoint == null) {
+        // If not found, use the k-d tree to find the nearest neighbor
+        def nearestConditions = findNearestNeighbor(currentConditions)
+        def nearestConditionsKey = nearestConditions.join('-')
+        setpoint = atomicState.hashTable[nearestConditionsKey]
+    }
+  
+    return setpoint ?: defaultSetpoint()
+}
+
+// Function to get current conditions (for demonstration purposes)
+def getConditions() {
+    // Replace with actual logic to get current conditions
+    def inside = Math.round(getInsideTemp())
+    def outside = Math.round(getOutsideTemp())
+    def insideHumidity = Math.round(getInsideHumidity()) // Round humidity values
+    def outsideHumidity = Math.round(getOutsideHumidity()) // Round humidity values
+    return [inside, outside, insideHumidity, outsideHumidity]
+}
+
+def getAutoVal() {
+    // Get current conditions and round temperature values to integers
+    def outside = Math.round(getOutsideTemp())
+    def inside = Math.round(getInsideTemp())
+    def insideHumidity = getInsideHumidity()
+    def outsideHumidity = getOutsideHumidity()
+
+    // Create the conditions array and key
+    def conditions = [inside, outside, insideHumidity, outsideHumidity].collect { it as int }
+    def conditionsKey = conditions.join('-')
+
+    def learnedTarget = atomicState.hashTable[conditionsKey]
+
+    log.warn("next loop over: $atomicState.hashTable")
+    log.warn("next loop overatomicState.hashTable size: ${atomicState.hashTable.size()}")
+
+    log.debug "outside =========> $outside"
+    log.debug "inside =========> $inside"
+    log.debug "insideHumidity =========> $insideHumidity"
+    log.debug "outsideHumidity =========> $outsideHumidity"
+    log.debug "Generated conditionsKey =========> ${conditionsKey}"
+    log.debug "learnedTarget =========> ${learnedTarget}"
+
+    def level = dimmer?.currentValue("level")
+
+    // if(learnedTarget == null && level){
+    //     // Add the conditions to the hash table with dimmer level as the value
+    //         atomicState.hashTable[conditionsKey] = level            
+    //         log.warn "Added conditions to the hash table with dimmer level as the value."
+
+    //         learnedTarget = atomicState.hashTable[conditionsKey]
+            
+    //         log.warn "ATTEMPT TO RETIEVE RIGHT AFTER ADDING IT: ${learnedTarget == null ? 'FAILED' : 'success! ' + learnedTarget}"
+
+    //         log.debug(atomicState.hashTable)
+    //         log.warn("atomicState.hashTable size: ${atomicState.hashTable.size()}")
+
+    //         pauseExecution(100)
+   
+    // }
+
+    if (learnedTarget != null) {
+        log.debug "Learned target applied: $learnedTarget"
+        return learnedTarget // Return the target based on learned data
+    } else if (useDryBulbEquation) {
+        // Fallback to dry-bulb temperature if no learned data is available
+        def drybulbval = defaultSetpoint()
+        log.warn "drybulbval fallback value => ${drybulbval}"
+        return drybulbval
+    } else {
+        // If nothing else, use the k-d tree to find the nearest neighbor
+        log.warn "------------conditions: $conditions"
+        def nearestConditions = findNearestNeighbor(conditions)
+        log.warn "nearestConditions  ========================= $nearestConditions "
+        def nearestConditionsKey = nearestConditions.join('-')
+        def nearestTarget = atomicState.hashTable[nearestConditionsKey]
+
+        if (nearestTarget != null) {
+            log.debug "Nearest target applied: $nearestTarget"
+            return nearestTarget
+        } else {
+            // Fallback to dimmer's level if all else fails and there's insufficient data
+           
+            log.warn "******* level: ${level}"
+            
+            return level
+        }
+    }
+}
+
+
+def getOutsideTemp(){
+    return outsideTemp.currentValue("temperature")
+}
+def getOutsideHumidity(){
+    return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
+}
 // Function to calculate the Wet-Bulb temperature as the default setpoint
-def defaultSetpoint(insideTemp=null, insideHum=null, dimmerPref=null) {
+def defaultSetpoint() {
     // Fetch the current indoor temperature, humidity, and other factors
     def currentInsideTemp = getInsideTemp()
     def currentInsideHumidity = getInsideHumidity()
@@ -4524,7 +4634,7 @@ def defaultSetpoint(insideTemp=null, insideHum=null, dimmerPref=null) {
     // Define personal preference (0 for neutral, positive for warmer, negative for cooler)
     def personalPreference = 0
 
-    dimmerPreference = getDimmerValue()
+    dimmerPreference = dimmer?.currentValue("level")
     // Calculate the PMV (Predicted Mean Vote) using environmental parameters
     def pmv = calculatePMV(currentInsideTemp, currentInsideHumidity,dimmerPreference)
 
@@ -4579,132 +4689,47 @@ def mapComfortScoreToPMV(comfortScore) {
     }
 }
 
-def getDimmerValue(){
-    return dimmer?.currentValue("level")
-}
 
-
-// Function to get current conditions (for demonstration purposes)
-def getConditions() {
-    // Replace with actual logic to get current conditions
-    def inside = Math.round(getInsideTemp())
-    def outside = Math.round(getOutsideTemp())
-    def insideHumidity = Math.round(getInsideHumidity()) // Round humidity values
-    def outsideHumidity = Math.round(getOutsideHumidity()) // Round humidity values
-    return [inside as int, outside as int, insideHumidity as int, outsideHumidity as int]
-}
-
-def getAutoVal() {
-    // Get current conditions and round temperature values to integers
-    def outside = Math.round(getOutsideTemp())
-    def inside = Math.round(getInsideTemp())
-    def insideHumidity = getInsideHumidity()
-    def outsideHumidity = getOutsideHumidity()
-
-    // Create the conditions array and key
-    def conditions = [inside, outside, insideHumidity, outsideHumidity].collect { it as int }
-    def conditionsKey = conditions.join('-')
-
-    // NEW CODE STARTS HERE
-    // Read existing hash table from your HTTP server
-    def hashTableJson = readFromFile("hash_table.txt")
-    def hashTable =hashTableJson ? deserializeHashTable(hashTableJson) : [:] // Helper function to deserialize JSON string to hash table
-    // NEW CODE ENDS HERE
-
-    def learnedTarget = hashTable[conditionsKey] // Modified to use the newly read hashTable
-
-    pauseExecution(1000)
-
-    // log.warn("next loop over: $hashTable")  // Modified to use the newly read hashTable
-    log.warn("next loop over hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
-
-    log.debug "outside =========> $outside"
-    log.debug "inside =========> $inside"
-    log.debug "insideHumidity =========> $insideHumidity"
-    log.debug "outsideHumidity =========> $outsideHumidity"
-    log.debug "Generated conditionsKey =========> ${conditionsKey}"
-    log.debug "learnedTarget =========> ${learnedTarget}"
-
-    def level = getDimmerValue()
-
-    if (learnedTarget == null && level) {
-        // NEW CODE STARTS HERE
-        // Add the conditions to the hash table with dimmer level as the value
-        hashTable[conditionsKey] = level  // Modified to use the newly read hashTable
-        log.warn "Added conditions to the hash table with dimmer level as the value."
-
-        // Write updated hash table back to your HTTP server
-        def newHashTableJson = serializeHashTable(hashTable)  // Helper function to serialize hash table to JSON string
-        writeToFile("hash_table.txt", newHashTableJson)
-        // NEW CODE ENDS HERE
-
-        learnedTarget = hashTable[conditionsKey]  // Modified to use the newly read hashTable
-
-        log.warn "ATTEMPT TO RETRIEVE RIGHT AFTER ADDING IT: ${learnedTarget == null ? 'FAILED' : 'success! ' + learnedTarget}"
-
-        log.debug(hashTable)  // Modified to use the newly read hashTable
-        log.warn("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
-    }
-
-    if (learnedTarget != null) {
-        log.debug "Learned target applied: $learnedTarget"
-        return learnedTarget // Return the target based on learned data
-    } else if (useDryBulbEquation) {
-        // Fallback to dry-bulb temperature if no learned data is available
-        def drybulbval = defaultSetpoint()
-        log.warn "drybulbval fallback value => ${drybulbval}"
-        return drybulbval
-    } else {
-        // If nothing else, 
-        log.warn "------------conditions: $conditions"
-        log.warn "******* level: ${level}"
-        return level
-    }
-}
-
-
-
-def getOutsideTemp(){
-    return outsideTemp.currentValue("temperature")
-}
-def getOutsideHumidity(){
-    return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
-}
 
 
 def convert_db_to_celsius() {
-    // Read existing hash table from HTTP server
-    def hashTableJson = readFromFile("hash_table.txt")
-    def hashTable = deserializeHashTable(hashTableJson)
-    
-    // Convert each dimmer value to Celsius
-    hashTable.collectEntries { key, value ->
-        [(key): (value - 32) * 5 / 9]
+    atomicState.currentUnit = atomicState.currentUnit == null ? "Fahrenheit" : atomicState.currentUnit 
+
+    if (celsius && atomicState.currentUnit == "Fahrenheit") {
+        def db = [:]
+        atomicState.db.each { key, val ->
+            def parts = key.split("-")
+            def convertedTempParts = parts[0..1].collect { getCelsius(it.toInteger()).toString() }
+            def humidityParts = parts[2..3]
+            def convertedKey = (convertedTempParts + humidityParts).join("-")
+
+            def convertedVal = getCelsius(val.toInteger())
+            db[convertedKey] = convertedVal
+        }
+        log.debug "DB Celsius = $db"
+        atomicState.db = db
+        atomicState.currentUnit = "Celsius"
     }
-    
-    // Serialize and write the updated hash table back to your HTTP server
-    def newHashTableJson = serializeHashTable(hashTable)
-    writeToFile("hash_table.txt", newHashTableJson)
-    
-    log.warn("Database has been converted to Celsius.")
 }
 
-
 def convert_db_to_fahrenheit() {
-    // Read existing hash table from HTTP server
-    def hashTableJson = readFromFile("hash_table.txt")
-    def hashTable = deserializeHashTable(hashTableJson)
-    
-    // Convert each dimmer value to Fahrenheit
-    hashTable.collectEntries { key, value ->
-        [(key): (value * 9 / 5) + 32]
+    atomicState.currentUnit = atomicState.currentUnit == null ? "Fahrenheit" : atomicState.currentUnit 
+
+    if (!celsius && atomicState.currentUnit != "Fahrenheit") {
+        def db = [:]
+        atomicState.db.each { key, val ->
+            def parts = key.split("-")
+            def convertedTempParts = parts[0..1].collect { getFahrenheit(it.toInteger()).toString() }
+            def humidityParts = parts[2..3]
+            def convertedKey = (convertedTempParts + humidityParts).join("-")
+
+            def convertedVal = getFahrenheit(val.toInteger())
+            db[convertedKey] = convertedVal
+        }
+        log.debug "DB Fahrenheit = $db"
+        atomicState.db = db
+        atomicState.currentUnit = "Fahrenheit"
     }
-    
-    // Serialize and write the updated hash table back to your HTTP server
-    def newHashTableJson = serializeHashTable(hashTable)
-    writeToFile("hash_table.txt", newHashTableJson)
-    
-    log.warn("Database has been converted to Fahrenheit.")
 }
 
 /************************************************BOOLEANS******************************************************/

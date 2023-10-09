@@ -4345,8 +4345,6 @@ def getFahrenheit(int value){
 }
 /************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
 
-
-
 def readFromFile(fileName) {
     def host = "localhost"  // or "127.0.0.1"
     def port = "8080"  
@@ -4362,50 +4360,20 @@ def readFromFile(fileName) {
             log.debug "HTTP Response Code: ${resp.status}"
             log.debug "HTTP Response Headers: ${resp.headers}"
             if (resp.success) {
-                log.debug "HTTP GET successful."
+                logging "HTTP GET successful."
                 fileData = resp.data.text
-                log.debug "resp.data =================================> \n\n ${resp.data}"
+                // log.debug "resp.data =================================> \n\n ${resp.data}"
             } else {
-                log.warn "HTTP GET failed. Response code: ${resp.status}"
+                log.error "HTTP GET failed. Response code: ${resp.status}"
             }
         }
     } catch (Exception e) {
-        log.warn "HTTP GET call failed: ${e.message}"
+        log.error "HTTP GET call failed: ${e.message}"
     }
     
-    log.trace "HTTP GET RESPONSE DATA: ${fileData}"
+    logging "HTTP GET RESPONSE DATA: ${fileData}"
     return fileData
 }
-
-
-
-
-// HashMap writeToFile(fileName, data) {
-//     def host = "127.0.0.1:8080"
-//     def path = "/local/" + fileName
-//     def uri = "http://" + host + path
-
-//     log.trace "HTTP PUT URI -------------------> $uri"
-
-//     log.debug "WRITING DATA ====> \n\n $data"
-
-//     def hubAction = new hubitat.device.HubAction(
-//         method: "PUT",
-//         path: path,
-//         body: "${data}",
-//         headers: [
-//             HOST: host,
-//             'Content-Type': 'text/plain'
-//         ]
-//     )
-//     try {
-//         // Execute the PUT request
-//         sendHubCommand(hubAction)
-//         log.debug "HTTP PUT was successful."
-//     } catch (Exception e) {
-//         log.error "HTTP PUT failed: ${e.message}"
-//     }
-// }
 
 Boolean writeToFile(String fileName, String data) {
     // Create boundary and payload
@@ -4437,26 +4405,22 @@ Boolean writeToFile(String fileName, String data) {
     }
 }
 
-
-
-
-
 def serializeHashTable(hashTable) {
     return JsonOutput.toJson(hashTable)
 }
 
 def deserializeHashTable(jsonString) {
 
-    log.trace "deserializeHashTable ====> $jsonString"
+    // log.trace "deserializeHashTable ====> $jsonString"
 
     JsonSlurper jsonSlurper = new JsonSlurper()
     return jsonSlurper.parseText(jsonString)
 }
 
 // Function to learn from a new setpoint
-def learn() {
+def learn(value) {
     def conditions = getConditions()
-    def dimmerValue = getDimmerValue()  // Replace with your actual function to get dimmer value
+    def dimmerValue = value ? value : getDimmerValue() 
     
     // Calculate grid ID (simplified example)
     def gridID = conditions.join("-")
@@ -4511,8 +4475,6 @@ def calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidi
     // Higher weight to indoor conditions
     return (0.6 * indoorTemp + 0.2 * indoorHumidity + 0.1 * outdoorTemp + 0.1 * outdoorHumidity) / 4
 }
-
-
 
 
 // Function to calculate the Wet-Bulb temperature as the default setpoint
@@ -4616,7 +4578,7 @@ def getAutoVal() {
     pauseExecution(1000)
 
     // log.warn("next loop over: $hashTable")  // Modified to use the newly read hashTable
-    log.warn("next loop over hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
+    logtrace("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
 
     log.debug "outside =========> $outside"
     log.debug "inside =========> $inside"

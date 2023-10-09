@@ -240,7 +240,7 @@ def methods(){
                     input "reset_confirmed", "button", title: "YES", submitOnChange:true
                     input "no_reset", "button", title: "NO", submitOnChange:true                    
                 }
-                input "useDryBulbEquation", "bool", title: "Use dry bulb equation (a math algorithm that optimizes temperature based on humidity)"
+                input "useDryBulbEquation", "bool", title: "Use the Predicted Mean Vote (PMV): algorithm that optimizes temperature based on humidity)"
                 
             }
             else 
@@ -3577,7 +3577,7 @@ def getTarget(simpleModeActive){
 
     if(method == "auto" && !simpleModeActive)
     {
-        target = getAutoVal()
+        target = getAutoVal() as int 
         logtrace "getAutoVal() returned $target"
     }
     else
@@ -3698,7 +3698,7 @@ def getNeed(target, simpleModeActive, inside){
     boolean contactClosed = !contactsAreOpen()  
 
     def outsideThres = getOutsideThershold()
-    def outsideTemperature = outsideTemp.currentValue("temperature")
+    def outsideTemperature = getOutsideTemp()
     def need0 = ""
     def need1 = ""
     def need = []
@@ -4357,12 +4357,12 @@ def readFromFile(fileName) {
     
     try {
         httpGet(uri) { resp ->
-            log.debug "HTTP Response Code: ${resp.status}"
-            log.debug "HTTP Response Headers: ${resp.headers}"
+            logging "HTTP Response Code: ${resp.status}"
+            logging "HTTP Response Headers: ${resp.headers}"
             if (resp.success) {
                 logging "HTTP GET successful."
                 fileData = resp.data.text
-                // log.debug "resp.data =================================> \n\n ${resp.data}"
+                // logging "resp.data =================================> \n\n ${resp.data}"
             } else {
                 log.error "HTTP GET failed. Response code: ${resp.status}"
             }
@@ -4397,7 +4397,7 @@ Boolean writeToFile(String fileName, String data) {
         // Assuming sendHubCommand is available in your code
         sendHubCommand(hubAction)
         
-        log.debug "HTTP POST was successful."
+        logging "HTTP POST was successful."
         return true
     } catch (Exception e) {
         log.error "HTTP POST failed: ${e.message}"
@@ -4428,7 +4428,7 @@ def learn(value) {
     // Read existing hash table
     def hashTableJson = readFromFile("hash_table.txt")
 
-    log.debug "hashTableJson ===> $hashTableJson"
+    logging "hashTableJson ===> $hashTableJson"
 
     def hashTable = deserializeHashTable(hashTableJson)
     
@@ -4580,12 +4580,12 @@ def getAutoVal() {
     // log.warn("next loop over: $hashTable")  // Modified to use the newly read hashTable
     logtrace("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
 
-    log.debug "outside =========> $outside"
-    log.debug "inside =========> $inside"
-    log.debug "insideHumidity =========> $insideHumidity"
-    log.debug "outsideHumidity =========> $outsideHumidity"
-    log.debug "Generated conditionsKey =========> ${conditionsKey}"
-    log.debug "learnedTarget =========> ${learnedTarget}"
+    logging "outside =========> $outside"
+    logging "inside =========> $inside"
+    logging "insideHumidity =========> $insideHumidity"
+    logging "outsideHumidity =========> $outsideHumidity"
+    logging "Generated conditionsKey =========> ${conditionsKey}"
+    logging "learnedTarget =========> ${learnedTarget}"
 
     def level = getDimmerValue()
 
@@ -4604,12 +4604,12 @@ def getAutoVal() {
 
         log.warn "ATTEMPT TO RETRIEVE RIGHT AFTER ADDING IT: ${learnedTarget == null ? 'FAILED' : 'success! ' + learnedTarget}"
 
-        log.debug(hashTable)  // Modified to use the newly read hashTable
+        logging(hashTable)  // Modified to use the newly read hashTable
         log.warn("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
     }
 
     if (learnedTarget != null) {
-        log.debug "Learned target applied: $learnedTarget"
+        logging "Learned target applied: $learnedTarget"
         return learnedTarget // Return the target based on learned data
     } else if (useDryBulbEquation) {
         // Fallback to dry-bulb temperature if no learned data is available
@@ -4785,12 +4785,12 @@ boolean Active(){
         // this must happen outside of getLastMotionEvents() collection, because the latter isn't called when outside of motion modes.  
         atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
 
-        // log.debug "now() - atomicState.lastMotionEvent > 1000 => ${(now() - atomicState.lastMotionEvent) > 1000}"
+        // logging "now() - atomicState.lastMotionEvent > 1000 => ${(now() - atomicState.lastMotionEvent) > 1000}"
         if((now() - atomicState.lastMotionEvent) > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
         {
             
             atomicState.activeMotionCount = 0 // time is up, reset this variable
-            // log.debug "atomicState.activeMotionCount set to $atomicState.activeMotionCount"
+            // logging "atomicState.activeMotionCount set to $atomicState.activeMotionCount"
             //events = 0
         }
     }
@@ -4969,7 +4969,7 @@ def pollPowerMeters(){
 }
 def logging(message){
     check_logs_timer()
-    if(enabledebug) log.debug message 
+    if(enabledebug) logging message 
 }
 def logtrace(message){
     check_logs_timer()

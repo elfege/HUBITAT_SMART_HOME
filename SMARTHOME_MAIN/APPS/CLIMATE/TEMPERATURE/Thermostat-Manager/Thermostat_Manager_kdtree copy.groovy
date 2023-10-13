@@ -50,8 +50,7 @@ def MainPage() {
             //label title: "Assign a name",description:"$atomicState.appLabel", required: false, submitOnChange:true // can't use this because it shows html font tags
             input "appLabel", "text", title: "Assign a name to this instance of $app.name", submitOnChange:true
             app.updateLabel(appLabel)
-            input "celsius", "bool", title: "Celsius (untested! Please send feedback)", submitOnChange:true
-            paragraph "It's nearly impossible to test the efficacy of this feature in an environment where all devices work in Fahrenheit. Please, if you get to test it, send feedback through Hubitat Community threads"
+            input "celsius", "bool", title: "Celsius", submitOnChange:true
             if(celsius)
             {
                 convert_db_to_celsius()
@@ -226,6 +225,8 @@ def methods(){
                 atomicState.confirmed = atomicState.confirmed == null ? true : atomicState.confirmed
                 paragraph formatText("auto method: the app sets your target temperature based on several learning functions by taking humidity levels and outside temperature into consideration", "black", "white")
                 input "RESET", "button", title: "RESET", submitOnChange:true
+                input "reset_kdtree", "button", title: "Reset kdtree only (if you don't know what this is, don't do it!)", submitOnChange:true
+                input "rebuild_kdtree", "button", title: "Rebuild Kdtree...", submitOnChange:true
                 if(atomicState.confirmed == "no"){ 
                     paragraph """<div style='
                     z-index: 9999;
@@ -241,7 +242,7 @@ def methods(){
                     input "reset_confirmed", "button", title: "YES", submitOnChange:true
                     input "no_reset", "button", title: "NO", submitOnChange:true                    
                 }
-                input "useDryBulbEquation", "bool", title: "Use the Predicted Mean Vote (PMV): algorithm that optimizes temperature based on humidity)"
+                input "useMeanVote", "bool", title: "Use the Predicted Mean Vote (PMV): algorithm that optimizes temperature based on humidity)"
                 
             }
             else 
@@ -301,7 +302,7 @@ atomicState.maxAutoCoolRestore = $atomicState.maxAutoCoolRestore
             }
 
             boolean dimmerRequired = false 
-            if(!useDryBulbEquation)
+            if(!useMeanVote)
             {
                 dimmerRequired = true
             }
@@ -1307,6 +1308,8 @@ def initialize(){
         log.warn("Hash table file was empty. Database has been reset and populated.")
     }
     
+    def kdTreeJson = readFromFile("kdtree.txt")
+    if(!kdTreeJson) buildKDTreeFromHashTable()
 
     schedule("0 0/1 * * * ?", mainloop)
 
@@ -1397,6 +1400,12 @@ def appButtonHandler(btn) {
         case "RESET":
         atomicState.confirmed = "no"
         break
+        case "reset_kdtree": 
+        resetKDTreeFile()
+        break
+        case "rebuild_kdtree":
+        buildKDTreeFromHashTable()
+        break 
         case "reset_confirmed":
         atomicState.confirmed = "yes" 
         log.debug "**********************************RESETING DATABASE*****************************"
@@ -1775,17 +1784,7 @@ def windowsHandler(evt){
 
 /************************************************MAIN OPERATIONS*************************************************/
 
-
-
-
-
-
 def mainloop(source){
-
-//    call_create_file() //works. Next step: implement custom file for each instance. 
-    
-
-
 
     descriptionText "mainloop called by $source"
 
@@ -2135,8 +2134,6 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 boolean timeIsUp = timeElapsedSinceLastResend > atomicState.threshold
                 boolean timeIsUpOff = atomicState.timeElapsedSinceLastOff > atomicState.threshold
                 def pwVal = pw.currentValue("power")
-                logtrace "${pw}'s current power consumption is $pwVal"
-
                 boolean pwLow = pwVal < 100 // below 100 watts we assume there's no AC compression nor resistor heat currently at work
                 boolean timeToRefreshMeters = need == "off" ? atomicState.timeElapsedSinceLastOff > 10000 && !pwLow : timeElapsedSinceLastResend > 10000 && pwLow
                 logging("time since last Resend Attempt = ${timeElapsedSinceLastResend/1000} seconds & atomicState.threshold = ${atomicState.threshold/1000}sec")
@@ -2164,7 +2161,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 // timeIsUp = true
                 if(!ignoreMode && timeIsUp && pwLow && (need != "off" || !offrequiredbyuser))
                 {
-                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency between power measurement (${pwVal}Watts) and current need ($need)</div>"
+                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency in power value</div>"
                     atomicState.resendAttempt = now() 
                     atomicState.setpointSentByApp = true
                     runIn(3, resetSetByThisApp)
@@ -2185,6 +2182,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                         {
                             thermostat."${cmd}"(target) // resend cmd
                         }
+
                     }
                     else
                     {
@@ -4096,123 +4094,7 @@ min = $min
     descriptionText "linear result for windows duration = ${y?.toInteger()} seconds"
     return y.toInteger()
 }
-def getInsideTemp(){
 
-    def inside = thermostat?.currentValue("temperature") 
-    def deltaHours = 72*3600*1000
-
-    atomicState.disabledSensors = []
-
-    if(sensor)
-    {
-
-        def sum = 0
-        int i = 0
-        int s = sensor.size()
-        int substract = 0 // value to substract to s when a device is to be ignored
-        for(i=0; i<s;i++)
-        {
-            def device = sensor[i]
-            def val = device?.currentValue("temperature")
-
-            logging "--${device} returns temperature: $val device id: ${device.id}"
-            if(val == null){
-                s -= 1
-                log.warn "${device} did not return any temperature: ${val} device id: ${device.id}"
-                continue                
-            } 
-            sum += val
-
-            // check sensors responsiveness
-            events = device.eventsSince(new Date(now() - deltaHours)).size() // collect all events within 72 hours
-            logging "$device has returned $events events in the last 72 hours" 
-            if(events == 0)
-            {
-                logwarn formatText("$device hasn't returned any event in the last 72 hours!", "white", "red")
-                if(sensor.size() > 1)
-                {
-                    if(atomicState.disabledSensors.contains("$device"))
-                    {
-                        //already in, do nothing 
-                        //logwarn " INPUT ALREADY DONE --------"
-                    }
-                    else 
-                    {
-                        atomicState.disabledSensors += "$device"
-                    }
-                    logtrace "$device is being ignored because it is unresponsive."
-                    sum -= val
-
-                }
-                substract += 1
-            }
-            else if(atomicState.disabledSensors.any{it->it == device.displayName}) 
-            {
-                logwarn "deleting $device from disabledSensors because it is active again"
-                atomicState.disabledSensors -= "$device"
-            }
-            if(device.hasCapability("Battery"))
-            {
-                def batteryValue = device.currentValue("battery")
-                def batThreshold = lowBatLevel ? lowBatLevel : 40
-                if(batteryValue <= batThreshold && batteryValue > 0) // batteryValue > 0 is because some cheap devices can return negative values when they're powered by AC current from and HVAC / PTAC
-                {
-                    logwarn formatText("WARNING! ${device}'s BATTERY LEVEL IS LOW (${batteryValue}%)", "white", "red")
-                    atomicState.lowBatterySensor = true
-                }
-                else 
-                {
-                    atomicState.lowBatterySensor = false
-                }
-            }
-        }
-
-        if(atomicState.disabledSensors.size() != 0)
-        {
-            descriptionText "disabledSensors size = ${atomicState.disabledSensors.size()}"
-            def a = atomicState.disabledSensors
-            logwarn "SOME SENSORS FAILED: ${a.join(", ")}"
-        }
-
-        if(sum == 0)
-        {
-            atomicState.paused = true
-            logwarn "SUM = 0 !!! 5erg4z"
-            thermostat.setThermostatMode("auto") // set the thermostat to auto for safety. 
-            atomicState.failedSensors = true // force the user to attend the fact that all sensors are irresponsive
-            return 0
-        }
-        else
-        {
-            atomicState.failedSensors = false
-        }
-        inside = sum/(s-substract)
-    }
-    else if(doorsManagement && doorsContactsAreOpen() && doorSetOfSensors && useDifferentSetOfSensors)
-    {
-        def sum = 0
-        int i = 0
-        int s = doorSetOfSensors.size()
-        for(i=0; i<s;i++)
-        {
-            def val = doorSetOfSensors[i]?.currentValue("temperature")
-            descriptionText "**${doorSetOfSensors[i]} temperature is: $val"
-            sum += val
-        }
-
-        inside = sum/s
-    }
-
-    descriptionText "${sensor?"average":""} temperature in this room is: $inside"
-
-    inside = inside.toDouble()
-    inside = inside.round(2)
-    atomicState.inside = inside
-
-    logtrace "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${sensor.join(", ")} ${sensor.collect{it.currentValue("temperature")}.join("°F, ")}°F" : inside}"
-
-    return inside
-}
 def getOutsideThershold(){
 
     // define the outside temperature as of which heating or cooling are respectively required 
@@ -4357,83 +4239,6 @@ def getFahrenheit(int value){
 }
 /************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
 
-
-
-Boolean createFile(String fName, String fData) {
-    try {
-        def params = [
-            uri: 'http://127.0.0.1:8080',
-            path: '/hub/fileManager/upload',
-            query: [
-                'folder': '/'
-            ],
-            headers: [
-                'Content-Type': 'multipart/form-data; boundary=----BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh'
-            ],
-            body: """------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
-Content-Disposition: form-data; name=\"uploadFile\"; filename=\"${fName}\"
-Content-Type: text/plain
-
-${fData}
-
-------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
-Content-Disposition: form-data; name=\"folder\"
-
-
-------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh--""",
-            timeout: 300,
-            ignoreSSLIssues: true
-        ]
-        httpPost(params) { resp ->
-            log.info resp.data.status;
-            return resp.data.success;
-        }
-    } catch (e) {
-        log.error "Error creating file $fName: ${e}"
-        return false;
-    }
-}
-
-def call_create_file(){
-    if(app.label.contains("Elfege")){
-        log.debug "This is Elfege's sandbox... "
-            
-        try{
-            String fileName = "myFile2.txt";
-            // Check if the file already exists
-            if (!fileExists(fileName)) {
-                // Create a text file named "myFile.txt" with the initial content "Hello, World!"
-                Boolean result = createFile(fileName, "Hello, World!");
-
-                // Check if the file was successfully created
-                if (result) {
-                    log.info "File successfully created.";
-                } else {
-                    log.error "Failed to create the file.";
-                }
-            } else {
-                log.info "File already exists. No need to create.";
-            }
-        }
-        catch (e) {
-            log.error "Error attempting to create a file: $e";
-        }
-    }
-}
-
-Boolean fileExists(String fName) {
-    def uri = "http://127.0.0.1:8080/local/${fName}"
-    def params = [uri: uri]
-
-    try {
-        httpGet(params) { resp ->
-            return resp.status == 200
-        }
-    } catch (Exception e) {
-        return false
-    }
-}
-
 def readFromFile(fileName) {
     def host = "localhost"  // or "127.0.0.1"
     def port = "8080"  
@@ -4506,6 +4311,236 @@ def deserializeHashTable(jsonString) {
     return jsonSlurper.parseText(jsonString)
 }
 
+def serializeKDTree(map) {
+    return JsonOutput.toJson(map)
+}
+
+def deserializeKDTree(kdTreeJson) {
+    if (kdTreeJson == null || kdTreeJson.isEmpty()) {
+        // Re-read the kdTreeJson after attempting to build it from the hash table
+        kdTreeJson = readFromFile("kdtree.txt")
+
+        if (kdTreeJson == null || kdTreeJson.isEmpty()) {
+            log.warn "KDTree JSON is empty or null. Returning default values."
+            return [version: 0, kdTree: null]
+        }
+    }
+
+    JsonSlurper jsonSlurper = new JsonSlurper()
+    def parsed = jsonSlurper.parseText(kdTreeJson)
+    def version = parsed.version ?: 0 // Initialize to 0 if version is null
+    return [version: version, kdTree: parsed.kdTree]
+}
+
+def resetKDTreeFile() {
+    // Define an empty or default k-d tree
+    log.warn "RESETING KDtree!!"
+    def emptyKDTree = [version: 0, kdTree: [point: null, value: null, left: null, right: null]]
+    
+    // Serialize the empty or default k-d tree to JSON
+    def emptyKDTreeJson = JsonOutput.toJson(emptyKDTree)
+    
+    // Write the empty or default k-d tree JSON to the file
+    writeToFile("kdtree.txt", emptyKDTreeJson)
+    
+    log.info("kdtree.txt has been reset.")
+}
+
+
+def buildKDTreeFromHashTable() {
+    log.warn "BUILDING KDTREE FROM HASH TABLE"
+    
+    // Read the hash table
+    def hashTableJson = readFromFile("hash_table.txt")
+    def hashTable = deserializeHashTable(hashTableJson)
+    
+    if(!hashTable){
+        log.error "no hash table..."
+        return 
+    }
+
+    // Initialize a new k-d tree from existing kdtree.txt or create a new one
+    def kdTreeJson = readFromFile("kdtree.txt")
+    def result = kdTreeJson ? deserializeKDTree(kdTreeJson) : [version: 0, kdTree: [point: null, value: null, left: null, right: null]]
+
+    def kdTree = result.kdTree ?: [point: null, value: null, left: null, right: null] // Check for null and set to a default empty tree if null
+
+    // Log the initial kdTree
+    log.warn "Initial kdTree: ${kdTree}"
+
+    // Populate or update the k-d tree from the hash table
+    hashTable.each { conditionsKey, target ->
+        def conditions = conditionsKey.split('-').collect { it as int }
+        
+        log.warn "Inserting point: ${conditions} with target: ${target}"
+        
+        kdTree = insertIntoKDTree(kdTree, conditions, target)
+    }
+    
+    // Increment the version
+    version += 1
+
+    // Serialize and save the k-d tree
+    def newJson = serializeKDTree([version: version, kdTree: kdTree])
+    log.warn "kdtree => ${newJson}"
+    writeToFile("kdtree.txt", newJson)
+}
+
+
+
+
+def insertIntoKDTree(kdTree, point, value, depth = 0) {
+
+    log.warn "Inserting point: ${conditions} with target: ${target}"
+
+    log.warn "At depth ${depth}, kdTree.point is ${kdTree.point}, inserting point: ${point}"
+
+
+    if (kdTree == null || point == null) {
+        log.warn "Either kdTree or point is null. Cannot proceed."
+        return null
+    }
+    
+    if (kdTree.point == null) {
+        kdTree.point = point
+        kdTree.value = value
+        return kdTree
+    }
+
+    if (!(point instanceof List) || !(kdTree.point instanceof List)) {
+        log.warn "Either point or kdTree.point is not a List. Cannot proceed."
+        return null
+    }
+
+    def axis = depth % point.size()
+
+    if (point[axis] < kdTree.point[axis]) {
+        kdTree.left = insertIntoKDTree(kdTree.left, point, value, depth + 1)
+    } else {
+        kdTree.right = insertIntoKDTree(kdTree.right, point, value, depth + 1)
+    }
+    
+    return kdTree
+}
+
+
+
+
+def nearestNeighborSearchInKDTree(kdTree, targetPoint, depth = 0) {
+
+    if (kdTree == null) return null
+
+    def axis = depth % targetPoint.size()
+    def nextBranch = null
+    def oppositeBranch = null
+
+    if (targetPoint[axis] < kdTree.point[axis]) {
+        nextBranch = kdTree.left
+        oppositeBranch = kdTree.right
+    } else {
+        nextBranch = kdTree.right
+        oppositeBranch = kdTree.left
+    }
+
+    def best = nearestNeighborSearchInKDTree(nextBranch, targetPoint, depth + 1)
+    if (best == null) best = kdTree
+
+    if (distance(targetPoint, kdTree.point) < distance(targetPoint, best.point)) {
+        best = kdTree
+    }
+
+    if (Math.abs(kdTree.point[axis] - targetPoint[axis]) < distance(targetPoint, best.point)) {
+        def possibleBest = nearestNeighborSearchInKDTree(oppositeBranch, targetPoint, depth + 1)
+        if (possibleBest != null && distance(targetPoint, possibleBest.point) < distance(targetPoint, best.point)) {
+            best = possibleBest
+        }
+    }
+
+    return best
+}
+
+def distance(pointA, pointB) {
+    if (pointA == null || pointB == null || pointA.size() != pointB.size()) {
+        log.warn "Invalid points for distance calculation."
+        return Float.MAX_VALUE
+    }
+    def sum = 0
+    for (int i = 0; i < pointA.size(); i++) {
+        sum += (pointA[i] - pointB[i]) ** 2
+    }
+    return sum
+}
+
+def isKDTreeUpdated(def currentVersion, def newVersion) {
+    if (currentVersion == null && newVersion == null) {
+        return false // Both are null, no update needed
+    }
+    if (currentVersion == null || newVersion == null) {
+        return true // One is null but not the other, update needed
+    }
+    return currentVersion != newVersion // Standard version check
+}
+
+
+
+// Function to get current conditions (for demonstration purposes)
+def getConditions() {
+    // Replace with actual logic to get current conditions
+    def inside = Math.round(getInsideTemp())
+    def outside = Math.round(getOutsideTemp())
+    def insideHumidity = Math.round(getInsideHumidity()) // Round humidity values
+    def outsideHumidity = Math.round(getOutsideHumidity()) // Round humidity values
+    return [inside as int, outside as int, insideHumidity as int, outsideHumidity as int]
+}
+
+def getAutoVal() {
+    // Read the serialized k-d tree from a file
+    def kdTreeJson = readFromFile("kdtree.txt")
+    
+    // Deserialize the k-d tree
+    def deserializedData = deserializeKDTree(kdTreeJson)
+    def version = deserializedData.version 
+    def kdTree = deserializedData.kdTree
+
+    // Get current conditions
+    def conditions = getConditions()
+
+    // Perform nearest neighbor search in k-d tree
+    def bestNode = nearestNeighborSearchInKDTree(kdTree, conditions)
+
+    def learnedTarget = bestNode ? bestNode.value : null
+
+    def level = getDimmerValue()
+
+    if (learnedTarget == null && level) {
+               
+        // Insert the new conditions into the k-d tree
+        kdTree = insertIntoKDTree(kdTree, conditions, level)
+        if (isKDTreeUpdated(version, kdTree)) {
+            def newKDTreeJson = serializeKDTree(kdTree, version + 1)
+            writeToFile("kdtree.txt", newKDTreeJson)
+        }
+        
+    }
+    else if (useMeanVote) {
+        // Fallback to dry-bulb temperature if no learned data is available
+        def meanVote = defaultSetpoint()
+        log.warn "meanVote fallback value => ${meanVote}"
+        return meanVote
+    } 
+    else if (learnedTarget != null) {
+        logging "Learned target applied: $learnedTarget"
+        return learnedTarget // Return the target based on learned data
+    }
+    else {
+        // If nothing else, 
+        log.warn "------------conditions: $conditions"
+        log.warn "******* level: ${level}"
+        return level
+    }
+
+}
+
 // Function to learn from a new setpoint
 def learn(value) {
     def conditions = getConditions()
@@ -4527,8 +4562,18 @@ def learn(value) {
     // Write updated hash table back to file
     def newHashTableJson = serializeHashTable(hashTable)
     writeToFile("hash_table.txt", newHashTableJson)
-}
 
+    // Read existing k-d tree
+    def kdTreeJson = readFromFile("kdtree.txt")
+    def kdTree = deserializeKDTree(kdTreeJson)
+
+    // Insert new point into k-d tree
+    kdTree = insertIntoKDTree(kdTree, conditions, value)
+
+    // Serialize and write updated k-d tree back
+    def newKDTreeJson = serializeKDTree(kdTree)
+    writeToFile("kdtree.txt", newKDTreeJson)
+}
 
 // Reset database function
 def reset_db() {    
@@ -4556,15 +4601,15 @@ def reset_db() {
     def newHashTableJson = serializeHashTable(hashTable)
     writeToFile("hash_table.txt", newHashTableJson)
     log.warn("Database has been reset and populated.")
-}
 
+    buildKDTreeFromHashTable()
+}
 
 // HELPER FUNCTION TO CALCULATE COMFORT SCORE
 def calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity) {
     // Higher weight to indoor conditions
     return (0.6 * indoorTemp + 0.2 * indoorHumidity + 0.1 * outdoorTemp + 0.1 * outdoorHumidity) / 4
 }
-
 
 // Function to calculate the Wet-Bulb temperature as the default setpoint
 def defaultSetpoint(insideTemp=null, insideHum=null, dimmerPref=null) {
@@ -4634,87 +4679,123 @@ def getDimmerValue(){
     return dimmer?.currentValue("level")
 }
 
+def getInsideTemp(){
 
-// Function to get current conditions (for demonstration purposes)
-def getConditions() {
-    // Replace with actual logic to get current conditions
-    def inside = Math.round(getInsideTemp())
-    def outside = Math.round(getOutsideTemp())
-    def insideHumidity = Math.round(getInsideHumidity()) // Round humidity values
-    def outsideHumidity = Math.round(getOutsideHumidity()) // Round humidity values
-    return [inside as int, outside as int, insideHumidity as int, outsideHumidity as int]
-}
+    def inside = thermostat?.currentValue("temperature") 
+    def deltaHours = 72*3600*1000
 
-def getAutoVal() {
-    // Get current conditions and round temperature values to integers
-    def outside = Math.round(getOutsideTemp())
-    def inside = Math.round(getInsideTemp())
-    def insideHumidity = getInsideHumidity()
-    def outsideHumidity = getOutsideHumidity()
+    atomicState.disabledSensors = []
 
-    // Create the conditions array and key
-    def conditions = [inside, outside, insideHumidity, outsideHumidity].collect { it as int }
-    def conditionsKey = conditions.join('-')
+    if(sensor)
+    {
 
-    // NEW CODE STARTS HERE
-    // Read existing hash table from your HTTP server
-    def hashTableJson = readFromFile("hash_table.txt")
-    def hashTable =hashTableJson ? deserializeHashTable(hashTableJson) : [:] // Helper function to deserialize JSON string to hash table
-    // NEW CODE ENDS HERE
+        def sum = 0
+        int i = 0
+        int s = sensor.size()
+        int substract = 0 // value to substract to s when a device is to be ignored
+        for(i=0; i<s;i++)
+        {
+            def device = sensor[i]
+            def val = device?.currentValue("temperature")
 
-    def learnedTarget = hashTable[conditionsKey] // Modified to use the newly read hashTable
+            logging "--${device} returns temperature: $val device id: ${device.id}"
+            if(val == null){
+                s -= 1
+                log.warn "${device} did not return any temperature: ${val} device id: ${device.id}"
+                continue                
+            } 
+            sum += val
 
-    pauseExecution(1000)
+            // check sensors responsiveness
+            events = device.eventsSince(new Date(now() - deltaHours)).size() // collect all events within 72 hours
+            logging "$device has returned $events events in the last 72 hours" 
+            if(events == 0)
+            {
+                logwarn formatText("$device hasn't returned any event in the last 72 hours!", "white", "red")
+                if(sensor.size() > 1)
+                {
+                    if(atomicState.disabledSensors.contains("$device"))
+                    {
+                        //already in, do nothing 
+                        //logwarn " INPUT ALREADY DONE --------"
+                    }
+                    else 
+                    {
+                        atomicState.disabledSensors += "$device"
+                    }
+                    logtrace "$device is being ignored because it is unresponsive."
+                    sum -= val
 
-    // log.warn("next loop over: $hashTable")  // Modified to use the newly read hashTable
-    logtrace("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
+                }
+                substract += 1
+            }
+            else if(atomicState.disabledSensors.any{it->it == device.displayName}) 
+            {
+                logwarn "deleting $device from disabledSensors because it is active again"
+                atomicState.disabledSensors -= "$device"
+            }
+            if(device.hasCapability("Battery"))
+            {
+                def batteryValue = device.currentValue("battery")
+                def batThreshold = lowBatLevel ? lowBatLevel : 40
+                if(batteryValue <= batThreshold && batteryValue > 0) // batteryValue > 0 is because some cheap devices can return negative values when they're powered by AC current from and HVAC / PTAC
+                {
+                    logwarn formatText("WARNING! ${device}'s BATTERY LEVEL IS LOW (${batteryValue}%)", "white", "red")
+                    atomicState.lowBatterySensor = true
+                }
+                else 
+                {
+                    atomicState.lowBatterySensor = false
+                }
+            }
+        }
 
-    logging "outside =========> $outside"
-    logging "inside =========> $inside"
-    logging "insideHumidity =========> $insideHumidity"
-    logging "outsideHumidity =========> $outsideHumidity"
-    logging "Generated conditionsKey =========> ${conditionsKey}"
-    logging "learnedTarget =========> ${learnedTarget}"
+        if(atomicState.disabledSensors.size() != 0)
+        {
+            descriptionText "disabledSensors size = ${atomicState.disabledSensors.size()}"
+            def a = atomicState.disabledSensors
+            logwarn "SOME SENSORS FAILED: ${a.join(", ")}"
+        }
 
-    def level = getDimmerValue()
+        if(sum == 0)
+        {
+            atomicState.paused = true
+            logwarn "SUM = 0 !!! 5erg4z"
+            thermostat.setThermostatMode("auto") // set the thermostat to auto for safety. 
+            atomicState.failedSensors = true // force the user to attend the fact that all sensors are irresponsive
+            return 0
+        }
+        else
+        {
+            atomicState.failedSensors = false
+        }
+        inside = sum/(s-substract)
+    }
+    else if(doorsManagement && doorsContactsAreOpen() && doorSetOfSensors && useDifferentSetOfSensors)
+    {
+        def sum = 0
+        int i = 0
+        int s = doorSetOfSensors.size()
+        for(i=0; i<s;i++)
+        {
+            def val = doorSetOfSensors[i]?.currentValue("temperature")
+            descriptionText "**${doorSetOfSensors[i]} temperature is: $val"
+            sum += val
+        }
 
-    if (learnedTarget == null && level) {
-        log.info "No corresponding conditions in the database. Adding current conditions and set point..."
-
-        // Add the conditions to the hash table with dimmer level as the value
-        hashTable[conditionsKey] = level  // Modified to use the newly read hashTable
-        log.warn "Added conditions to the hash table with dimmer level as the value."
-
-        // Write updated hash table back to your HTTP server
-        def newHashTableJson = serializeHashTable(hashTable)  // Helper function to serialize hash table to JSON string
-        writeToFile("hash_table.txt", newHashTableJson)
-        
-
-        learnedTarget = hashTable[conditionsKey]  // Modified to use the newly read hashTable
-
-        log.trace "${learnedTarget == null ? 'FAILED to retrieve any value despite adding one... investigate.' : 'Successfully added and retrieved: ' + learnedTarget}"
-
-        logging(hashTable)  // Modified to use the newly read hashTable
-        log.warn("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
+        inside = sum/s
     }
 
-    if (learnedTarget != null) {
-        logging "Learned target applied: $learnedTarget"
-        return learnedTarget // Return the target based on learned data
-    } else if (useDryBulbEquation) {
-        // Fallback to dry-bulb temperature if no learned data is available
-        def drybulbval = defaultSetpoint()
-        log.warn "drybulbval fallback value => ${drybulbval}"
-        return drybulbval
-    } else {
-        // If nothing else, 
-        log.warn "------------conditions: $conditions"
-        // log.warn "******* level: ${level}"
-        return level
-    }
+    descriptionText "${sensor?"average":""} temperature in this room is: $inside"
+
+    inside = inside.toDouble()
+    inside = inside.round(2)
+    atomicState.inside = inside
+
+    logtrace "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${sensor.join(", ")} ${sensor.collect{it.currentValue("temperature")}.join("°F, ")}°F" : inside}"
+
+    return inside
 }
-
-
 
 def getOutsideTemp(){
     return outsideTemp.currentValue("temperature")
@@ -4723,62 +4804,38 @@ def getOutsideHumidity(){
     return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
 }
 
-
 def convert_db_to_celsius() {
-
-    if (atomicState.currentUnit == "fahrenheit"){
-        // Read existing hash table from HTTP server
-        def hashTableJson = readFromFile("hash_table.txt")
-        def hashTable = deserializeHashTable(hashTableJson)
-        
-        // Convert each dimmer value to Celsius
-        try{
-                hashTable.collectEntries { key, value ->
-                [(key): (value - 32) * 5 / 9]
-            }
-        }
-        catch(e){
-            log.warn"hastable not computable at the moment... "
-        }
-        
-        // Serialize and write the updated hash table back to your HTTP server
-        def newHashTableJson = serializeHashTable(hashTable)
-        writeToFile("hash_table.txt", newHashTableJson)
-
-        atomicState.currentUnit = "celsius"
-        
-        log.warn("Database has been converted to Celsius.")
+    // Read existing hash table from HTTP server
+    def hashTableJson = readFromFile("hash_table.txt")
+    def hashTable = deserializeHashTable(hashTableJson)
+    
+    // Convert each dimmer value to Celsius
+    hashTable.collectEntries { key, value ->
+        [(key): (value - 32) * 5 / 9]
     }
-    else {
-      log.warn "database already in celcius"  
-    }
+    
+    // Serialize and write the updated hash table back to your HTTP server
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+    
+    log.warn("Database has been converted to Celsius.")
 }
 
-
 def convert_db_to_fahrenheit() {
-
-    if (atomicState.currentUnit == "celcius"){
-
-        // Read existing hash table from HTTP server
-        def hashTableJson = readFromFile("hash_table.txt")
-        def hashTable = deserializeHashTable(hashTableJson)
-        
-        // Convert each dimmer value to Fahrenheit
-        hashTable.collectEntries { key, value ->
-            [(key): (value * 9 / 5) + 32]
-        }
-        
-        // Serialize and write the updated hash table back to your HTTP server
-        def newHashTableJson = serializeHashTable(hashTable)
-        writeToFile("hash_table.txt", newHashTableJson)
-        
-        log.warn("Database has been converted to Fahrenheit.")
-
-        atomicState.currentUnit = "celsius"
+    // Read existing hash table from HTTP server
+    def hashTableJson = readFromFile("hash_table.txt")
+    def hashTable = deserializeHashTable(hashTableJson)
+    
+    // Convert each dimmer value to Fahrenheit
+    hashTable.collectEntries { key, value ->
+        [(key): (value * 9 / 5) + 32]
     }
-    else {
-    log.warn "database already in fahrenheit"  
-    }    
+    
+    // Serialize and write the updated hash table back to your HTTP server
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+    
+    log.warn("Database has been converted to Fahrenheit.")
 }
 
 /************************************************BOOLEANS******************************************************/
@@ -4844,7 +4901,6 @@ boolean doorsContactsAreOpen(){
     descriptionText "------------------ doors: $doorsContacts open ?: ${listOpen.join(', ')}"
     return Open
 }
-
 boolean Active(){
     boolean result = true // default is true  always return Active = true when no sensor is selected by the user
 

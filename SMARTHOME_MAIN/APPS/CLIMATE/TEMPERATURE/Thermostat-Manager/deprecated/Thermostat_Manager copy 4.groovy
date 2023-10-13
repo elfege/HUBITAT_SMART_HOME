@@ -50,8 +50,7 @@ def MainPage() {
             //label title: "Assign a name",description:"$atomicState.appLabel", required: false, submitOnChange:true // can't use this because it shows html font tags
             input "appLabel", "text", title: "Assign a name to this instance of $app.name", submitOnChange:true
             app.updateLabel(appLabel)
-            input "celsius", "bool", title: "Celsius (untested! Please send feedback)", submitOnChange:true
-            paragraph "It's nearly impossible to test the efficacy of this feature in an environment where all devices work in Fahrenheit. Please, if you get to test it, send feedback through Hubitat Community threads"
+            input "celsius", "bool", title: "Celsius", submitOnChange:true
             if(celsius)
             {
                 convert_db_to_celsius()
@@ -1775,17 +1774,7 @@ def windowsHandler(evt){
 
 /************************************************MAIN OPERATIONS*************************************************/
 
-
-
-
-
-
 def mainloop(source){
-
-//    call_create_file() //works. Next step: implement custom file for each instance. 
-    
-
-
 
     descriptionText "mainloop called by $source"
 
@@ -2135,8 +2124,6 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 boolean timeIsUp = timeElapsedSinceLastResend > atomicState.threshold
                 boolean timeIsUpOff = atomicState.timeElapsedSinceLastOff > atomicState.threshold
                 def pwVal = pw.currentValue("power")
-                logtrace "${pw}'s current power consumption is $pwVal"
-
                 boolean pwLow = pwVal < 100 // below 100 watts we assume there's no AC compression nor resistor heat currently at work
                 boolean timeToRefreshMeters = need == "off" ? atomicState.timeElapsedSinceLastOff > 10000 && !pwLow : timeElapsedSinceLastResend > 10000 && pwLow
                 logging("time since last Resend Attempt = ${timeElapsedSinceLastResend/1000} seconds & atomicState.threshold = ${atomicState.threshold/1000}sec")
@@ -2164,7 +2151,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 // timeIsUp = true
                 if(!ignoreMode && timeIsUp && pwLow && (need != "off" || !offrequiredbyuser))
                 {
-                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency between power measurement (${pwVal}Watts) and current need ($need)</div>"
+                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency in power value</div>"
                     atomicState.resendAttempt = now() 
                     atomicState.setpointSentByApp = true
                     runIn(3, resetSetByThisApp)
@@ -2185,6 +2172,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                         {
                             thermostat."${cmd}"(target) // resend cmd
                         }
+
                     }
                     else
                     {
@@ -4357,83 +4345,6 @@ def getFahrenheit(int value){
 }
 /************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
 
-
-
-Boolean createFile(String fName, String fData) {
-    try {
-        def params = [
-            uri: 'http://127.0.0.1:8080',
-            path: '/hub/fileManager/upload',
-            query: [
-                'folder': '/'
-            ],
-            headers: [
-                'Content-Type': 'multipart/form-data; boundary=----BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh'
-            ],
-            body: """------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
-Content-Disposition: form-data; name=\"uploadFile\"; filename=\"${fName}\"
-Content-Type: text/plain
-
-${fData}
-
-------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
-Content-Disposition: form-data; name=\"folder\"
-
-
-------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh--""",
-            timeout: 300,
-            ignoreSSLIssues: true
-        ]
-        httpPost(params) { resp ->
-            log.info resp.data.status;
-            return resp.data.success;
-        }
-    } catch (e) {
-        log.error "Error creating file $fName: ${e}"
-        return false;
-    }
-}
-
-def call_create_file(){
-    if(app.label.contains("Elfege")){
-        log.debug "This is Elfege's sandbox... "
-            
-        try{
-            String fileName = "myFile2.txt";
-            // Check if the file already exists
-            if (!fileExists(fileName)) {
-                // Create a text file named "myFile.txt" with the initial content "Hello, World!"
-                Boolean result = createFile(fileName, "Hello, World!");
-
-                // Check if the file was successfully created
-                if (result) {
-                    log.info "File successfully created.";
-                } else {
-                    log.error "Failed to create the file.";
-                }
-            } else {
-                log.info "File already exists. No need to create.";
-            }
-        }
-        catch (e) {
-            log.error "Error attempting to create a file: $e";
-        }
-    }
-}
-
-Boolean fileExists(String fName) {
-    def uri = "http://127.0.0.1:8080/local/${fName}"
-    def params = [uri: uri]
-
-    try {
-        httpGet(params) { resp ->
-            return resp.status == 200
-        }
-    } catch (Exception e) {
-        return false
-    }
-}
-
 def readFromFile(fileName) {
     def host = "localhost"  // or "127.0.0.1"
     def port = "8080"  
@@ -4679,8 +4590,7 @@ def getAutoVal() {
     def level = getDimmerValue()
 
     if (learnedTarget == null && level) {
-        log.info "No corresponding conditions in the database. Adding current conditions and set point..."
-
+        // NEW CODE STARTS HERE
         // Add the conditions to the hash table with dimmer level as the value
         hashTable[conditionsKey] = level  // Modified to use the newly read hashTable
         log.warn "Added conditions to the hash table with dimmer level as the value."
@@ -4688,11 +4598,11 @@ def getAutoVal() {
         // Write updated hash table back to your HTTP server
         def newHashTableJson = serializeHashTable(hashTable)  // Helper function to serialize hash table to JSON string
         writeToFile("hash_table.txt", newHashTableJson)
-        
+        // NEW CODE ENDS HERE
 
         learnedTarget = hashTable[conditionsKey]  // Modified to use the newly read hashTable
 
-        log.trace "${learnedTarget == null ? 'FAILED to retrieve any value despite adding one... investigate.' : 'Successfully added and retrieved: ' + learnedTarget}"
+        log.warn "ATTEMPT TO RETRIEVE RIGHT AFTER ADDING IT: ${learnedTarget == null ? 'FAILED' : 'success! ' + learnedTarget}"
 
         logging(hashTable)  // Modified to use the newly read hashTable
         log.warn("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
@@ -4709,7 +4619,7 @@ def getAutoVal() {
     } else {
         // If nothing else, 
         log.warn "------------conditions: $conditions"
-        // log.warn "******* level: ${level}"
+        log.warn "******* level: ${level}"
         return level
     }
 }
@@ -4725,60 +4635,38 @@ def getOutsideHumidity(){
 
 
 def convert_db_to_celsius() {
-
-    if (atomicState.currentUnit == "fahrenheit"){
-        // Read existing hash table from HTTP server
-        def hashTableJson = readFromFile("hash_table.txt")
-        def hashTable = deserializeHashTable(hashTableJson)
-        
-        // Convert each dimmer value to Celsius
-        try{
-                hashTable.collectEntries { key, value ->
-                [(key): (value - 32) * 5 / 9]
-            }
-        }
-        catch(e){
-            log.warn"hastable not computable at the moment... "
-        }
-        
-        // Serialize and write the updated hash table back to your HTTP server
-        def newHashTableJson = serializeHashTable(hashTable)
-        writeToFile("hash_table.txt", newHashTableJson)
-
-        atomicState.currentUnit = "celsius"
-        
-        log.warn("Database has been converted to Celsius.")
+    // Read existing hash table from HTTP server
+    def hashTableJson = readFromFile("hash_table.txt")
+    def hashTable = deserializeHashTable(hashTableJson)
+    
+    // Convert each dimmer value to Celsius
+    hashTable.collectEntries { key, value ->
+        [(key): (value - 32) * 5 / 9]
     }
-    else {
-      log.warn "database already in celcius"  
-    }
+    
+    // Serialize and write the updated hash table back to your HTTP server
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+    
+    log.warn("Database has been converted to Celsius.")
 }
 
 
 def convert_db_to_fahrenheit() {
-
-    if (atomicState.currentUnit == "celcius"){
-
-        // Read existing hash table from HTTP server
-        def hashTableJson = readFromFile("hash_table.txt")
-        def hashTable = deserializeHashTable(hashTableJson)
-        
-        // Convert each dimmer value to Fahrenheit
-        hashTable.collectEntries { key, value ->
-            [(key): (value * 9 / 5) + 32]
-        }
-        
-        // Serialize and write the updated hash table back to your HTTP server
-        def newHashTableJson = serializeHashTable(hashTable)
-        writeToFile("hash_table.txt", newHashTableJson)
-        
-        log.warn("Database has been converted to Fahrenheit.")
-
-        atomicState.currentUnit = "celsius"
+    // Read existing hash table from HTTP server
+    def hashTableJson = readFromFile("hash_table.txt")
+    def hashTable = deserializeHashTable(hashTableJson)
+    
+    // Convert each dimmer value to Fahrenheit
+    hashTable.collectEntries { key, value ->
+        [(key): (value * 9 / 5) + 32]
     }
-    else {
-    log.warn "database already in fahrenheit"  
-    }    
+    
+    // Serialize and write the updated hash table back to your HTTP server
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+    
+    log.warn("Database has been converted to Fahrenheit.")
 }
 
 /************************************************BOOLEANS******************************************************/
@@ -4844,7 +4732,6 @@ boolean doorsContactsAreOpen(){
     descriptionText "------------------ doors: $doorsContacts open ?: ${listOpen.join(', ')}"
     return Open
 }
-
 boolean Active(){
     boolean result = true // default is true  always return Active = true when no sensor is selected by the user
 

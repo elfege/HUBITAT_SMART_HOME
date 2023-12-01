@@ -20,8 +20,7 @@ metadata {
         capability "Switch"
         capability "Refresh"
         capability "Polling"
-
-
+        
         command "reset"
         command "refresh"
         command "reboot"
@@ -102,6 +101,12 @@ def parse(String description) {
             }
 
             sendEvent(name: name, value: value)
+
+            value == "off" ? "sleeping" : "running"
+            sendEvent(name: "status", value: value)
+
+            value == "sleepingf" ? "off" : "on"
+            sendEvent(name: "switch", value: value)
         }
         else
         {

@@ -10,8 +10,6 @@ metadata {
         capability "Switch"
         capability "Refresh"
         capability "Switch Level"
-        //capability "Temperature Measurement"
-        //capability "Relative Humidity Measurement"
         capability "TemperatureMeasurement"
         capability "RelativeHumidityMeasurement"
         capability "Thermostat"
@@ -124,8 +122,19 @@ def parse(String description) {
             state.refreshRequest = false
             
             logging("$name, $value")
-            sendEvent(name: name, value: value)          
+            sendEvent(name: name, value: value)       
 
+            // no feedback from the unit since this is an infra-red controller, so default operatingState value to mode's value
+            if(value in ["heat", "cool"]){
+                sendEvent(name:"thermostatOperatingState", value: "${value}ing")
+            }  
+            else if(value == "fanCirculate"){
+                sendEvent(name:"thermostatOperatingState", value: value)
+            }
+            else {
+                sendEvent(name:"thermostatOperatingState", value: "idle")
+            }
+            
         }
         else
         {
@@ -244,7 +253,7 @@ def setHeatingSetpoint(cmd) {
     state.lastHeatSetpoint = cmd.toInteger()
     //sendEvent(name: "switch", value: "on")
     //sendEvent(name: "thermostatSetpoint", value: cmd)
-    sendEthernet("setHeatingSetpoint${cmd.toInteger()}") // will effectively change on the controller if and only if current mode correspond
+    sendEthernet("setHeatingSetpoint${cmd.toInteger()}") // will effectively change on the controller if and only if current mode corresponds
 
 }
 def setLevel(value){

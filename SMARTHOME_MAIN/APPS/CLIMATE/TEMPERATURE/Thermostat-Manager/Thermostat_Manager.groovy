@@ -1,6 +1,9 @@
 import java.text.SimpleDateFormat
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
+import groovy.transform.Field
+
+@Field static var1 = "test" // works. ToDo: swap as many atomicState with static; but mostly constant ones (in which case I should then mark them as "final")
 
 definition(
     name: "Thermostat Manager",
@@ -141,11 +144,16 @@ def thermostats(){
             } 
 
             input "differentiateThermostatsHeatCool", "bool", title: "Use 2 different thermostats: 1 for cooling, 1 for heating", submitOnChange:true, defaultValue:false
+            input "useBothThermostatsForHeat", "bool", title: "Use both when in heat mode", submitOnChange:true, defaultValue:false
+            input "useBothThermostatsForCool", "bool", title: "Use both when in cool mode", submitOnChange:true, defaultValue:false
             if(differentiateThermostatsHeatCool)
             {
                 input "thermostatHeat", "capability.thermostat", title: "Select a thermostat used exclusively for heating", required:true
-                input"thermostatCool", "capability.thermostat", title: "Select a thermostat used exclusively for cooling", required: true
+                input "thermostatCool", "capability.thermostat", title: "Select a thermostat used exclusively for cooling", required: true
                 input "keep2ndThermOffAtAllTimes", "bool", title: "Keep the unused thermostat off at all times (if enabled, you can't use this thermostat for any other purpose, it'll be shut down within a minute after you turn it on when not in use by this app", defaultValue:True
+            }
+            if(useBothThermostatsForCool || useBothThermostatsForHeat){
+                app.updateSetting("keep2ndThermOffAtAllTimes", [type: "bool", value:false])
             }
 
             // verify not only capability, but also actual reading, some thermostats working with generic drivers
@@ -228,21 +236,21 @@ def methods(){
                 input "RESET", "button", title: "RESET", submitOnChange:true
                 if(atomicState.confirmed == "no"){ 
                     paragraph """<div style='
-                    z-index: 9999;
-                    padding: 20px;
-                    border-radius: 10px; 
-                    font-size:25px; 
-                    color:white; 
-                    background: rgba(0, 0, 0, 0.5); 
-                    position:relative; 
-                    margin:auto;
-                    '>
-                    Are you sure? You will lose everything your app has learned over time!</div>"""
+z-index: 9999;
+padding: 20px;
+border-radius: 10px; 
+font-size:25px; 
+color:white; 
+background: rgba(0, 0, 0, 0.5); 
+position:relative; 
+margin:auto;
+'>
+Are you sure? You will lose everything your app has learned over time!</div>"""
                     input "reset_confirmed", "button", title: "YES", submitOnChange:true
                     input "no_reset", "button", title: "NO", submitOnChange:true                    
                 }
                 input "useDryBulbEquation", "bool", title: "Use the Predicted Mean Vote (PMV): algorithm that optimizes temperature based on humidity)"
-                
+
             }
             else 
             {
@@ -499,7 +507,7 @@ def comfortSettings(){
                     } 
                     input "simpleModeTimeLimit", "number", title: "Optional: return to normal operation after a certain amount of time", descripition: "Time in hours", submitOnChange:true
                     input "allowWindowsInSimpleMode", "bool", title:"Allow windows management, if any", defaultValue:false
-                   
+
                     if(simpleModeTimeLimit)
                     {
                         message = "Limited mode will be canceled after $simpleModeTimeLimit hours or after a new button event" //. Note that $devicesStr will not be able to cancel limited mode before time is out" 
@@ -580,35 +588,35 @@ def windowsManagement(){
                 input "windows", "capability.switch", title: "Turn on some switches/fan/windows when home needs to cool down, wheather permitting", multiple:true, required: false, submitOnChange: true
                 if(windows)
                 {
-                    
+
                     def text = """
-                        <div style='background-color: #f2f2f2; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px; white-space: nowrap;'>
-                            <h3 style='font-size: 24px; margin-bottom: 20px;'>Read this to avoid frustration!</h3>
-                            <span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; word-wrap: break-word;white-space: normal'>
-                            Having your windows reopening or re-closing after you intervened can be frustrating. To prevent that, the app will detect manual intervention and release control of your windows after you either closed or opened them yourself (for example, using rule machine or a voice command).
-                            </span>
-                            <span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px;white-space: normal'>
-                            However, this override functionality cancels out the benefit of this feature.
-                            After you intervened to close your automated windows, the app will never open them again, with the following exceptions:
-                            </span>
-                            <ul style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; margin-left: 20px;'>
-                                <li>you reset/update the app settings</li>
-                                <li>You intervene again to close/open them back</li>
-                                <li>If it gets dangerously cold inside</li>
-                            </ul>
-                            <span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; white-space: normal;'>
-                                Beside that, after a manual override occured, the app won't use the windows to save power (instead of using your A.C., for instance), which is the core benefit of this feature
-                                In order to prevent such inconvenience, you can enable the option named 'cancel manual override with location mode events'. That way, you can override the app's decision, for instance, 
-                                to open the windows instead of using the A.C. by having them close back and, when your location changes its mode, the app will start controlling your windows again to save power whenever possible.
-                            </span>
-                            <span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; white-space: normal'>
-                                Note that manual overrides will also ALWAYS be canceled out if you use a ${simpleModeName} mode button with (windows management enabled, since ${simpleModeName} allows you to totally ignore the windows if you wish).
-                            </span>
-                            <span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; word-wrap: break-word;white-space: normal'>
-                            You can also leave this option disabled and let the app manage your windows entirely. You'll have to close a window back after you manually opened it (and reciprocally, reopen it after you opened it) for the app to resume its normal windows control.
-                            </span>
-                        </div>
-                        """
+<div style='background-color: #f2f2f2; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px; white-space: nowrap;'>
+<h3 style='font-size: 24px; margin-bottom: 20px;'>Read this to avoid frustration!</h3>
+<span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; word-wrap: break-word;white-space: normal'>
+Having your windows reopening or re-closing after you intervened can be frustrating. To prevent that, the app will detect manual intervention and release control of your windows after you either closed or opened them yourself (for example, using rule machine or a voice command).
+</span>
+<span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px;white-space: normal'>
+However, this override functionality cancels out the benefit of this feature.
+After you intervened to close your automated windows, the app will never open them again, with the following exceptions:
+</span>
+<ul style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; margin-left: 20px;'>
+<li>you reset/update the app settings</li>
+<li>You intervene again to close/open them back</li>
+<li>If it gets dangerously cold inside</li>
+</ul>
+<span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; white-space: normal;'>
+Beside that, after a manual override occured, the app won't use the windows to save power (instead of using your A.C., for instance), which is the core benefit of this feature
+In order to prevent such inconvenience, you can enable the option named 'cancel manual override with location mode events'. That way, you can override the app's decision, for instance, 
+to open the windows instead of using the A.C. by having them close back and, when your location changes its mode, the app will start controlling your windows again to save power whenever possible.
+</span>
+<span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; white-space: normal'>
+Note that manual overrides will also ALWAYS be canceled out if you use a ${simpleModeName} mode button with (windows management enabled, since ${simpleModeName} allows you to totally ignore the windows if you wish).
+</span>
+<span style='font-size: 18px; line-height: 1.5; margin-bottom: 20px; word-wrap: break-word;white-space: normal'>
+You can also leave this option disabled and let the app manage your windows entirely. You'll have to close a window back after you manually opened it (and reciprocally, reopen it after you opened it) for the app to resume its normal windows control.
+</span>
+</div>
+"""
 
                     paragraph text
                     input "resetWindowsOverrideWithLocationModeChange", "bool", title: "Cancel manual override with location mode events: the app always regains control of your windows when the mode changes", defaultValue: true
@@ -1191,7 +1199,9 @@ def initialize(){
     atomicState.userWantsWarmerTimeStamp = now()
     atomicState.userWantsCoolerTimeStamp = now()
 
-        atomicState.setPointOverride = false
+    atomicState.setPointOverride = false
+
+    atomicState.neededThermostats = []
 
     logging("subscribing to events...")
 
@@ -1300,22 +1310,19 @@ def initialize(){
         convert_db_to_fahrenheit() // will run only if was converted to celsius before
     }
 
-    
+
     def hashTableJson = readFromFile("hash_table.txt")
     if (hashTableJson == null || hashTableJson.isEmpty()) {
         reset_db()
         log.warn("Hash table file was empty. Database has been reset and populated.")
     }
-    
+
 
     schedule("0 0/1 * * * ?", mainloop)
 
     descriptionText "END OF INITIALIZATION"
-    
+
 }
-
-
-
 
 /************************************************EVT HANDLERS***************************************************/
 def modeChangeHandler(evt){
@@ -1388,6 +1395,7 @@ def appButtonHandler(btn) {
         updated()
         break
         case "run":
+        logging "Running mainloop('btn')"
         if(!atomicState.paused) mainloop("btn")
         break
         case "poll":
@@ -1399,7 +1407,7 @@ def appButtonHandler(btn) {
         break
         case "reset_confirmed":
         atomicState.confirmed = "yes" 
-        log.debug "**********************************RESETING DATABASE*****************************"
+        logging "**********************************RESETING DATABASE*****************************"
         reset_db()
         break
         case "no_reset": 
@@ -1426,7 +1434,7 @@ def motionHandler(evt){
     if(!atomicState.paused){
         if(location.mode in restricted){
             descriptionText "location in restricted mode, doing nothing"
-            
+
             return
         } 
         atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
@@ -1443,12 +1451,12 @@ def temperatureHandler(evt){
     if(!atomicState.paused){
         if(location.mode in restricted){
             descriptionText "location in restricted mode, doing nothing"
-             def critical = criticalcold ? criticalcold : 65
-                    if(getInsideTemp() < critical) 
-                    {
-                        atomicState.override = false // cancel if it gets too cold
-                        atomicState.antifreeze = true
-                    }
+            def critical = criticalcold ? criticalcold : 65
+            if(getInsideTemp() < critical) 
+            {
+                atomicState.override = false // cancel if it gets too cold
+                atomicState.antifreeze = true
+            }
             return
         } 
         logging("$evt.device returns ${evt.value}F")
@@ -1483,7 +1491,7 @@ def dimmerHandler(evt){
             return
         } 
 
-        log.debug "new dimmer level is $evt.value method = $method && setpointSentByApp = $atomicState.setpointSentByApp"
+        logging "new dimmer level is $evt.value method = $method && setpointSentByApp = $atomicState.setpointSentByApp"
 
         // learning from user's input for the auto method
         learn(evt.value) // will also respond to thermostat inputs because it is ran before testing if it's set by the app or not
@@ -1496,6 +1504,8 @@ def dimmerHandler(evt){
         {
             userWants(evt.value.toInteger(), getInsideTemp())
         }
+
+
 
         atomicState.setpointSentByApp = false // always reset this variable after calling it
 
@@ -1563,7 +1573,17 @@ any found with same current value: ${thermostatB?.any{it -> it.currentValue(evt.
             userWants(evt.value.toInteger(), inside)
 
             def currDim = !dimmer ? atomicState.lastThermostatInput : getDimmerValue()
-            def thermMode = thermostat?.currentValue("thermostatMode")
+
+
+            def thermMode = [thermostat?.currentValue("thermostatMode")]
+
+            if(differentiateThermostatsHeatCool){
+                append_multiple_thermostats()
+                for(int i = 0; i < atomicState.neededThermostats.size(); i++)
+                {
+                    thermMode = atomicState.neededThermostats.collect{ it.currentValue("thermostatMode")}
+                }
+            }
 
             // this will be true only if thermostat is heating or cooling; therefore, dimmer won't be adjusted if off 
             // using atomicState.lastNeed == "heat" / "cool" seemed to allow exceptions... UPDATE but we need it. Let's keep an eye on this... 
@@ -1649,12 +1669,12 @@ def pushableButtonHandler(evt){
             atomicState.buttonPushed = !atomicState.buttonPushed 
 
             atomicState.simpleModeOverrideResetDone = atomicState.buttonPushed ? false : true
-    
+
             logwarn """
-            <p> allowWindowsInSimpleMode = $allowWindowsInSimpleMode</p>
-            <p> atomicState.simpleModeOverrideResetDone = $atomicState.simpleModeOverrideResetDone</p>
-            """   
-   
+<p> allowWindowsInSimpleMode = $allowWindowsInSimpleMode</p>
+<p> atomicState.simpleModeOverrideResetDone = $atomicState.simpleModeOverrideResetDone</p>
+"""   
+
             if(allowWindowsInSimpleMode && atomicState.simpleModeOverrideResetDone == false){
                 descriptionText formatText("RESET WINDOWS OVERRIDE DUE TO ${simpleModeName} BEING ACTIVE","white", "magenta",)
                 atomicState.openByApp = true;
@@ -1776,16 +1796,9 @@ def windowsHandler(evt){
 /************************************************MAIN OPERATIONS*************************************************/
 
 
-
-
-
-
 def mainloop(source){
 
-//    call_create_file() //works. Next step: implement custom file for each instance. 
-    
-
-
+    //    call_create_file() //works. Next step: implement custom file for each instance. 
 
     descriptionText "mainloop called by $source"
 
@@ -1880,7 +1893,15 @@ def mainloop(source){
 
         def currSP = thermostat?.currentValue("thermostatSetpoint").toInteger()
         //logwarn "--- $currSP"
-        def thermMode = thermostat?.currentValue("thermostatMode")
+        def thermMode = [thermostat?.currentValue("thermostatMode")]
+        
+        if(differentiateThermostatsHeatCool){
+            append_multiple_thermostats()
+            for(int i = 0; i < atomicState.neededThermostats.size(); i++)
+            {
+                thermMode = atomicState.neededThermostats.collect{ it.currentValue("thermostatMode")}
+            }
+        }
         logging("need is needData[1] = $need")
         def cmd = "set"+"${needData[0]}"+"ingSetpoint" // "Cool" or "Heat" with a capital letter
 
@@ -1924,10 +1945,8 @@ inside = $inside
 antiFreezeThreshold = $antiFreezeThreshold_V
 safeValue = $safeValue
 """
-                    descriptionText "thermostat.setThermostatMode('heat')"
-                    thermostat.setThermostatMode("heat")
-                    thermostat.setHeatingSetpoint(safeValue)
-
+                    set_multiple_thermosats("heat", "antifreeze_user", safeValue)
+                    
                     atomicState.resendAttempt = now()
                     windows?.off() // make sure all windows linked to this instance are closed
                     heater?.on()// turn on the alternate heater, if any
@@ -1956,7 +1975,10 @@ backupSensor = $backupSensor
 defaultSafeTemp = $defaultSafeTemp (is this user's criticalcold set temp ? ${criticalcold == null ? false : true}
 """
                     windows?.off() // make sure all windows linked to this instance are closed
-                    thermostat.setThermostatMode("heat")
+                    // thermostat.setThermostatMode("heat")
+                    
+                    set_multiple_thermosats("heat", "antifreeze", null)
+                    
                     atomicState.resendAttempt = now()
                     atomicState.antifreeze = true
                     //sendNotification()
@@ -2007,11 +2029,12 @@ defaultSafeTemp = $defaultSafeTemp (is this user's criticalcold set temp ? ${cri
                 else
                 {
 
+                    boolean thermModeNotOff = thermMode.any{it -> it.currentValue("thermostatMode" != "off")} 
                     if(fanMode != "on")
                     {                                                
                         if(!motionActive && alwaysButNotWhenPowerSaving)
                         {
-                            if(thermMode != "off" || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10))
+                            if(thermModeNotOff || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10))
                             {
                                 atomicState.dontcheckthermstateCount += 1
 
@@ -2153,7 +2176,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
 <br>need = $need
 <br>cmd = $cmd
 
-                """
+"""
                 //this must not run in ignoreMode 
                 if(timeToRefreshMeters /*&& !timeIsUp && !timeIsUpOff && !ignoreMode*/) // make sure to attempt a refresh before sending more commands
                 {
@@ -2172,18 +2195,30 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                     if(cmd in ["setCoolingSetpoint", "setHeatingSetpoint", "setThermostatSetpoint"])
                     {
                         log.warn "resending $need command as well"
-                        thermostat.setThermostatMode(need)
+                        set_multiple_thermosats(need, "resend", null)
+                        
 
                         descriptionText "$thermostat $cmd 4gh5ze"
                         boolean inpowerSavingMode = location.mode in powersavingmode
                         if(ignoreSetPoint && !inpowerSavingMode)
                         {
                             logtrace "Target ($target) temp not sent to $thermostat at user's request 654frg"
-                            
+
                         }
                         else
                         {
-                            thermostat."${cmd}"(target) // resend cmd
+                            
+                            if(differentiateThermostatsHeatCool){
+                                append_multiple_thermostats()
+                                for(int i = 0; i < atomicState.neededThermostats.size(); i++)
+                                {
+                                    atomicState.neededThermostats[i]."${cmd}"(target) // resend target cmd 
+                                }
+                            }
+                            else{
+                                thermostat."${cmd}"(target) // resend target cmd 
+                            }
+
                         }
                     }
                     else
@@ -2222,10 +2257,10 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                     }
                     else if(need == "off" && fanCirculateAlways)
                     {
-
+                        boolean thermModeNotOff = thermMode.any{it -> it.currentValue("thermostatMode") != "off"}
                         if(!motionActive && alwaysButNotWhenPowerSaving)
                         {
-                            if(thermMode != "off" || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10))
+                            if(thermModeNotOff || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10))
                             {
                                 atomicState.dontcheckthermstateCount += 1
                                 if(okToTurnOff())
@@ -2273,13 +2308,13 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
             }
             if(fanDimmer)
             {
-                logging""" fanDimmer
+                logging(""" fanDimmer
 neverTurnOffFanDimmer
 inside = $inside
 target = $target
 need in ["cool", "heat"] = ${need in ["cool", "heat"]}
 location.mode in silenceMode
-"""
+""")
                 boolean keepOnWindows = keepFanOnWhenWindowsOpen && !contactClosed
                 boolean keepFandDimmerCoolerOutside = keepFanDimmerOnIfOutsideLowerThanInside && outside < inside && inside > 74
 
@@ -2300,8 +2335,34 @@ thermostat.currentValue("thermostatOperatingState") = ${thermostat.currentValue(
 ${thermostat.currentValue("thermostatOperatingState") == currentOperatingNeed}"""
 
             atomicState.lastSetTime = atomicState.lastSetTime != null ? atomicState.lastSetTime : now() + 31 * 60 * 1000
+
+
             def currentOperatingState = thermostat.currentValue("thermostatOperatingState")
             boolean OperatingStateOk = contactClosed && !doorContactsAreOpen ? currentOperatingState in [currentOperatingNeed, "fanCirculate"] : true
+
+            
+
+            if(differentiateThermostatsHeatCool){
+
+                append_multiple_thermostats()
+
+                pauseExecution(10) // give time to the db to update the atomicState (they're big!)
+
+                log.debug "atomicState.neededThermostats => $atomicState.neededThermostats"                
+                def currentOperatingStates = atomicState.neededThermostats.collect { it.currentValue("thermostatOperatingState") }
+                boolean allOk = !currentOperatingStates.any { it -> it != currentOperatingNeed && it != "fanCirculate" }
+                logging "contactClosed && !doorContactsAreOpen => ${contactClosed && !doorContactsAreOpen}"
+
+                OperatingStateOk = contactClosed && !doorContactsAreOpen ? allOk : true
+
+                logging "${atomicState.neededThermostats[0]}.currentValue('thermostatOperatingState') => ${atomicState.neededThermostats[0].currentValue('thermostatOperatingState')}"
+                logging "${atomicState.neededThermostats[1]}.currentValue('thermostatOperatingState') => ${atomicState.neededThermostats[1].currentValue('thermostatOperatingState')}"
+                logging "currentOperatingNeed => $currentOperatingNeed"
+                logwarn "currentOperatingStates => $currentOperatingStates"
+                logwarn "allOk => $allOk"
+                logwarn "OperatingStateOk => $OperatingStateOk"
+            
+            }
 
             double swing = UserSwing ? UserSwing.toDouble() : 0.5 // swing is the target amplitude set at the level of the thermostat directly (hardware setting) - user must specify, default is 0.5
             double undesirableOffset = 2
@@ -2319,42 +2380,13 @@ ${thermostat.currentValue("thermostatOperatingState") == currentOperatingNeed}""
             def thermostatTempProblem = (need == "cool" && thermTempTooCloseToCoolTargetdWhileInsideNotGood ) || (need == "heat" && thermTempTooCloseToHeatTargetdWhileInsideNotGood)
             boolean thermTempDiscrepancy = manageThermDiscrepancy && sensor && thermostatTempProblem && contactClosed 
 
-            logging """
-currentOperatingState = $currentOperatingState
-currentOperatingNeed = $currentOperatingNeed
-OperatingStateOk = $OperatingStateOk
-swing (user defined) = $swing
-undesirableOffset = $undesirableOffset
-thermostatTemp = $thermostatTemp
-target + swing = ${target + swing}12
-target - swing = ${target - swing}
-thermTempTooCloseToCoolTargetdWhileInsideNotGood = $thermTempTooCloseToCoolTargetdWhileInsideNotGood
-thermTempTooCloseToHeatTargetdWhileInsideNotGood = $thermTempTooCloseToHeatTargetdWhileInsideNotGood
-
-"""
 
             // check cooler performance and turn thermostat back on (override preferCooler bool) if needed 
             atomicState.coolerTurnedOnTimeStamp = atomicState.coolerTurnedOnTimeStamp != null ? atomicState.coolerTurnedOnTimeStamp : 31*60*1000
             def efficiencyOffset = 2
             boolean coolerNotEfficientEnough = efficiencyOverride && preferCooler && (now() - atomicState.coolerTurnedOnTimeStamp) > 30*60*1000 && inside >= target + efficiencyOffset
             boolean boost = userBoostOffset && inside >= target + userBoostOffset 
-            
-            logging """
-need = $need
-preferCooler = $preferCooler
-efficiencyOverride = $efficiencyOverride
-preferCoolerLimitTemperature = $preferCoolerLimitTemperature
-outside = $outside
-outside < preferCoolerLimitTemperature = ${outside < preferCoolerLimitTemperature}
-inside = $inside
-target = $target 
-inside >= target + $efficiencyOffset ? ${inside >= target + efficiencyOffset}
-atomicState.coolerTurnedOnTimeStamp > 30*60*1000 ? ${atomicState.coolerTurnedOnTimeStamp > 30*60*1000}
-coolerNotEfficientEnough = $coolerNotEfficientEnough
-boost = $boost
-userBoostOffset = $userBoostOffset
 
-"""
             if(coolerNotEfficientEnough && need == "cool") logwarn formatText("$cooler not efficient enough, turning on $thermostat", "red", "white")
 
             if(need == "cool" && preferCooler && (outside < preferCoolerLimitTemperature || !preferCoolerLimitTemperature)) // NO OVERRIDE WHEN preferCooler and need == "cool"
@@ -2454,10 +2486,10 @@ notSet = $notSet
             /****************NORMAL EVALUATION WITH POSSIBLE NEED FOR REDUNDENT FORCED COMMANDS (possibly needed due to bad Z-Wave mesh)******/
             atomicState.forceLimit = Math.abs(inside-target) > 5 ? 20 : 5 // higher amount of attempts if bigger discrepancy         
             atomicState.forceAttempts = atomicState.forceAttempts != null ? atomicState.forceAttempts : 0
-            boolean forceCommand = forceCommand ? (atomicState.forceAttempts < atomicState.forceLimit ? true : false) : false //
-            forceCommand = forceCommand ? (need in ["cool", "heat"] && Math.abs(inside-target) > 3 ? true : false) : false // 
-            forceCommand = !forceCommand && forceCommand && Math.abs(inside-target) >= 5 ? true : (forceCommand ? true : false) // counter ignored if forceCmd user decision is true and temp discrepancy too high: continue trying until temp is ok
-            forceCommand = !forceCommand && !OperatingStateOk ? true : forceCommand // OperatingStateOk supercedes all other conditions
+            boolean forceCommand = atomicState.forceAttempts < atomicState.forceLimit ? true : false
+            forceCommand = need in ["cool", "heat"] && Math.abs(inside-target) > 3 ? true : false // 
+            forceCommand = Math.abs(inside-target) >= 5 ? true : (forceCommand ? true : false) // counter ignored if forceCmd user decision is true and temp discrepancy too high: continue trying until temp is ok
+            forceCommand = !OperatingStateOk ? true : forceCommand // !OperatingStateOk supercedes all other conditions
             forceCommand = contactClosed && !doorContactsAreOpen ? forceCommand : false // don't use this method when contacts are open, even door contacts
 
             // if forececommand true and need is not off make sure we're not under heat pump cold conditions 
@@ -2497,19 +2529,8 @@ thermMode != need = ${thermMode != need}
                         }
                         else 
                         {
-                            logging """
-1. ${need == "off" && fanCirculateAlways}
-1.1. need = $need
-1.2. fanciruclateAlways = $fanCirculateAlways
-2. ${thermMode == need}
-3. ${need == "off" && fanCirculateAlways}
-4. ${need == "off" && offrequiredbyuser}
-4.1. offrequiredbyuser = $offrequiredbyuser
-5. ${thermostat.currentValue("thermostatFanMode")}
-
-"""
-
-                            if((thermMode != need || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10) || thermostat.currentValue("thermostatFanMode") != "auto") && need == "off" && offrequiredbyuser)
+                            
+                            if((thermMode.any{it -> it != need} || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10) || thermostat.currentValue("thermostatFanMode") != "auto") && need == "off" && offrequiredbyuser)
                             {
                                 atomicState.dontcheckthermstateCount += 1
                                 if(okToTurnOff())
@@ -2536,8 +2557,7 @@ thermMode != need = ${thermMode != need}
                                         atomicState.dontcheckthermstateCount += 1
                                         if(!ignoreTherMode) 
                                         {
-                                            logtrace "thermostat set to $need g5h4hr "
-                                            thermostat.setThermostatMode(need) // set needed mode
+                                            set_multiple_thermosats(need, "checkthermstate force command", null)   
                                         }
                                         else
                                         {
@@ -2604,7 +2624,7 @@ thermMode != need = ${thermMode != need}
                     {
                         atomicState.offAttempt = now()
 
-                            }
+                    }
                 }
                 else 
                 {
@@ -2620,19 +2640,10 @@ thermMode != need = ${thermMode != need}
             //logtrace "atomicState.setPointOverride = $atomicState.setPointOverride"
             if(!atomicState.setPointOverride)
             {
-                logging """ 
-need = $need
-currSP = $currSP
-target = $target
-currSP != target ? ${currSP != target.toInteger()}
-thermMode = $thermMode 
-thermMode == need ? ${thermMode == need}
-currSP != target || thermMode != need => ${currSP != target || thermMode != need}
-thermTempDiscrepancy = $thermTempDiscrepancy 
-"""
-                def fanMode = thermostat.currentValue("thermostatFanMode")
+               def fanMode = thermostat.currentValue("thermostatFanMode")
 
-                if((need != "off" || !offrequiredbyuser || simpleModeIsActive()) && (currSP != target || thermoMode != need) && !thermTempDiscrepancy && contactClosed)
+                boolean thermModeNotNeed = thermMode.any{it -> it != need}
+                if((need != "off" || !offrequiredbyuser || simpleModeIsActive()) && (currSP != target || thermModeNotNeed) && !thermTempDiscrepancy && contactClosed)
                 {
                     //logwarn "need = $need last need = $atomicState.lastNeed **************** "
                     cmd = need == "off" ? "set"+atomicState.lastNeed.capitalize()+"ingSetpoint" : cmd // restore the last need if need = off
@@ -2644,7 +2655,7 @@ thermTempDiscrepancy = $thermTempDiscrepancy
                     {
                         logtrace "Target ($target) temp not sent to $thermostat at user's request"
                     }
-                    else if(currSP != target || thermMode != need)
+                    else if(currSP != target || thermModeNotNeed)
                     {                        
                         //logwarn ""
 
@@ -2675,7 +2686,8 @@ thermTempDiscrepancy = $thermTempDiscrepancy
                         else if(!ignoreMode)
                         {
                             descriptionText "Thermostat set to $need (5rrgh4klt5ui)"
-                            thermostat.setThermostatMode(need); 
+                            set_multiple_thermosats(need, "5rrgh4klt5ui", null)
+                            
                         }
 
                         logtrace """
@@ -2750,12 +2762,15 @@ thermosat kept off ${preferCoolerLimitTemperature ? "unless outside temperature 
     {
         message = "${boost ? 'boosting with ${thermotat} at user s request' : '${cooler} is not efficient enough turning $thermostat back on'} 44JKD"
         logtrace message
-        
+
         if(thermMode != "cool" || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10))
         {
             atomicState.dontcheckthermstateCount += 1
             logwarn "cooler not efficient enough 5zr4z8h"
-            thermostat.setThermostatMode("cool") // will run as inside > target + efficiencyOffset
+            // thermostat.setThermostatMode("cool") // will run as inside > target + efficiencyOffset
+            
+            set_multiple_thermosats("cool", "efficiency boost", null)
+            
             atomicState.resendAttempt = now()
         }
     }
@@ -3135,7 +3150,7 @@ def virtualThermostat(need, target){
                 logging "$cooler already off"
             }
         }
-        
+
     }
 
 }
@@ -3234,12 +3249,12 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         }
 
         logging """<br>NEED TO OPEN? --------------------------- $needToOpen
-        <br>doorsManagement = $doorsManagement
-        <br>doorsContactsAreOpen() = ${doorsContactsAreOpen()}
-        <br>otherWindows.any{it.currentValue('switch') == 'on'} = ${otherWindows.any{it.currentValue('switch') == 'on'}}
-        <br>atomicState.otherWindowsOpenByApp = $atomicState.otherWindowsOpenByApp
-        <br>synchronize = $synchronize
-        """
+<br>doorsManagement = $doorsManagement
+<br>doorsContactsAreOpen() = ${doorsContactsAreOpen()}
+<br>otherWindows.any{it.currentValue('switch') == 'on'} = ${otherWindows.any{it.currentValue('switch') == 'on'}}
+<br>atomicState.otherWindowsOpenByApp = $atomicState.otherWindowsOpenByApp
+<br>synchronize = $synchronize
+"""
 
         if((INpwSavingMode || !Active()) && outsideWithinRange)
         {
@@ -3248,61 +3263,61 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         }
 
         def windowsLog = """<div style='background:lightgreen;color:darkblue;display:inline-block:position:relative;left:-20%'>
-        <br> **********************WINDOWS************************
-        <br> inWindowsModes = $inWindowsModes
-        <br> ${windows.join(',')} ${contactCapable ?
-            (windows.size() > 1 ? 'have' : 'has') + ' contact capability' :
-            (windows.size() > 1 ? 'dont have' : 'doesnt have') + ' contact capability'}
-        
-        <br> closed: ${windows.findAll{it?.currentValue('contact') == 'closed'}.join(',')}
-        <br> Open: ${windows.findAll{it?.currentValue('contact') == 'open'}.join(',')}
-        <br> atomicState.openByApp = $atomicState.openByApp
-        <br> atomicState.closedByApp = $atomicState.closedByApp
-        <br> withinRange (stritcly): $withinRange
-        <br> humidity >= humThres  : ${humidity >= humThres}
-        <br> outsideWithinRange = $outsideWithinRange [range: $outsidetempwindowsL <> $outsidetempwindowsH] ${tooHumid ? 'Too humid' : ''}
-        <br> insideTempHasIncreased = $insideTempHasIncreased
-        <br> atomicState.outsideTempAtTimeOfOpening = $atomicState.outsideTempAtTimeOfOpening
-        <br> atomicState.insideTempAtTimeOfOpening = $atomicState.insideTempAtTimeOfOpening
-        <br> insideTempIsHopeLess = $insideTempIsHopeLess ${insideTempIsHopeLess ? 'temp went from: $atomicState.outsideTempAtTimeOfOpening to $inside' : ''}
-        <br> amplThreshold = $amplThreshold
-        <br> someAreOff = $someAreOff
-        <br> someAreOpen = $someAreOpen
-        <br> last time windows were OPEN = at $atomicState.lastOpeningTimeStamp ${lastOpeningTime < 2 ? 'less than 1 minute ago' : (lastOpeningTime < 60 ? '${lastOpeningTime} minutes ago' : (lastOpeningTime < 60*2 ? '${(lastOpeningTime/60).round(2)} hour ago' : '${(lastOpeningTime/60).round(2)} hours ago'))}
-        <br> last time windows were CLOSED = $atomicState.lastClosingTimeStamp ${lastClosingTime < 2 ? 'less than 1 minute ago' : (lastClosingTime < 60 ? '${lastClosingTime} minutes ago' : (lastClosingTime < 60*2 ? '${(lastClosingTime/60).round(2)} hour ago' : '${(lastClosingTime/60).round(2)} hours ago'))}
-        <br> humThres = ${humThres}
-        <br> humidity = ${humidity}%
-        <br> tooHumid = $tooHumid
-        <br> openMore = $openMore
-        <br> target = $target
-        <br> outside = $outside
-        <br> inside = $inside
-        <br> swing = $swing
-        <br> inside > target + (swing * 2) : ${inside > target + (swing * 2)}
-        <br> inside > target + swing : ${inside > target + swing}
-        <br> inside < target - swing       : ${inside < target - swing}
-        <br> enoughTimeBetweenOpenAndClose : $enoughTimeBetweenOpenAndClose
-        <br> enoughTimeBetweenCloseAndOpen : $enoughTimeBetweenCloseAndOpen
-        <br> outsideSubstantiallyLowEnough = $outsideSubstantiallyLowEnough // allows to bypass enoughTimeBetweenCloseAndOpen 
-        <br> outsidetempwindowsL =  $outsidetempwindowsL
-        <br> outsidetempwindowsH = $outsidetempwindowsH
-        <br> lastOpeningTime = $lastOpeningTime minutes ago ${outsideTempHasDecreased ? 'value was reset to 0 because outsideTempHasDecreased = true (outsideTempHasDecreased = $outsideTempHasDecreased' : ''}
-        <br> lastClosingTime = $lastClosingTime minutes ago
-        <br> beenOpenForLong = $beenOpenForLong
-        <br> temperature at last window opening = $atomicState.outsideTempAtTimeOfOpening
-        <br> now() = ${now()}
-        <br> atomicState.lastOpeningTime = $atomicState.lastOpeningTime 
-        <br> atomicState.outsideTempAtTimeOfOpening = $atomicState.outsideTempAtTimeOfOpening  
-        <br> atomicState.widerOpeningDone = $atomicState.widerOpeningDone
-        <br> atomicState.lastNeed = $atomicState.lastNeed
-        <br> 
-        <br> needToOpen = $needToOpen
-        <br> needToClose = $needToClose
-        <br> *****************************************************
-        </div>
-        """
+<br> **********************WINDOWS************************
+<br> inWindowsModes = $inWindowsModes
+<br> ${windows.join(',')} ${contactCapable ?
+    (windows.size() > 1 ? 'have' : 'has') + ' contact capability' :
+        (windows.size() > 1 ? 'dont have' : 'doesnt have') + ' contact capability'}
 
- /*  def causeClosing = "${needToClose ? "WINDOWS CLOSED OR CLOSING BECAUSE: ${enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && beenOpenForLong ? "enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && beenOpenForLong" : inside < target - swing ? "inside < target - $swing" : !outsideWithinRange ? "!outsideWithinRange" : insideTempIsHopeLess ? "insideTempIsHopeLess" : !someAreOpen ? "Already closed" : atomicState.lastNeed == "heat" ? atomicState.lastNeed : "FIRE THE DEVELOPER IF THIS MESSAGE SHOWS UP"}":""}"*/
+<br> closed: ${windows.findAll{it?.currentValue('contact') == 'closed'}.join(',')}
+<br> Open: ${windows.findAll{it?.currentValue('contact') == 'open'}.join(',')}
+<br> atomicState.openByApp = $atomicState.openByApp
+<br> atomicState.closedByApp = $atomicState.closedByApp
+<br> withinRange (stritcly): $withinRange
+<br> humidity >= humThres  : ${humidity >= humThres}
+<br> outsideWithinRange = $outsideWithinRange [range: $outsidetempwindowsL <> $outsidetempwindowsH] ${tooHumid ? 'Too humid' : ''}
+<br> insideTempHasIncreased = $insideTempHasIncreased
+<br> atomicState.outsideTempAtTimeOfOpening = $atomicState.outsideTempAtTimeOfOpening
+<br> atomicState.insideTempAtTimeOfOpening = $atomicState.insideTempAtTimeOfOpening
+<br> insideTempIsHopeLess = $insideTempIsHopeLess ${insideTempIsHopeLess ? 'temp went from: $atomicState.outsideTempAtTimeOfOpening to $inside' : ''}
+<br> amplThreshold = $amplThreshold
+<br> someAreOff = $someAreOff
+<br> someAreOpen = $someAreOpen
+<br> last time windows were OPEN = at $atomicState.lastOpeningTimeStamp ${lastOpeningTime < 2 ? 'less than 1 minute ago' : (lastOpeningTime < 60 ? '${lastOpeningTime} minutes ago' : (lastOpeningTime < 60*2 ? '${(lastOpeningTime/60).round(2)} hour ago' : '${(lastOpeningTime/60).round(2)} hours ago'))}
+<br> last time windows were CLOSED = $atomicState.lastClosingTimeStamp ${lastClosingTime < 2 ? 'less than 1 minute ago' : (lastClosingTime < 60 ? '${lastClosingTime} minutes ago' : (lastClosingTime < 60*2 ? '${(lastClosingTime/60).round(2)} hour ago' : '${(lastClosingTime/60).round(2)} hours ago'))}
+<br> humThres = ${humThres}
+<br> humidity = ${humidity}%
+<br> tooHumid = $tooHumid
+<br> openMore = $openMore
+<br> target = $target
+<br> outside = $outside
+<br> inside = $inside
+<br> swing = $swing
+<br> inside > target + (swing * 2) : ${inside > target + (swing * 2)}
+<br> inside > target + swing : ${inside > target + swing}
+<br> inside < target - swing       : ${inside < target - swing}
+<br> enoughTimeBetweenOpenAndClose : $enoughTimeBetweenOpenAndClose
+<br> enoughTimeBetweenCloseAndOpen : $enoughTimeBetweenCloseAndOpen
+<br> outsideSubstantiallyLowEnough = $outsideSubstantiallyLowEnough // allows to bypass enoughTimeBetweenCloseAndOpen 
+<br> outsidetempwindowsL =  $outsidetempwindowsL
+<br> outsidetempwindowsH = $outsidetempwindowsH
+<br> lastOpeningTime = $lastOpeningTime minutes ago ${outsideTempHasDecreased ? 'value was reset to 0 because outsideTempHasDecreased = true (outsideTempHasDecreased = $outsideTempHasDecreased' : ''}
+<br> lastClosingTime = $lastClosingTime minutes ago
+<br> beenOpenForLong = $beenOpenForLong
+<br> temperature at last window opening = $atomicState.outsideTempAtTimeOfOpening
+<br> now() = ${now()}
+<br> atomicState.lastOpeningTime = $atomicState.lastOpeningTime 
+<br> atomicState.outsideTempAtTimeOfOpening = $atomicState.outsideTempAtTimeOfOpening  
+<br> atomicState.widerOpeningDone = $atomicState.widerOpeningDone
+<br> atomicState.lastNeed = $atomicState.lastNeed
+<br> 
+<br> needToOpen = $needToOpen
+<br> needToClose = $needToClose
+<br> *****************************************************
+</div>
+"""
+
+        /*  def causeClosing = "${needToClose ? "WINDOWS CLOSED OR CLOSING BECAUSE: ${enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && beenOpenForLong ? "enoughTimeBetweenOpenAndClose && inside > target + (swing * 2) && beenOpenForLong" : inside < target - swing ? "inside < target - $swing" : !outsideWithinRange ? "!outsideWithinRange" : insideTempIsHopeLess ? "insideTempIsHopeLess" : !someAreOpen ? "Already closed" : atomicState.lastNeed == "heat" ? atomicState.lastNeed : "FIRE THE DEVELOPER IF THIS MESSAGE SHOWS UP"}":""}"*/
 
         logging(windowsLog)
 
@@ -3320,20 +3335,20 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                         atomicState.widerOpeningDone = true
                         unschedule(stop)
                     }                    
-                        
+
                     if(atomicState.closedByApp || (openMore && atomicState.openByApp))
                     {
                         def message = ""
                         if(onlySomeWindowsWillOpen && location.mode in modeSpecificWindows)
                         {
                             logwarn"""
-                                openMore = $openMore
-                                atomicState.openByApp = $atomicState.openByApp
-                                atomicState.closedByApp = $atomicState.closedByApp
-                                atomicState.insideTempHasIncreased = $atomicState.insideTempHasIncreased
-                                atomicState.widerOpeningDone = $atomicState.widerOpeningDone
-                                
-                                    """;
+openMore = $openMore
+atomicState.openByApp = $atomicState.openByApp
+atomicState.closedByApp = $atomicState.closedByApp
+atomicState.insideTempHasIncreased = $atomicState.insideTempHasIncreased
+atomicState.widerOpeningDone = $atomicState.widerOpeningDone
+
+""";
 
                             message = "opening $onlyThoseWindows ONLY"
                             def objectDevice
@@ -3462,7 +3477,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                     {
                         windows.setLevel(1)
                     }
-                    
+
                     atomicState.openByApp = false
                     atomicState.closedByApp = true
                     descriptionText "56FG"
@@ -3494,7 +3509,7 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                 //descriptionText "56TG"
                 atomicState.openByApp = false
                 atomicState.closedByApp = true
-                
+
             }
         }
 
@@ -3543,7 +3558,9 @@ alwaysButNotWhenPowerSaving = $alwaysButNotWhenPowerSaving
             descriptionText "Turning off thermostat"
             if(thermostat.currentValue("thermostatMode") != "off") 
             {
-                thermostat.setThermostatMode("off") 
+                // thermostat.setThermostatMode("off") 
+                set_multiple_thermosats("off", "turnOffthermostat()", null)
+                
             }
         }
     }
@@ -3580,6 +3597,15 @@ def resetUserWants(){
     atomicState.userWantsWarmer = false
     atomicState.userWantsCooler = false
 }
+def set_thermostat(t, mode, origin){
+    try {
+        log.trace "$t set to $mode (origin: $origin)"
+        t.setThermostatMode(mode)
+    }
+    catch (Exception e){
+        log.warn "Object class error for 't' in set_thermostat - item skipped"
+    }
+}
 
 /************************************************DECISIONS******************************************************/
 def getTarget(simpleModeActive){
@@ -3590,9 +3616,9 @@ def getTarget(simpleModeActive){
     if(method == "auto" && !simpleModeActive)
     {
         target = getAutoVal() as int 
-        logtrace "getAutoVal() returned $target"
+            logtrace "getAutoVal() returned $target"
     }
-    else
+    else if(!simpleModeActive)
     {
         //logwarn "dimmer = $dimmer dimmer?.currentValue(level) = ${getDimmerValue()}"
         target = !dimmer ? atomicState.lastThermostatInput.toInteger() : getDimmerValue().toInteger()
@@ -3667,8 +3693,8 @@ problem =$problem
 
     return target
 }
-
 def getNeed(target, simpleModeActive, inside){
+ 
 
     atomicState.userWantsWarmerTimeStamp = atomicState.userWantsWarmerTimeStamp == null ? now() : atomicState.userWantsWarmerTimeStamp
     atomicState.userWantsCoolerTimeStamp = atomicState.userWantsCoolerTimeStamp == null ? now() : atomicState.userWantsCoolerTimeStamp
@@ -3685,24 +3711,24 @@ def getNeed(target, simpleModeActive, inside){
     boolean doorsOverride = doorsManagement ? doorsOverrideMotion : true // must return true by default if none due to "(!doorContactsAreOpen && doorsOverrideMotion)"
     boolean INpwSavingMode = powersavingmode != null && location.mode in powersavingmode  ? true : false //!simpleModeActive && (!doorContactsAreOpen && doorsOverrideMotion)
     boolean isBetween = timeWindowInsteadofModes ? timeOfDayIsBetween(toDateTime(windowsFromTime), toDateTime(windowsToTime), new Date(), location.timeZone) : false
-    
-    logwarn """<div style="background:black;color:white;display:inline-block:position:relative;left:-20%">
-    <br> ---------------------------- 
-    <br> current mode = $location.mode  
-    <br> IN POWER SAVING MODE ? $INpwSavingMode  
-    <br> powersavingmode = $powersavingmode  
-    <br> !simpleModeActive = ${!simpleModeActive}  
-    <br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion 
-    <br> !doorContactsAreOpen = ${!doorContactsAreOpen} 
-    <br> location.mode in powersavingmode = ${location.mode in powersavingmode} 
-    <br> doorsOverrideMotion = $doorsOverrideMotion 
-    <br> atomicState.userWantsWarmerTimeStamp = $atomicState.userWantsWarmerTimeStamp 
-    <br> atomicState.userWantsCoolerTimeStamp = $atomicState.userWantsCoolerTimeStamp 
-    <br> now() - atomicState.userWantsWarmerTimeStamp => ${(now() - atomicState.userWantsWarmerTimeStamp)} >= ${120 * 60 * 1000} ==> ${(now() - atomicState.userWantsWarmerTimeStamp) >= 120 * 60 * 1000} 
-    <br> now() - atomicState.userWantsCoolerTimeStamp => ${(now() - atomicState.userWantsCoolerTimeStamp)} >= ${120 * 60 * 1000} ==> ${(now() - atomicState.userWantsCoolerTimeStamp) >= 120 * 60 * 1000}     
-    <br> current mode = $location.mode 
-    <br> ---------------------------- 
-    </div>
+
+    logwarn """<div style="background:black;color:white;display:inline-block:position:relative;left:-10%; padding-left:20px">
+<br> ---------------------------- 
+<br> current mode = $location.mode  
+<br> IN POWER SAVING MODE ? $INpwSavingMode  
+<br> powersavingmode = $powersavingmode  
+<br> simpleModeActive = ${simpleModeActive}  
+<br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion 
+<br> !doorContactsAreOpen = ${!doorContactsAreOpen} 
+<br> location.mode in powersavingmode = ${location.mode in powersavingmode} 
+<br> doorsOverrideMotion = $doorsOverrideMotion 
+<br> atomicState.userWantsWarmerTimeStamp = $atomicState.userWantsWarmerTimeStamp 
+<br> atomicState.userWantsCoolerTimeStamp = $atomicState.userWantsCoolerTimeStamp 
+<br> now() - atomicState.userWantsWarmerTimeStamp => ${(now() - atomicState.userWantsWarmerTimeStamp)} >= ${120 * 60 * 1000} ==> ${(now() - atomicState.userWantsWarmerTimeStamp) >= 120 * 60 * 1000} 
+<br> now() - atomicState.userWantsCoolerTimeStamp => ${(now() - atomicState.userWantsCoolerTimeStamp)} >= ${120 * 60 * 1000} ==> ${(now() - atomicState.userWantsCoolerTimeStamp) >= 120 * 60 * 1000}     
+<br> current mode = $location.mode 
+<br> ---------------------------- 
+</div>
 """
     boolean withinTimeWindow = timeWindowInsteadofModes ? isBetween : true // no pun intended... :) 
 
@@ -3736,32 +3762,16 @@ def getNeed(target, simpleModeActive, inside){
         atomicState.wasTooHot = false
     }
 
-    boolean needCool = atomicState.userWantsCooler ? true : (swamp ? true : toohot || atomicState.wasTooHot ? true : (
-        !simpleModeActive || simpleModeActive && simpleModeSimplyIgnoresMotion ? 
-        (inWindowsModes ? 
-            outsideTemperature >= outsideThres && inside >= target + swing : 
-                outsideTemperature >= outsideThres && inside >= target + swing || swamp
-                ) :
-                    inside >= target + swing))
 
-    logging """<div style="background:black;color:white;display:inline-block:position:relative;left:-20%">
-    <br>toohot = $toohot 
-    <br>swamp = $swamp
-<br> insideHum = $insideHum
-<br> humidity = $humidity
-<br> inside = $inside
-<br> swing = $swing
-<br> outsideTemperature >= outsideThres + 5 = ${outsideTemperature >= outsideThres + 5}
-<br> outsideTemperature = $outsideTemperature
-<br> outsideThres + 5 = ${outsideThres + 5}
-<br> needCool = $needCool
-<br> thermMode = $thermMode
-<br> simpleModeActive = $simpleModeActive
-<br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
-<br> atomicState.userWantsCooler = $atomicState.userWantsCooler
-</div>
 
-"""
+    boolean needCool = atomicState.userWantsCooler ? true : (swamp ? true : toohot || atomicState.wasTooHot ? true : 
+                                                             (!simpleModeActive || simpleModeActive && simpleModeSimplyIgnoresMotion ? 
+                                                              (inWindowsModes ? 
+                                                               outsideTemperature >= outsideThres && inside >= target + swing : 
+                                                               outsideTemperature >= outsideThres && inside >= target + swing || swamp
+                                                              ) :
+                                                              inside >= target + swing))
+
     boolean needHeat = !simpleModeActive || (simpleModeActive && simpleModeSimplyIgnoresMotion) ? (outsideTemperature < outsideThres || (amplitudeTooHigh && atomicState.lastNeed != "cool")) && inside <= target - swing : inside <= target - swing && outsideTemperature < outsideThres
 
     needHeat = atomicState.userWantsWarmer || inside < target - 4 ? true : needHeat
@@ -3775,7 +3785,7 @@ def getNeed(target, simpleModeActive, inside){
     // the other room could be in an inadequate mode, which would be noticed by an undesirable temperature amplitude
     boolean unacceptable = doorContactsAreOpen && !atomicState.override && (inside < target - 2 || inside > target + 2) // if it gets too cold or too hot, ignore doorsManagement
     logtrace """<div style="background:black;color:white;display:inline-block:position:relative;left:-20%"> 
-    inside = $inside 
+inside = $inside 
 target = $target 
 $inside < ${target - 2} : ${inside < target - 2} 
 $inside > ${target + 2} : ${inside > target + 2}
@@ -3876,7 +3886,7 @@ inside > criticalcold :  ${inside > criticalcold}
             need0 = "Cool"
             need1 = "cool"
 
-            log.debug "****************************** returning need ${need1}"
+            logtrace "****************************** returning need ${need1}"
             return [need0, need1]
 
         }
@@ -3908,18 +3918,19 @@ inside > criticalcold :  ${inside > criticalcold}
 
     }
 
-/****************WINDOWS MANAGEMENT*************************/
+    /****************WINDOWS MANAGEMENT*************************/
 
     windowsControl(target, simpleModeActive, inside, outsideTemperature, humidity, swing, needCool, inWindowsModes, amplitudeTooHigh)
 
     logging"""simpleModeActive = $simpleModeActive
-        doorContactsAreOpen = $doorContactsAreOpen
-        !contactsOverrideSimpleMode = ${!contactsOverrideSimpleMode}
-        simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
-        simpleModeIsActive() = ${simpleModeIsActive()}
-        """
+doorContactsAreOpen = $doorContactsAreOpen
+!contactsOverrideSimpleMode = ${!contactsOverrideSimpleMode}
+simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
+simpleModeIsActive() = ${simpleModeIsActive()}
+"""
 
- /****************WINDOWS MANAGEMENT*************************/
+
+    /****************END OF WINDOWS MANAGEMENT*************************/
 
     if(UseSimpleMode && (simpleModeActive && !doorContactsAreOpen && !contactsOverrideSimpleMode && !simpleModeSimplyIgnoresMotion)) // 
     {
@@ -3936,19 +3947,21 @@ inside > criticalcold :  ${inside > criticalcold}
 
     need = [need0, need1]
 
+
     if(differentiateThermostatsHeatCool)
     {
-        atomicState.keepOffAtAllTimesRun = atomicState.keepOffAtAllTimesRun == null ? 8 * 60 * 1000 : atomicState.keepOffAtAllTimesRun
-        def neededThermostat = need1 == "cool" ? thermostatCool : thermostatHeat
-        if(thermostat.id != neededThermostat.id)
+        append_multiple_thermostats()
+            
+        if(thermostat.id != atomicState.neededThermostats[0].id)
         {
-            logwarn "using $neededThermostat as ${need1 == "cool" ? "cooling unit" : "heating unit"} due to user's requested differenciation"
-            app.updateSetting("thermostat", [type:"capability", value: neededThermostat])
+            logwarn "using ${atomicState.neededThermostats[0]} as ${need1 == "cool" ? "cooling unit" : "heating unit"} due to user's requested differenciation"
+            app.updateSetting("thermostat", [type:"capability", value: atomicState.neededThermostats[0]])
             atomicState.otherThermWasTurnedOff = false // reset this value so as to allow to turn off the other unit now that we swapped them
         }
         def remainsOff = need1 == "cool" ? thermostatHeat : thermostatCool
         if((remainsOff.currentValue("thermostatMode") != "off" || keep2ndThermOffAtAllTimes) && (!atomicState.otherThermWasTurnedOff || keep2ndThermOffAtAllTimes)) 
         {
+            atomicState.keepOffAtAllTimesRun = atomicState.keepOffAtAllTimesRun == null ? 8 * 60 * 1000 : atomicState.keepOffAtAllTimesRun
             if(keep2ndThermOffAtAllTimes && (now() - atomicState.keepOffAtAllTimesRun) > 5 * 60 * 1000) { //prevent sending too many requests when user enabled this fail safe option
                 atomicState.keepOffAtAllTimesRun = now()
                 remainsOff.off()
@@ -3958,10 +3971,26 @@ inside > criticalcold :  ${inside > criticalcold}
             }
             atomicState.otherThermWasTurnedOff = true // allow user to manually turn this unit back on, since we won't use it here until weather changes
         }
+        
     }
+
 
     logging formatText("""<div style="background:darkgray;color:darkblue;display:inline-block:position:relative;left:-20%">
 <br> --------------NEED---------------------
+<br>toohot = $toohot 
+<br>swamp = $swamp
+<br> insideHum = $insideHum
+<br> humidity = $humidity
+<br> inside = $inside
+<br> swing = $swing
+<br> outsideTemperature >= outsideThres + 5 = ${outsideTemperature >= outsideThres + 5}
+<br> outsideTemperature = $outsideTemperature
+<br> outsideThres + 5 = ${outsideThres + 5}
+<br> needCool = $needCool
+<br> thermMode = $thermMode
+<br> simpleModeActive = $simpleModeActive
+<br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
+<br> atomicState.userWantsCooler = $atomicState.userWantsCooler
 <br> inWindowsModes = $inWindowsModes
 <br> power saving management= ${powersavingmode ? "$powersavingmode INpwSavingMode = $INpwSavingMode":"option not selected by user"}
 <br> amplitude = $amplitude
@@ -3997,7 +4026,7 @@ inside > criticalcold :  ${inside > criticalcold}
 </div>
 """, "white", "blue")
 
-    logtrace "current need: ${need1 != "off" ? "${need1}ing" : need1} contacts open? ${contactsAreOpen()} | userWantsCooler ? $atomicState.userWantsCooler | userWantsWarmer ? $atomicState.userWantsWarmer"
+    logtrace "current need: ${need1 != "off" ? "${need1}ing" : need1} contacts open? ${contactsAreOpen()} (${contactsAreOpen() ? "${atomicState.listOfOpenContacts}" : ""})| userWantsCooler ? $atomicState.userWantsCooler | userWantsWarmer ? $atomicState.userWantsWarmer"
 
     if(need1 == "cool" && atomicState.lastNeed == "heat") atomicState.lastTimeCool = now() // keep track of time to avoid oscillations between cool / heat during shoulder season
     if(need1 == "heat" && atomicState.lastNeed == "cool") atomicState.lastTimeHeat = now() // same idea
@@ -4029,10 +4058,51 @@ inside > criticalcold :  ${inside > criticalcold}
     log.trace "need: $need | target: $target | outside: $outsideTemperature | inside: $inside | inside hum: ${getInsideHumidity()} | outside hum ${getOutsideHumidity()} 65fhjk45"
 
     return need
-
 }
 
+def append_multiple_thermostats(){
 
+    atomicState.neededThermostats = []
+    if(useBothThermostatsForHeat || useBothThermostatsForCool){
+        atomicState.neededThermostats.push(thermostatCool)
+        atomicState.neededThermostats.push(thermostatHeat)
+    }
+    else {
+        
+        if(need1 == "cool"){
+            atomicState.neededThermostats.push(thermostatCool)
+            atomicState.neededThermostats.remove(thermostatHeat)
+        } else {
+            atomicState.neededThermostats.push(thermostatHeat)
+            atomicState.neededThermostats.remove(thermostatCool)
+        }
+    }
+}
+def set_multiple_thermosats(mode, origin, safeValue){
+
+    if(differentiateThermostatsHeatCool){
+        append_multiple_thermostats()
+        for(int i = 0; i < atomicState.neededThermostats.size(); i++)
+        {
+            logging "atomicState.neededThermostats[i].displayName => ${atomicState.neededThermostats[i].displayName}"
+            try {
+                set_thermostat(atomicState.neededThermostats[i], mode, origin)
+                if(safeValue) {
+                    atomicState.neededThermostats[i].setHeatingSetpoint(safeValue)
+                }
+            }
+            catch (Exception e) {
+                log.warn "object class instance error for ${atomicState.neededThermostats[i].displayName}"
+            }
+        }
+    }
+    else{
+        set_thermostat(thermostat, mode, origin) // set the thermostat to auto for safety. 
+        if(safeValue){
+            thermostat.setHeatingSetpoint(safeValue)
+        }
+    }
+}
 def getVariationAmplitude(outside, need){
 
     def y = 0 // value to find
@@ -4066,9 +4136,9 @@ def getVariationAmplitude(outside, need){
     y = Math.abs(y)
 
     logging """
-    y = ${Math.abs(y)}
-    x / outside = $outside
-    theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}"""
+y = ${Math.abs(y)}
+x / outside = $outside
+theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}"""
 
     descriptionText "db variation amplitude = ${y}"
 
@@ -4174,11 +4244,16 @@ def getInsideTemp(){
             logwarn "SOME SENSORS FAILED: ${a.join(", ")}"
         }
 
+
         if(sum == 0)
         {
             atomicState.paused = true
-            logwarn "SUM = 0 !!! 5erg4z"
-            thermostat.setThermostatMode("auto") // set the thermostat to auto for safety. 
+            logwarn "SUM = 0 !!! ALL ALTERNATE SENSORS ARE UNRESPONSIVE! Setting thermostat to auto 5erg4z"
+            
+            set_multiple_thermosats("auto", "getInsideTemp all sensors are dead", null)
+            
+            
+
             atomicState.failedSensors = true // force the user to attend the fact that all sensors are irresponsive
             return 0
         }
@@ -4213,6 +4288,9 @@ def getInsideTemp(){
 
     return inside
 }
+
+/************************************************GETTERS******************************************************/
+
 def getOutsideThershold(){
 
     // define the outside temperature as of which heating or cooling are respectively required 
@@ -4301,7 +4379,7 @@ def getLastMotionEvents(Dtime, testType){
     if(testType == "motionTest")logtrace "$events active events collected within the last ${Dtime/1000/60} minutes (eventsSince)"
 
     // eventsSince() can be messy 
-    
+
     if(events < atomicState.activeMotionCount && testType == "motionTest") // whichever the greater takes precedence
     {
         events = atomicState.activeMotionCount
@@ -4355,286 +4433,9 @@ def getFahrenheit(int value){
     descriptionText "${value}F converted to ${F}F"
     return F.toInteger()
 }
-/************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
-
-
-
-Boolean createFile(String fName, String fData) {
-    try {
-        def params = [
-            uri: 'http://127.0.0.1:8080',
-            path: '/hub/fileManager/upload',
-            query: [
-                'folder': '/'
-            ],
-            headers: [
-                'Content-Type': 'multipart/form-data; boundary=----BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh'
-            ],
-            body: """------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
-Content-Disposition: form-data; name=\"uploadFile\"; filename=\"${fName}\"
-Content-Type: text/plain
-
-${fData}
-
-------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
-Content-Disposition: form-data; name=\"folder\"
-
-
-------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh--""",
-            timeout: 300,
-            ignoreSSLIssues: true
-        ]
-        httpPost(params) { resp ->
-            log.info resp.data.status;
-            return resp.data.success;
-        }
-    } catch (e) {
-        log.error "Error creating file $fName: ${e}"
-        return false;
-    }
-}
-
-def call_create_file(){
-    if(app.label.contains("Elfege")){
-        log.debug "This is Elfege's sandbox... "
-            
-        try{
-            String fileName = "myFile2.txt";
-            // Check if the file already exists
-            if (!fileExists(fileName)) {
-                // Create a text file named "myFile.txt" with the initial content "Hello, World!"
-                Boolean result = createFile(fileName, "Hello, World!");
-
-                // Check if the file was successfully created
-                if (result) {
-                    log.info "File successfully created.";
-                } else {
-                    log.error "Failed to create the file.";
-                }
-            } else {
-                log.info "File already exists. No need to create.";
-            }
-        }
-        catch (e) {
-            log.error "Error attempting to create a file: $e";
-        }
-    }
-}
-
-Boolean fileExists(String fName) {
-    def uri = "http://127.0.0.1:8080/local/${fName}"
-    def params = [uri: uri]
-
-    try {
-        httpGet(params) { resp ->
-            return resp.status == 200
-        }
-    } catch (Exception e) {
-        return false
-    }
-}
-
-def readFromFile(fileName) {
-    def host = "localhost"  // or "127.0.0.1"
-    def port = "8080"  
-    def path = "/local/" + fileName
-    def uri = "http://" + host + ":" + port + path
-
-    logtrace "HTTP GET URI ====> $uri"
-
-    def fileData = null
-    
-    try {
-        httpGet(uri) { resp ->
-            logging "HTTP Response Code: ${resp.status}"
-            logging "HTTP Response Headers: ${resp.headers}"
-            if (resp.success) {
-                logging "HTTP GET successful."
-                fileData = resp.data.text
-                // logging "resp.data =================================> \n\n ${resp.data}"
-            } else {
-                log.error "HTTP GET failed. Response code: ${resp.status}"
-            }
-        }
-    } catch (Exception e) {
-        log.error "HTTP GET call failed: ${e.message}"
-    }
-    
-    logging "HTTP GET RESPONSE DATA: ${fileData}"
-    return fileData
-}
-
-Boolean writeToFile(String fileName, String data) {
-    // Create boundary and payload
-    String boundary = "----CustomBoundary"
-    String payloadTop = "--${boundary}\r\nContent-Disposition: form-data; name=\"uploadFile\"; filename=\"${fileName}\"\r\nContent-Type: text/plain\r\n\r\n"
-    String payloadBottom = "\r\n--${boundary}--"
-
-    String fullPayload = "${payloadTop}${data}${payloadBottom}"
-
-    try {
-        def hubAction = new hubitat.device.HubAction(
-            method: "POST",
-            path: "/hub/fileManager/upload",
-            headers: [
-                HOST: "127.0.0.1:8080",
-                'Content-Type': "multipart/form-data; boundary=${boundary}"
-            ],
-            body: fullPayload
-        )
-        
-        // Assuming sendHubCommand is available in your code
-        sendHubCommand(hubAction)
-        
-        logging "HTTP POST was successful."
-        return true
-    } catch (Exception e) {
-        log.error "HTTP POST failed: ${e.message}"
-        return false
-    }
-}
-
-def serializeHashTable(hashTable) {
-    return JsonOutput.toJson(hashTable)
-}
-
-def deserializeHashTable(jsonString) {
-
-    // logtrace "deserializeHashTable ====> $jsonString"
-
-    JsonSlurper jsonSlurper = new JsonSlurper()
-    return jsonSlurper.parseText(jsonString)
-}
-
-// Function to learn from a new setpoint
-def learn(value) {
-    def conditions = getConditions()
-    def dimmerValue = value ? value : getDimmerValue() 
-    
-    // Calculate grid ID (simplified example)
-    def gridID = conditions.join("-")
-    
-    // Read existing hash table
-    def hashTableJson = readFromFile("hash_table.txt")
-
-    logging "hashTableJson ===> $hashTableJson"
-
-    def hashTable = deserializeHashTable(hashTableJson)
-    
-    // Update hash table
-    hashTable[gridID] = dimmerValue
-    
-    // Write updated hash table back to file
-    def newHashTableJson = serializeHashTable(hashTable)
-    writeToFile("hash_table.txt", newHashTableJson)
-}
-
-
-// Reset database function
-def reset_db() {    
-    // Initialize an empty hash table
-    def hashTable = [:]
-    log.warn "DATABASE DROPPED !"
-
-    def indoorTempRange = [65, 70, 75]
-    def outdoorTempRange = [30, 50, 70, 90, 100]
-    def indoorHumidityRange = [20, 40, 60]
-    def outdoorHumidityRange = [20, 50, 80, 100]
-
-    for (indoorTemp in indoorTempRange) {
-        for (outdoorTemp in outdoorTempRange) {
-            for (indoorHumidity in indoorHumidityRange) {
-                for (outdoorHumidity in outdoorHumidityRange) {
-                    def conditions = [indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity]
-                    def conditionsKey = conditions.join('-')
-                    def initialValue = calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity)
-                    hashTable[conditionsKey] = Math.round(initialValue)
-                }
-            }
-        }
-    }
-    def newHashTableJson = serializeHashTable(hashTable)
-    writeToFile("hash_table.txt", newHashTableJson)
-    log.warn("Database has been reset and populated.")
-}
-
-
-// HELPER FUNCTION TO CALCULATE COMFORT SCORE
-def calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity) {
-    // Higher weight to indoor conditions
-    return (0.6 * indoorTemp + 0.2 * indoorHumidity + 0.1 * outdoorTemp + 0.1 * outdoorHumidity) / 4
-}
-
-
-// Function to calculate the Wet-Bulb temperature as the default setpoint
-def defaultSetpoint(insideTemp=null, insideHum=null, dimmerPref=null) {
-    // Fetch the current indoor temperature, humidity, and other factors
-    def currentInsideTemp = getInsideTemp()
-    def currentInsideHumidity = getInsideHumidity()
-    
-    // Define personal preference (0 for neutral, positive for warmer, negative for cooler)
-    def personalPreference = 0
-
-    dimmerPreference = getDimmerValue()
-    // Calculate the PMV (Predicted Mean Vote) using environmental parameters
-    def pmv = calculatePMV(currentInsideTemp, currentInsideHumidity,dimmerPreference)
-
-    // Adjust the personal preference based on PMV
-    if (pmv > 0) {
-        personalPreference += 1 // Slightly warmer
-    } else if (pmv < 0) {
-        personalPreference -= 1 // Slightly cooler
-    }
-
-    // Calculate the ideal room temperature based on the adjusted personal preference
-    def idealTemperature = currentInsideTemp + personalPreference
-
-    // Ensure the ideal temperature is within a reasonable range
-    idealTemperature = Math.max(65, Math.min(78, idealTemperature))
-
-    return idealTemperature
-}
-
-// Function to calculate PMV based on temperature, humidity, and dimmer preference
-def calculatePMV(temperature, humidity, dimmerPreference) {
-    // Here, you can implement a simplified PMV calculation
-    // using the ASHRAE Standard 55 or ISO 7730 guidelines.
-    // This calculation can be more complex and depends on
-    // factors like clothing insulation, metabolic rate, etc.
-    
-    // For simplicity, we'll return a constant value for now.
-    
-    // Calculate a comfort score based on temperature and humidity.
-    // Adjust the formula based on your specific comfort model.
-    def comfortScore = temperature - (humidity / 2)
-
-    // Adjust the comfort score based on the user's dimmer preference.
-    comfortScore += dimmerPreference / 10 // Adjust as needed
-
-    // Map the comfort score to a PMV value (-2 to 2 for simplicity).
-    def pmv = mapComfortScoreToPMV(comfortScore)
-
-    return pmv
-}
-
-// Function to map a comfort score to a PMV value (simplified)
-def mapComfortScoreToPMV(comfortScore) {
-    // Map the comfort score to a PMV value (-2 to 2).
-    // You can fine-tune this mapping based on your comfort model.
-    if (comfortScore < -2) {
-        return -2
-    } else if (comfortScore > 2) {
-        return 2
-    } else {
-        return comfortScore
-    }
-}
-
 def getDimmerValue(){
     return dimmer?.currentValue("level")
 }
-
-
 // Function to get current conditions (for demonstration purposes)
 def getConditions() {
     // Replace with actual logic to get current conditions
@@ -4644,7 +4445,6 @@ def getConditions() {
     def outsideHumidity = Math.round(getOutsideHumidity()) // Round humidity values
     return [inside as int, outside as int, insideHumidity as int, outsideHumidity as int]
 }
-
 def getAutoVal() {
     // Get current conditions and round temperature values to integers
     def outside = Math.round(getOutsideTemp())
@@ -4688,7 +4488,7 @@ def getAutoVal() {
         // Write updated hash table back to your HTTP server
         def newHashTableJson = serializeHashTable(hashTable)  // Helper function to serialize hash table to JSON string
         writeToFile("hash_table.txt", newHashTableJson)
-        
+
 
         learnedTarget = hashTable[conditionsKey]  // Modified to use the newly read hashTable
 
@@ -4713,9 +4513,6 @@ def getAutoVal() {
         return level
     }
 }
-
-
-
 def getOutsideTemp(){
     return outsideTemp.currentValue("temperature")
 }
@@ -4723,38 +4520,291 @@ def getOutsideHumidity(){
     return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
 }
 
+/************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
 
+Boolean createFile(String fName, String fData) {
+    try {
+        def params = [
+            uri: 'http://127.0.0.1:8080',
+            path: '/hub/fileManager/upload',
+            query: [
+                'folder': '/'
+            ],
+            headers: [
+                'Content-Type': 'multipart/form-data; boundary=----BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh'
+            ],
+            body: """------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
+Content-Disposition: form-data; name=\"uploadFile\"; filename=\"${fName}\"
+Content-Type: text/plain
+
+${fData}
+
+------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
+Content-Disposition: form-data; name=\"folder\"
+
+
+------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh--""",
+            timeout: 300,
+            ignoreSSLIssues: true
+        ]
+        httpPost(params) { resp ->
+            log.info resp.data.status;
+            return resp.data.success;
+        }
+    } catch (e) {
+        log.error "Error creating file $fName: ${e}"
+        return false;
+    }
+}
+def call_create_file(){
+    if(app.label.contains("Elfege")){
+        logging "This is Elfege's sandbox... "
+
+        try{
+            String fileName = "myFile2.txt";
+            // Check if the file already exists
+            if (!fileExists(fileName)) {
+                // Create a text file named "myFile.txt" with the initial content "Hello, World!"
+                Boolean result = createFile(fileName, "Hello, World!");
+
+                // Check if the file was successfully created
+                if (result) {
+                    log.info "File successfully created.";
+                } else {
+                    log.error "Failed to create the file.";
+                }
+            } else {
+                log.info "File already exists. No need to create.";
+            }
+        }
+        catch (e) {
+            log.error "Error attempting to create a file: $e";
+        }
+    }
+}
+Boolean fileExists(String fName) {
+    def uri = "http://127.0.0.1:8080/local/${fName}"
+    def params = [uri: uri]
+
+    try {
+        httpGet(params) { resp ->
+            return resp.status == 200
+        }
+    } catch (Exception e) {
+        return false
+    }
+}
+def readFromFile(fileName) {
+    def host = "localhost"  // or "127.0.0.1"
+    def port = "8080"  
+    def path = "/local/" + fileName
+    def uri = "http://" + host + ":" + port + path
+
+    logtrace "HTTP GET URI ====> $uri"
+
+    def fileData = null
+
+    try {
+        httpGet(uri) { resp ->
+            logging "HTTP Response Code: ${resp.status}"
+            logging "HTTP Response Headers: ${resp.headers}"
+            if (resp.success) {
+                logging "HTTP GET successful."
+                fileData = resp.data.text
+                // logging "resp.data =================================> \n\n ${resp.data}"
+            } else {
+                log.error "HTTP GET failed. Response code: ${resp.status}"
+            }
+        }
+    } catch (Exception e) {
+        log.error "HTTP GET call failed: ${e.message}"
+    }
+
+    logging "HTTP GET RESPONSE DATA: ${fileData}"
+    return fileData
+}
+Boolean writeToFile(String fileName, String data) {
+    // Create boundary and payload
+    String boundary = "----CustomBoundary"
+    String payloadTop = "--${boundary}\r\nContent-Disposition: form-data; name=\"uploadFile\"; filename=\"${fileName}\"\r\nContent-Type: text/plain\r\n\r\n"
+    String payloadBottom = "\r\n--${boundary}--"
+
+    String fullPayload = "${payloadTop}${data}${payloadBottom}"
+
+    try {
+        def hubAction = new hubitat.device.HubAction(
+            method: "POST",
+            path: "/hub/fileManager/upload",
+            headers: [
+                HOST: "127.0.0.1:8080",
+                'Content-Type': "multipart/form-data; boundary=${boundary}"
+            ],
+            body: fullPayload
+        )
+
+        sendHubCommand(hubAction)
+
+        logging "HTTP POST was successful."
+        return true
+    } catch (Exception e) {
+        log.error "HTTP POST failed: ${e.message}"
+        return false
+    }
+}
+def serializeHashTable(hashTable) {
+    return JsonOutput.toJson(hashTable)
+}
+def deserializeHashTable(jsonString) {
+
+    // logtrace "deserializeHashTable ====> $jsonString"
+
+    JsonSlurper jsonSlurper = new JsonSlurper()
+    return jsonSlurper.parseText(jsonString)
+}
+// Function to learn from a new setpoint
+def learn(value) {
+    def conditions = getConditions()
+    def dimmerValue = value ? value : getDimmerValue() 
+
+    // Calculate grid ID (simplified example)
+    def gridID = conditions.join("-")
+
+    // Read existing hash table
+    def hashTableJson = readFromFile("hash_table.txt")
+
+    logging "hashTableJson ===> $hashTableJson"
+
+    def hashTable = deserializeHashTable(hashTableJson)
+
+    // Update hash table
+    hashTable[gridID] = dimmerValue
+
+    // Write updated hash table back to file
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+}
+// Reset database function
+def reset_db() {    
+    // Initialize an empty hash table
+    def hashTable = [:]
+    log.warn "DATABASE DROPPED !"
+
+    def indoorTempRange = [65, 70, 75]
+    def outdoorTempRange = [30, 50, 70, 90, 100]
+    def indoorHumidityRange = [20, 40, 60]
+    def outdoorHumidityRange = [20, 50, 80, 100]
+
+    for (indoorTemp in indoorTempRange) {
+        for (outdoorTemp in outdoorTempRange) {
+            for (indoorHumidity in indoorHumidityRange) {
+                for (outdoorHumidity in outdoorHumidityRange) {
+                    def conditions = [indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity]
+                    def conditionsKey = conditions.join('-')
+                    def initialValue = calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity)
+                    hashTable[conditionsKey] = Math.round(initialValue)
+                }
+            }
+        }
+    }
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+    log.warn("Database has been reset and populated.")
+}
+// HELPER FUNCTION TO CALCULATE COMFORT SCORE
+def calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity) {
+    // Higher weight to indoor conditions
+    return (0.6 * indoorTemp + 0.2 * indoorHumidity + 0.1 * outdoorTemp + 0.1 * outdoorHumidity) / 4
+}
+// Function to calculate the Wet-Bulb temperature as the default setpoint
+def defaultSetpoint(insideTemp=null, insideHum=null, dimmerPref=null) {
+    // Fetch the current indoor temperature, humidity, and other factors
+    def currentInsideTemp = getInsideTemp()
+    def currentInsideHumidity = getInsideHumidity()
+
+    // Define personal preference (0 for neutral, positive for warmer, negative for cooler)
+    def personalPreference = 0
+
+    dimmerPreference = getDimmerValue()
+    // Calculate the PMV (Predicted Mean Vote) using environmental parameters
+    def pmv = calculatePMV(currentInsideTemp, currentInsideHumidity,dimmerPreference)
+
+    // Adjust the personal preference based on PMV
+    if (pmv > 0) {
+        personalPreference += 1 // Slightly warmer
+    } else if (pmv < 0) {
+        personalPreference -= 1 // Slightly cooler
+    }
+
+    // Calculate the ideal room temperature based on the adjusted personal preference
+    def idealTemperature = currentInsideTemp + personalPreference
+
+    // Ensure the ideal temperature is within a reasonable range
+    idealTemperature = Math.max(65, Math.min(78, idealTemperature))
+
+    return idealTemperature
+}
+// Function to calculate PMV based on temperature, humidity, and dimmer preference
+def calculatePMV(temperature, humidity, dimmerPreference) {
+    // Here, you can implement a simplified PMV calculation
+    // using the ASHRAE Standard 55 or ISO 7730 guidelines.
+    // This calculation can be more complex and depends on
+    // factors like clothing insulation, metabolic rate, etc.
+
+    // For simplicity, we'll return a constant value for now.
+
+    // Calculate a comfort score based on temperature and humidity.
+    // Adjust the formula based on your specific comfort model.
+    def comfortScore = temperature - (humidity / 2)
+
+    // Adjust the comfort score based on the user's dimmer preference.
+    comfortScore += dimmerPreference / 10 // Adjust as needed
+
+    // Map the comfort score to a PMV value (-2 to 2 for simplicity).
+    def pmv = mapComfortScoreToPMV(comfortScore)
+
+    return pmv
+}
+// Function to map a comfort score to a PMV value (simplified)
+def mapComfortScoreToPMV(comfortScore) {
+    // Map the comfort score to a PMV value (-2 to 2).
+    // You can fine-tune this mapping based on your comfort model.
+    if (comfortScore < -2) {
+        return -2
+    } else if (comfortScore > 2) {
+        return 2
+    } else {
+        return comfortScore
+    }
+}
 def convert_db_to_celsius() {
 
     if (atomicState.currentUnit == "fahrenheit"){
         // Read existing hash table from HTTP server
         def hashTableJson = readFromFile("hash_table.txt")
         def hashTable = deserializeHashTable(hashTableJson)
-        
+
         // Convert each dimmer value to Celsius
         try{
-                hashTable.collectEntries { key, value ->
+            hashTable.collectEntries { key, value ->
                 [(key): (value - 32) * 5 / 9]
             }
         }
         catch(e){
             log.warn"hastable not computable at the moment... "
         }
-        
-        // Serialize and write the updated hash table back to your HTTP server
+
+        // Serialize and write the updated hash table back to the HTTP server
         def newHashTableJson = serializeHashTable(hashTable)
         writeToFile("hash_table.txt", newHashTableJson)
 
         atomicState.currentUnit = "celsius"
-        
+
         log.warn("Database has been converted to Celsius.")
     }
     else {
-      log.warn "database already in celcius"  
+        log.warn "database already in celcius"  
     }
 }
-
-
 def convert_db_to_fahrenheit() {
 
     if (atomicState.currentUnit == "celcius"){
@@ -4762,22 +4812,22 @@ def convert_db_to_fahrenheit() {
         // Read existing hash table from HTTP server
         def hashTableJson = readFromFile("hash_table.txt")
         def hashTable = deserializeHashTable(hashTableJson)
-        
+
         // Convert each dimmer value to Fahrenheit
         hashTable.collectEntries { key, value ->
             [(key): (value * 9 / 5) + 32]
         }
-        
-        // Serialize and write the updated hash table back to your HTTP server
+
+        // Serialize and write the updated hash table back to the HTTP server
         def newHashTableJson = serializeHashTable(hashTable)
         writeToFile("hash_table.txt", newHashTableJson)
-        
+
         log.warn("Database has been converted to Fahrenheit.")
 
         atomicState.currentUnit = "celsius"
     }
     else {
-    log.warn "database already in fahrenheit"  
+        log.warn "database already in fahrenheit"  
     }    
 }
 
@@ -4788,6 +4838,9 @@ boolean contactsAreOpen(){
         def listOfOpenContacts = []
         listOfOpenContacts = WindowsContact?.findAll{it.currentValue("contact") == "open"}
         atomicState.listOfOpenContacts = listOfOpenContacts.join(", ")
+        if (atomicState.listOfOpenContacts.size() > 0){
+            log.trace "Contacts are open: ${listOfOpenContacts}"
+        }
         return Open
     }
     else
@@ -4901,7 +4954,7 @@ boolean Active(){
         // logging "now() - atomicState.lastMotionEvent > 1000 => ${(now() - atomicState.lastMotionEvent) > 1000}"
         if((now() - atomicState.lastMotionEvent) > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
         {
-            
+
             atomicState.activeMotionCount = 0 // time is up, reset this variable
             // logging "atomicState.activeMotionCount set to $atomicState.activeMotionCount"
             //events = 0
@@ -4968,13 +5021,13 @@ def stop(data){
             windows[i]."${cmd}"()
             logwarn "${windows[i]} $customCommand"
         }
-        
+
     }
 
 }
 
 def Poll(){
-    
+
     if(location.mode in restricted){
         descriptionText "location in restricted mode, doing nothing"
         return
@@ -5082,7 +5135,7 @@ def pollPowerMeters(){
 }
 def logging(message){
     check_logs_timer()
-    if(enabledebug) log.debug message 
+    if(enabledebug) logging message 
 }
 def logtrace(message){
     check_logs_timer()
@@ -5120,19 +5173,19 @@ def check_logs_timer(){
         atomicState.enableDescriptionTime = atomicState.enableDescriptionTime == null ? now() : atomicState.enableDescriptionTime
         atomicState.EnableWarningTime = atomicState.EnableWarningTime == null ? now() : atomicState.EnableWarningTime
         atomicState.EnableTraceTime = atomicState.EnableTraceTime == null ? now() : atomicState.EnableTraceTime
-        
+
         atomicState.lastlog = atomicState.lastlog ? atomicState.lastlog : now()
         show = false // change this value for debugging. 
-        
-        if((now() - atomicState.lastlog) >= 3000 && show){
-        atomicState.lastlog = now()
-        log.debug """
-        ----------------------------------------
-        <br>end debug ? ${(now() - atomicState.EnableDebugTime) >=  30 * 30 * 1000}
-        <br>end descr ? ${(now() - atomicState.enableDescriptionTime) >=  30 * 30 * 1000}
-        <br>end warn ? ${(now() - atomicState.EnableWarningTime) >=  30 * 30 * 1000}
 
-        """
+        if((now() - atomicState.lastlog) >= 3000 && show){
+            atomicState.lastlog = now()
+            logging """
+----------------------------------------
+<br>end debug ? ${(now() - atomicState.EnableDebugTime) >=  30 * 30 * 1000}
+<br>end descr ? ${(now() - atomicState.enableDescriptionTime) >=  30 * 30 * 1000}
+<br>end warn ? ${(now() - atomicState.EnableWarningTime) >=  30 * 30 * 1000}
+
+"""
         }
 
         if((now() - atomicState.EnableDebugTime) >= 30 * 60 * 1000 && enabledebug) disablelogging()

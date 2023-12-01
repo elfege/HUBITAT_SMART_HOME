@@ -668,12 +668,12 @@ def testTrueSwitches(){
         try {
             
             // Check if there's been reported activity in the last X minutes
-            def X = 25 * 60 * 1000
+            def X = 4 * 60 * 60 * 1000
             def lastActivity = device.eventsSince(new Date(now() - X)).size() 
             logging "${device}'s lastActivity => $lastActivity"
 
 // lastActivity = 0 // TEST
-
+            
             if (lastActivity == 0) {
                 log.warn formatText("${device.displayName} has not reported any activity for more than ${X / 60 / 1000} minutes and might be unresponsive.", "blue", "yellow")
                 lastActivityCount += 1
@@ -681,7 +681,7 @@ def testTrueSwitches(){
 
 // lastActivityCount = 10 // TEST
 
-                if(lastActivityCount >= trueSwitches.size()) {
+                if(lastActivityCount >= repeatswitch) {
                     def hub = location.hubs[0]
                     def unformatedMessage = "Z-wave mesh down. Rebooting $hub.name"
                     notification?.deviceNotification(unformatedMessage)

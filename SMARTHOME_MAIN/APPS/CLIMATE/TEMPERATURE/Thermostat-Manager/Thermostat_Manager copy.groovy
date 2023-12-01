@@ -1,4 +1,6 @@
 import java.text.SimpleDateFormat
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 
 definition(
     name: "Thermostat Manager",
@@ -48,7 +50,15 @@ def MainPage() {
             //label title: "Assign a name",description:"$atomicState.appLabel", required: false, submitOnChange:true // can't use this because it shows html font tags
             input "appLabel", "text", title: "Assign a name to this instance of $app.name", submitOnChange:true
             app.updateLabel(appLabel)
-            input "celsius", "bool", title: "Celsius"
+            input "celsius", "bool", title: "Celsius (untested! Please send feedback)", submitOnChange:true
+            paragraph "It's nearly impossible to test the efficacy of this feature in an environment where all devices work in Fahrenheit. Please, if you get to test it, send feedback through Hubitat Community threads"
+            if(celsius)
+            {
+                convert_db_to_celsius()
+            }
+            else {
+                if(atomicState.currentUnit == "celsius") convert_db_to_fahrenheit() // will run only if db was already converted to celsius, F being default. 
+            }
         }
         section()
         {
@@ -95,7 +105,6 @@ def MainPage() {
             input "logwarndebug", "bool", title: "Warning logs", submitOnChange:true
             input "description", "bool", title: "Description Text", submitOnChange:true
 
-            
             atomicState.EnableDebugTime = now()
             atomicState.enableDescriptionTime = now()
             atomicState.EnableWarningTime = now()
@@ -132,13 +141,17 @@ def thermostats(){
             } 
 
             input "differentiateThermostatsHeatCool", "bool", title: "Use 2 different thermostats: 1 for cooling, 1 for heating", submitOnChange:true, defaultValue:false
+            input "useBothThermostatsForHeat", "bool", title: "Use both when in heat mode", submitOnChange:true, defaultValue:false
+            input "useBothThermostatsForCool", "bool", title: "Use both when in cool mode", submitOnChange:true, defaultValue:false
             if(differentiateThermostatsHeatCool)
             {
                 input "thermostatHeat", "capability.thermostat", title: "Select a thermostat used exclusively for heating", required:true
                 input"thermostatCool", "capability.thermostat", title: "Select a thermostat used exclusively for cooling", required: true
                 input "keep2ndThermOffAtAllTimes", "bool", title: "Keep the unused thermostat off at all times (if enabled, you can't use this thermostat for any other purpose, it'll be shut down within a minute after you turn it on when not in use by this app", defaultValue:True
             }
-
+            if(useBothThermostatsForCool || useBothThermostatsForHeat){
+                app.updateSetting("keep2ndThermOffAtAllTimes", [type: "bool", value:false])
+            }
 
             // verify not only capability, but also actual reading, some thermostats working with generic drivers
             // will return true to some capabilities while the hardware won't parse any value
@@ -163,7 +176,6 @@ def thermostats(){
             }
 
         }    
-
 
         section("Sensors")
         {
@@ -216,7 +228,26 @@ def methods(){
             input "method", "enum", title:"select the method you want $app.name to use to adjust your thermostats cooling and heating set points", options:["normal","auto"],submitOnChange:true
             if(method == "auto")
             {
+                atomicState.confirmed = atomicState.confirmed == null ? true : atomicState.confirmed
                 paragraph formatText("auto method: the app sets your target temperature based on several learning functions by taking humidity levels and outside temperature into consideration", "black", "white")
+                input "RESET", "button", title: "RESET", submitOnChange:true
+                if(atomicState.confirmed == "no"){ 
+                    paragraph """<div style='
+                    z-index: 9999;
+                    padding: 20px;
+                    border-radius: 10px; 
+                    font-size:25px; 
+                    color:white; 
+                    background: rgba(0, 0, 0, 0.5); 
+                    position:relative; 
+                    margin:auto;
+                    '>
+                    Are you sure? You will lose everything your app has learned over time!</div>"""
+                    input "reset_confirmed", "button", title: "YES", submitOnChange:true
+                    input "no_reset", "button", title: "NO", submitOnChange:true                    
+                }
+                input "useDryBulbEquation", "bool", title: "Use the Predicted Mean Vote (PMV): algorithm that optimizes temperature based on humidity)"
+                
             }
             else 
             {
@@ -224,13 +255,13 @@ def methods(){
             }
             if(method == "auto")
             {    
-                atomicState.converted = atomicState.converted ? atomicState.converted : false
+                atomicState.currentUnit = atomicState.currentUnit ? atomicState.currentUnit : false
                 if(maxAutoHeat != "null" && minAutoHeat != "null" && minAutoCool != "null" && maxAutoCool != "null")
                 {   
                     input "convertToCelsius", "bool", title: "Convert all these values to Celsius (if you forgot to select this option on the main page)", submitOnChange:true
-                    if(convertToCelsius && !atomicState.converted)
+                    if(convertToCelsius && !atomicState.currentUnit)
                     {
-                        atomicState.converted = true
+                        atomicState.currentUnit = true
                         atomicState.maxAutoHeatRestore = maxAutoHeat // backup to prevent loop down conversions
                         atomicState.minAutoHeatRestore = minAutoHeat
                         atomicState.minAutoCoolRestore = minAutoCool
@@ -242,10 +273,12 @@ def methods(){
                         app.updateSetting("minAutoHeat", [type:"number",value:getCelsius(minAutoHeat.toInteger())])
                         app.updateSetting("minAutoCool", [type:"number",value:getCelsius(minAutoCool.toInteger())])
                         app.updateSetting("maxAutoCool", [type:"number",value:getCelsius(maxAutoCool.toInteger())])
+
+                        convert_db_to_celsius()
                     }
-                    else if(!convertToCelsius && atomicState.converted)
+                    else if(!convertToCelsius && atomicState.currentUnit)
                     {
-                        atomicState.converted = false
+                        atomicState.currentUnit = false
                         descriptionText """restoring values: 
 
 atomicState.maxAutoHeatRestore = $atomicState.maxAutoHeatRestore
@@ -258,12 +291,12 @@ atomicState.maxAutoCoolRestore = $atomicState.maxAutoCoolRestore
                         app.updateSetting("minAutoCool", [type:"number",value:atomicState.minAutoCoolRestore])
                         app.updateSetting("maxAutoCool", [type:"number",value:atomicState.maxAutoCoolRestore]) 
                     }
-                    else if(convertToCelsius && atomicState.converted)
+                    else if(convertToCelsius && atomicState.currentUnit)
                     {
                         descriptionText "already converted, doing nothing"   
                     }
 
-                    descriptionText "atomicState.converted = $atomicState.converted"
+                    descriptionText "atomicState.currentUnit = $atomicState.currentUnit"
                 }
                 input "maxAutoHeat", "number", title: "Highest heating set point", defaultValue:celsius?getCelsius(78):78, submitOnChange:true
                 input "minAutoHeat", "number", title: "Lowest heating set point", defaultValue:celsius?getCelsius(70):70, submitOnChange:true
@@ -272,7 +305,12 @@ atomicState.maxAutoCoolRestore = $atomicState.maxAutoCoolRestore
 
             }
 
-            input "dimmer", "capability.switchLevel", title: "Optional but HIGHLY recommended: Use a dimmer as a mean for this app to learn from your input", required: false, submitOnChange:true
+            boolean dimmerRequired = false 
+            if(!useDryBulbEquation)
+            {
+                dimmerRequired = true
+            }
+            input "dimmer", "capability.switchLevel", title: "${dimmerRequired ? 'Select' : 'Use'} a dimmer as a mean for this app to learn from your input", required: dimmerRequired, submitOnChange:true
         }
         section(){
             if(sensor)
@@ -314,7 +352,6 @@ def contactsensors(){
             {
                 input "openDelay", "number", title: "After how long?", description: "Time in seconds", required:true
             }
-
 
             input "doorsManagement", "bool", title: "When some doors are open, synchronise $thermostat with a thermostat from another room", defaultValue:false, submitOnChange:true
             if(doorsManagement)
@@ -371,7 +408,6 @@ def powersaving(){
         }
         section(formatText("Motion Management", "white", "blue")){
             input "motionSensors", "capability.motionSensor", title: "Save power when there's no motion", required: false, multiple: true, submitOnChange:true
-
 
             if(motionSensors)
             {
@@ -481,7 +517,6 @@ def comfortSettings(){
                         input "setSpecialTemp", "bool", title: "Keep room at a preset temperature when $nightModeButton is pressed", submitOnChange:true, defaultValue:false
                         input "specialSubstraction", "bool", title: "Lower the current set point instead?", submitOnChange:true
 
-
                         if(setSpecialTemp)
                         {
                             app.updateSetting("specialSubstraction",[type:"bool", value:false]) // foolproofing
@@ -579,9 +614,6 @@ def windowsManagement(){
                             </span>
                         </div>
                         """
-
-
-                
 
                     paragraph text
                     input "resetWindowsOverrideWithLocationModeChange", "bool", title: "Cancel manual override with location mode events: the app always regains control of your windows when the mode changes", defaultValue: true
@@ -867,7 +899,6 @@ def virtualThermostat(){
                 def m = heater && altThermostat ? "Turn on $heater and set $altThermostat to heat $only" : heater ? "Turn on $heater $only" : altThermostat ? "Set $altThermostat to heat $only" : "error"
                 input "addLowTemp", "bool", title: m, submitOnChange:true
 
-
                 if(heatpump || addLowTemp)
                 {
                     input "lowtemp", "number", title: "low outside temperature threshold", required: true, defaultValue: 30
@@ -914,7 +945,6 @@ def virtualThermostat(){
                     }
                 }
             }
-
 
             input "cooler", "capability.switch", title: "Select a switch to control an alternate cooler", required: false, submitOnChange:true, multiple: false
             if(cooler)
@@ -1033,7 +1063,11 @@ def operationConsistency(){
 }
 def pageNameUpdate(){
     closeBoolQuestions()
-    def pauseVar = atomicState.failedSensors ? "FAILED SENSORS" : "paused"
+
+    def failedSensorsList = atomicState.disabledSensors ? atomicState.disabledSensors.join(", ") : "None"
+    def pauseVar = atomicState.disabledSensors && !atomicState.disabledSensors.isEmpty() ? "FAILED SENSORS: ${failedSensorsList}" : "paused"
+
+    // def pauseVar = atomicState.failedSensors ? "FAILED SENSORS" : "paused"
     def batteryVar = "LOW BATTERY"
     def previousLabel = app.label // save current label
 
@@ -1135,7 +1169,6 @@ def initialize(){
     runIn(1800,disabledescription)
     runIn(1800,disablewarnings)
     runIn(1800, disabletrace)
-    
 
     updateAllHeatSourcesBooleans()
 
@@ -1219,7 +1252,6 @@ def initialize(){
         subscribe(altThermostat, "thermostatMode", thermostatModeHandler)
     }
 
-
     subscribe(location, "mode", modeChangeHandler)
 
     if(windows && controlWindows)
@@ -1265,32 +1297,30 @@ def initialize(){
         schedule("0 0/5 * * * ?", pollPowerMeters)
     }
 
-    /* UNCOMMENT, RUN THE UPDATED(), THEN COMMENT OUT AGAIN TO RESET THE LEARNING BASE *****/
-    //atomicState.db = null
-    /*******************************************************************************/
-    if(atomicState.db == null)
-    {
-        logwarn "DB RESET !"
-        atomicState.db = ['-40':113,'-30':103,'-20':93,'-10':83,'0':73,'10':63,'15':58,'20':53,'25':48,'30':43,'35':38,'40':33,'45':28,'50':23,'55':18,'60':13,'65':8,'70':3,'75':0,'80':-5,'85':-9,'90':-12,'95':-17,'100':-21,'105':-26,'110':-30,'115':-35,'120':-40,'125':-45,'130':-50]
-    }
-
     if(celsius)
     {
-        def db = [:]
-        atomicState.db.eachWithIndex { 
-            key, val, index ->
-            db += ["${getCelsius(key.toInteger())}":val]
-        }
-        log.debub "DB CELSIUS = $db"
-        atomicState.db = db
+        convert_db_to_celsius() // can run only once or after converted back to F
     }
+    else {
+        convert_db_to_fahrenheit() // will run only if was converted to celsius before
+    }
+
+    
+    def hashTableJson = readFromFile("hash_table.txt")
+    if (hashTableJson == null || hashTableJson.isEmpty()) {
+        reset_db()
+        log.warn("Hash table file was empty. Database has been reset and populated.")
+    }
+    
 
     schedule("0 0/1 * * * ?", mainloop)
 
-
     descriptionText "END OF INITIALIZATION"
-
+    
 }
+
+
+
 
 /************************************************EVT HANDLERS***************************************************/
 def modeChangeHandler(evt){
@@ -1337,7 +1367,6 @@ def modeChangeHandler(evt){
         }
     }
 
-
     //mainloop()
 }
 def appButtonHandler(btn) {
@@ -1370,7 +1399,17 @@ def appButtonHandler(btn) {
         Poll()
         pollPowerMeters()
         break
-
+        case "RESET":
+        atomicState.confirmed = "no"
+        break
+        case "reset_confirmed":
+        atomicState.confirmed = "yes" 
+        log.debug "**********************************RESETING DATABASE*****************************"
+        reset_db()
+        break
+        case "no_reset": 
+        atomicState.confirmed = "na"
+        break 
     }
 }
 def contactHandler(evt){
@@ -1449,7 +1488,7 @@ def dimmerHandler(evt){
             return
         } 
 
-        descriptionText "new dimmer level is $evt.value method = $method && setpointSentByApp = $atomicState.setpointSentByApp"
+        log.debug "new dimmer level is $evt.value method = $method && setpointSentByApp = $atomicState.setpointSentByApp"
 
         // learning from user's input for the auto method
         learn(evt.value) // will also respond to thermostat inputs because it is ran before testing if it's set by the app or not
@@ -1462,6 +1501,8 @@ def dimmerHandler(evt){
         {
             userWants(evt.value.toInteger(), getInsideTemp())
         }
+
+       
 
         atomicState.setpointSentByApp = false // always reset this variable after calling it
 
@@ -1484,7 +1525,6 @@ def setPointHandler(evt){
             int i = 0
             int s = thermostatB.size()
 
-
             logging """
 thermostat = $evt.device
 evt.value = $evt.value
@@ -1495,7 +1535,6 @@ KEEP FOR FUTURE REFERENCE!
 thermostatB current set point: ${thermostatB[0].currentValue(evt.name)} = $evt.value
 true? ${thermostatB[0].currentValue(evt.name) == evt.value.toInteger()}
 any found with same current value: ${thermostatB?.any{it -> it.currentValue(evt.name) == evt.value.toInteger()}} 
-
 
 """
             if("$evt.device" == "$thermostat")
@@ -1530,7 +1569,7 @@ any found with same current value: ${thermostatB?.any{it -> it.currentValue(evt.
 
             userWants(evt.value.toInteger(), inside)
 
-            def currDim = !dimmer ? atomicState.lastThermostatInput : dimmer?.currentValue("level")
+            def currDim = !dimmer ? atomicState.lastThermostatInput : getDimmerValue()
             def thermMode = thermostat?.currentValue("thermostatMode")
 
             // this will be true only if thermostat is heating or cooling; therefore, dimmer won't be adjusted if off 
@@ -1550,12 +1589,10 @@ evt.value = $evt.value
             boolean simpleModeActive = simpleModeIsActive()
             def target = getTarget(simpleModeActive)
 
-
             atomicState.inside = atomicState.inside != null ? atomicState.inside : inside
             def needData = getNeed(target, simpleModeActive, inside)
             def need = needData[1]
             def cmd = "set"+"${needData[0]}"+"ingSetpoint" // "Cool" or "Heat" with a capital letter
-
 
             // make sure the therm event is same as current need
             // as to not apply a value from a differentiated thermostat mode (heat set to 75 will modify coolingSP and then trigger an event)
@@ -1584,7 +1621,7 @@ evt.value = $currDim"""
             }
             if(currDim == evt.value)
             {
-                descriptionText "${dimmer ? "dimmer" : "atomicState.lastThermostatInput"} value ok (${dimmer ? '${dimmer?.currentValue("level")}' : "atomicState.lastThermostatInput"} = ${evt.value}"
+                descriptionText "${dimmer ? "dimmer" : "atomicState.lastThermostatInput"} value ok (${dimmer ? '${getDimmerValue()}' : "atomicState.lastThermostatInput"} = ${evt.value}"
             }
         }
         else
@@ -1617,7 +1654,6 @@ def pushableButtonHandler(evt){
             if(!ignoreTarget && !simpleModeSimplyIgnoresMotion) thermostat.off() // always set it to off in order to reset values in this case (idiosyncratic of my setup, feel free to comment out this line)
 
             atomicState.buttonPushed = !atomicState.buttonPushed 
-
 
             atomicState.simpleModeOverrideResetDone = atomicState.buttonPushed ? false : true
     
@@ -1746,13 +1782,19 @@ def windowsHandler(evt){
 
 /************************************************MAIN OPERATIONS*************************************************/
 
+
+
+
+
+
 def mainloop(source){
 
+//    call_create_file() //works. Next step: implement custom file for each instance. 
+    
+
+
+
     descriptionText "mainloop called by $source"
-
-    
-
-    
 
     atomicState.lastThermostatInput = atomicState.lastThermostatInput ? atomicState.lastThermostatInput : thermostat.currentValue("thermostatSetpoint")
     if(!atomicState.paused)
@@ -1766,8 +1808,6 @@ def mainloop(source){
         {
             app.updateSetting("offrequiredbyuser",[type:"bool", value:false]) 
         }
-
-
 
         //atomicState.override = true // -> uncomment to test this function
         if(atomicState.override){
@@ -1851,11 +1891,10 @@ def mainloop(source){
         logging("need is needData[1] = $need")
         def cmd = "set"+"${needData[0]}"+"ingSetpoint" // "Cool" or "Heat" with a capital letter
 
-
         /********************** ANTI FREEZE SAFETY TESTS *************************/
         // first make sure dimmer is within safe parameters. Accidental modifications with Alexa or Siri can make it problematic...         
         // def Crit = criticalcold ? criticalcold : 65
-        // if(dimmer?.currentValue("level") <= Crit - 1 && !simpleModeActive)
+        // if(getDimmerValue() <= Crit - 1 && !simpleModeActive)
         // {
         //     def safeVal = criticalcold && criticalhot ? (criticalcold + criticalhot) / 2 : 72
         //     safeVal = safeVal < 70 ? 70 : safeVal >=73 ? 72 : safeVal
@@ -2041,8 +2080,6 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
 
             /********************** END OF ANTIFREEZE TESTS *************************/
 
-
-
             /********************** VERIFY HEATPUMP AND POWER USAGE CONDITIONS (HEATER OR COOLER)*************************/
             boolean tooMuchPower = false
             if(controlPowerConsumption && atomicState.lastNeed == "heat" && pw && heater) // heater only
@@ -2105,12 +2142,12 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 boolean timeIsUp = timeElapsedSinceLastResend > atomicState.threshold
                 boolean timeIsUpOff = atomicState.timeElapsedSinceLastOff > atomicState.threshold
                 def pwVal = pw.currentValue("power")
+                logtrace "${pw}'s current power consumption is $pwVal"
+
                 boolean pwLow = pwVal < 100 // below 100 watts we assume there's no AC compression nor resistor heat currently at work
                 boolean timeToRefreshMeters = need == "off" ? atomicState.timeElapsedSinceLastOff > 10000 && !pwLow : timeElapsedSinceLastResend > 10000 && pwLow
                 logging("time since last Resend Attempt = ${timeElapsedSinceLastResend/1000} seconds & atomicState.threshold = ${atomicState.threshold/1000}sec")
                 logging("time since last OFF Attempt = ${atomicState.timeElapsedSinceLastOff/1000} seconds & atomicState.threshold = ${30}sec")
-
-                
 
                 logging """
 <br>timeToRefreshMeters = ${timeToRefreshMeters}
@@ -2134,7 +2171,7 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 // timeIsUp = true
                 if(!ignoreMode && timeIsUp && pwLow && (need != "off" || !offrequiredbyuser))
                 {
-                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency in power value</div>"
+                    log.warn "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency between power measurement (${pwVal}Watts) and current need ($need)</div>"
                     atomicState.resendAttempt = now() 
                     atomicState.setpointSentByApp = true
                     runIn(3, resetSetByThisApp)
@@ -2155,10 +2192,6 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                         {
                             thermostat."${cmd}"(target) // resend cmd
                         }
-                        
-                        
-
-
                     }
                     else
                     {
@@ -2232,7 +2265,6 @@ thermostat.currentValue("thermostatFanMode") = ${thermostat.currentValue("thermo
                 }
             }
 
-
             /****************END OF HEAT PUMP AND POWER MANAGEMENT FUNCTIONS *************************/
 
             /****************FAN CIRCULATION MANAGEMENT*************************/
@@ -2265,7 +2297,6 @@ location.mode in silenceMode
                 descriptionText "$fanDimmer running at ${fanDimmer.currentValue("level")}%"
             }
             /****************END OF FAN CIRCULATION MANAGEMENT*************************/
-
 
             /****************CONSISTENCY TESTS AND EMERGENCY HEAT/COLD DUE TO A POSSIBLE BADLY LOCATED THERMOSTAT*************************/
 
@@ -2384,7 +2415,6 @@ notSet = $notSet
                     if(notSet)
                     {
 
-
                         logtrace "setting $thermostat to $need"
 
                         if(heatpumpConditionsTrue && need != "off")
@@ -2437,12 +2467,10 @@ notSet = $notSet
             forceCommand = !forceCommand && !OperatingStateOk ? true : forceCommand // OperatingStateOk supercedes all other conditions
             forceCommand = contactClosed && !doorContactsAreOpen ? forceCommand : false // don't use this method when contacts are open, even door contacts
 
-
             // if forececommand true and need is not off make sure we're not under heat pump cold conditions 
             forceCommand = forceCommand && (need != "off" || !offrequiredbyuser) ? !heatpumpConditionsTrue : forceCommand // if need = off then apply forcecommand functions to make sure to turn it off
 
             //logwarn "ignoreTherMode = $ignoreTherMode"
-
 
             if(!atomicState.setPointOverride && (thermMode != need || forceCommand || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10)) && contactClosed)
             {
@@ -2463,7 +2491,6 @@ thermMode = $thermMode
 need = $need
 thermMode != need = ${thermMode != need}
 """
-
 
                 if((need != "off" || !offrequiredbyuser) || forceCommand || (need == "off" && (sensor || offrequiredbyuser)))
                 {                
@@ -2488,7 +2515,6 @@ thermMode != need = ${thermMode != need}
 5. ${thermostat.currentValue("thermostatFanMode")}
 
 """
-
 
                             if((thermMode != need || (dontcheckthermstate && atomicState.dontcheckthermstateCount < 10) || thermostat.currentValue("thermostatFanMode") != "auto") && need == "off" && offrequiredbyuser)
                             {
@@ -2563,7 +2589,6 @@ thermMode != need = ${thermMode != need}
                                     }
                                 }
                             }
-
 
                         }
 
@@ -2707,7 +2732,6 @@ need = $need
 
 def checkEfficiency(coolerNotEfficientEnough, boost, thermMode){
 
-
     logging """
 coolerNotEfficientEnough = $coolerNotEfficientEnough
 boost = $boost
@@ -2750,7 +2774,6 @@ def flashTheLight(){
     lightSignal.on()
     pauseExecution(500)
 
-
     logging("${lightSignal.getCapabilities()}") //weirdly required otherwise platform doesn't read colorControl capability... pb raised on the forums, never resolved by Hubitat's staff, for some reason. 
     boolean colorControlCap = lightSignal?.hasCapability("ColorControl")
     descriptionText "colorControlCap = $colorControlCap"
@@ -2781,8 +2804,6 @@ def flashTheLight(){
     pauseExecution(500)
     lightSignal.on()
     pauseExecution(500)
-
-
 
     if(nightModeColor && colorControlCap && setPreviousColor) 
     {
@@ -2987,7 +3008,6 @@ def virtualThermostat(need, target){
             logwarn "$thermostat and $heater use too much power at the same time. Turning $heater off since $thermostat takesh precedence"
         }
 
-
         if(need == "heat" && atomicState.lastNeed == "heat")
         {
             if(lowLimitReached || useAllHeatSources || inAllHeatSourcesMode || altHeatExclusiveMode)
@@ -3092,7 +3112,6 @@ def virtualThermostat(need, target){
 
         logtrace "coolerCurVal = ${coolerCurVal} ${powerCapable ? "powerValue = $powerValue" : ""} powerDiscrepancy = $powerDiscrepancy"
 
-
         if(need == "cool"){
             if(coolerCurVal != "on" || powerDiscrepancy)
             {
@@ -3126,7 +3145,6 @@ def virtualThermostat(need, target){
         
     }
 
-    
 }
 def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidity, swing, needCool, inWindowsModes, amplitudeTooHigh){
 
@@ -3169,7 +3187,6 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         boolean someAreOpen = contactCapable ? (windows.findAll{it?.currentValue("contact") == "open"}?.size() > 0) : (windows.findAll{it?.currentValue("switch") == "on"}?.size() > 0)
         boolean withinRange = outsideTemperature < outsidetempwindowsH && outsideTemperature > outsidetempwindowsL // strict temp value
 
-        
         boolean outsideWithinRange = withinRange && !tooHumid // same as withinRange but with humidity
 
         atomicState.lastOpeningTime = atomicState.lastOpeningTime != null ? atomicState.lastOpeningTime : now() // make sure value is not null
@@ -3230,8 +3247,6 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         <br>atomicState.otherWindowsOpenByApp = $atomicState.otherWindowsOpenByApp
         <br>synchronize = $synchronize
         """
-
-        
 
         if((INpwSavingMode || !Active()) && outsideWithinRange)
         {
@@ -3361,7 +3376,6 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
                             logtrace "openMore && atomicState.openByApp ===> ${openMore && atomicState.openByApp}"
                         }
 
-                        
                         need0 = "off"
                         need1 = "off"
                         atomicState.lastContactOpenEvt = atomicState.lastContactOpenEvt ? atomicState.lastContactOpenEvt : now()
@@ -3504,7 +3518,6 @@ def windowsControl(target, simpleModeActive, inside, outsideTemperature, humidit
         descriptionText "Override mode because $thermostat is set to 'auto'"
     }
 
-
 }
 def turnOffThermostat(){
     logtrace """turnOffThermostat()
@@ -3581,15 +3594,15 @@ def getTarget(simpleModeActive){
     int target = 74 // default value
     def inside = getInsideTemp()
 
-    if(method == "auto")
+    if(method == "auto" && !simpleModeActive)
     {
-        target = getAutoVal()
+        target = getAutoVal() as int 
         logtrace "getAutoVal() returned $target"
     }
-    else
+    else if(!simpleModeActive)
     {
-        //logwarn "dimmer = $dimmer dimmer?.currentValue(level) = ${dimmer?.currentValue("level")}"
-        target = !dimmer ? atomicState.lastThermostatInput.toInteger() : dimmer?.currentValue("level").toInteger()
+        //logwarn "dimmer = $dimmer dimmer?.currentValue(level) = ${getDimmerValue()}"
+        target = !dimmer ? atomicState.lastThermostatInput.toInteger() : getDimmerValue().toInteger()
     }
 
     // safety checkup for when alexa misinterpret a command to a light dimmer and applies it to the dimmer used by this app
@@ -3605,7 +3618,7 @@ minAutoCool = $minAutoCool
 maxHi = $maxHi
 minLow = $minLow
 atomicState.lastThermostatInput = $atomicState.lastThermostatInput 
-dimmer value = ${dimmer?.currentValue("level")}
+dimmer value = ${getDimmerValue()}
 heatingSetpoint = ${thermostat.currentValue("heatingSetpoint")}
 coolingSetpoint = ${thermostat.currentValue("coolingSetpoint")}
 boolean problem = $target >= $maxHi ? ${target >= maxHi} : $target <= $minLow ? ${target <= minLow} : false
@@ -3631,12 +3644,11 @@ problem =$problem
 """
     if(problem)
     {
-        logwarn "${thermostat}'s values are as inconsistent as ${dimmer ? "${dimmer}'s" : "the previous'"}, meaning data retrieval failed. Applying safe values instead until next user's input"
+        log.warn "${thermostat}'s values are as inconsistent as ${dimmer ? "${dimmer}'s" : "the previous'"}, meaning data retrieval failed. Applying safe values instead until next user's input"
         target = celsius ? getCelsius(74) : 74 // safe value
 
     }
-    logtrace "simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion ****** target = $target************ dimmerLevel = ${dimmer?.currentValue("level")}"
-
+    logtrace "simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion ****** target = $target************ dimmerLevel = ${getDimmerValue()}"
 
     if(simpleModeActive && !simpleModeSimplyIgnoresMotion)
     {
@@ -3681,12 +3693,12 @@ def getNeed(target, simpleModeActive, inside){
     boolean INpwSavingMode = powersavingmode != null && location.mode in powersavingmode  ? true : false //!simpleModeActive && (!doorContactsAreOpen && doorsOverrideMotion)
     boolean isBetween = timeWindowInsteadofModes ? timeOfDayIsBetween(toDateTime(windowsFromTime), toDateTime(windowsToTime), new Date(), location.timeZone) : false
     
-    logwarn """<div style="background:black;color:white;display:inline-block:position:relative;left:-20%">
+    logwarn """<div style="background:black;color:white;display:inline-block:position:relative;left:-10%; padding-left:20px">
     <br> ---------------------------- 
     <br> current mode = $location.mode  
     <br> IN POWER SAVING MODE ? $INpwSavingMode  
     <br> powersavingmode = $powersavingmode  
-    <br> !simpleModeActive = ${!simpleModeActive}  
+    <br> simpleModeActive = ${simpleModeActive}  
     <br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion 
     <br> !doorContactsAreOpen = ${!doorContactsAreOpen} 
     <br> location.mode in powersavingmode = ${location.mode in powersavingmode} 
@@ -3705,7 +3717,7 @@ def getNeed(target, simpleModeActive, inside){
     boolean contactClosed = !contactsAreOpen()  
 
     def outsideThres = getOutsideThershold()
-    def outsideTemperature = outsideTemp.currentValue("temperature")
+    def outsideTemperature = getOutsideTemp()
     def need0 = ""
     def need1 = ""
     def need = []
@@ -3731,34 +3743,16 @@ def getNeed(target, simpleModeActive, inside){
         atomicState.wasTooHot = false
     }
 
-    boolean needCool = atomicState.userWantsCooler ? true : (swamp ? true : toohot || atomicState.wasTooHot ? true : (
-        !simpleModeActive || simpleModeActive && simpleModeSimplyIgnoresMotion ? 
+
+
+    boolean needCool = atomicState.userWantsCooler ? true : (swamp ? true : toohot || atomicState.wasTooHot ? true : 
+    (!simpleModeActive || simpleModeActive && simpleModeSimplyIgnoresMotion ? 
         (inWindowsModes ? 
             outsideTemperature >= outsideThres && inside >= target + swing : 
                 outsideTemperature >= outsideThres && inside >= target + swing || swamp
                 ) :
                     inside >= target + swing))
 
-    
-
-    logtrace """<div style="background:black;color:white;display:inline-block:position:relative;left:-20%">
-    <br>toohot = $toohot 
-    <br>swamp = $swamp
-<br> insideHum = $insideHum
-<br> humidity = $humidity
-<br> inside = $inside
-<br> swing = $swing
-<br> outsideTemperature >= outsideThres + 5 = ${outsideTemperature >= outsideThres + 5}
-<br> outsideTemperature = $outsideTemperature
-<br> outsideThres + 5 = ${outsideThres + 5}
-<br> needCool = $needCool
-<br> thermMode = $thermMode
-<br> simpleModeActive = $simpleModeActive
-<br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
-<br> atomicState.userWantsCooler = $atomicState.userWantsCooler
-</div>
-
-"""
     boolean needHeat = !simpleModeActive || (simpleModeActive && simpleModeSimplyIgnoresMotion) ? (outsideTemperature < outsideThres || (amplitudeTooHigh && atomicState.lastNeed != "cool")) && inside <= target - swing : inside <= target - swing && outsideTemperature < outsideThres
 
     needHeat = atomicState.userWantsWarmer || inside < target - 4 ? true : needHeat
@@ -3892,7 +3886,6 @@ inside > criticalcold :  ${inside > criticalcold}
             if(okToTurnOff()) turnOffThermostat()
         }
 
-
         message = formatText("POWER SAVING MODE ($cause)", "white", "#90ee90")   
 
         def fanCmd = keepFanOnInNoMotionMode && !motionActive ? "on" : "off" // only when motion is not active, otherwise it'll also turn on when windows are open
@@ -3906,13 +3899,9 @@ inside > criticalcold :  ${inside > criticalcold}
 
     }
 
-    
 /****************WINDOWS MANAGEMENT*************************/
-       
-            
+
     windowsControl(target, simpleModeActive, inside, outsideTemperature, humidity, swing, needCool, inWindowsModes, amplitudeTooHigh)
-    
-    
 
     logging"""simpleModeActive = $simpleModeActive
         doorContactsAreOpen = $doorContactsAreOpen
@@ -3920,9 +3909,9 @@ inside > criticalcold :  ${inside > criticalcold}
         simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
         simpleModeIsActive() = ${simpleModeIsActive()}
         """
+        
 
  /****************WINDOWS MANAGEMENT*************************/
-
 
     if(UseSimpleMode && (simpleModeActive && !doorContactsAreOpen && !contactsOverrideSimpleMode && !simpleModeSimplyIgnoresMotion)) // 
     {
@@ -3965,6 +3954,20 @@ inside > criticalcold :  ${inside > criticalcold}
 
     logging formatText("""<div style="background:darkgray;color:darkblue;display:inline-block:position:relative;left:-20%">
 <br> --------------NEED---------------------
+<br>toohot = $toohot 
+<br>swamp = $swamp
+<br> insideHum = $insideHum
+<br> humidity = $humidity
+<br> inside = $inside
+<br> swing = $swing
+<br> outsideTemperature >= outsideThres + 5 = ${outsideTemperature >= outsideThres + 5}
+<br> outsideTemperature = $outsideTemperature
+<br> outsideThres + 5 = ${outsideThres + 5}
+<br> needCool = $needCool
+<br> thermMode = $thermMode
+<br> simpleModeActive = $simpleModeActive
+<br> simpleModeSimplyIgnoresMotion = $simpleModeSimplyIgnoresMotion
+<br> atomicState.userWantsCooler = $atomicState.userWantsCooler
 <br> inWindowsModes = $inWindowsModes
 <br> power saving management= ${powersavingmode ? "$powersavingmode INpwSavingMode = $INpwSavingMode":"option not selected by user"}
 <br> amplitude = $amplitude
@@ -4000,12 +4003,10 @@ inside > criticalcold :  ${inside > criticalcold}
 </div>
 """, "white", "blue")
 
-    logtrace "current need: ${need1 != "off" ? "${need1}ing" : need1} contacts open? ${contactsAreOpen()} | userWantsCooler ? $atomicState.userWantsCooler | userWantsWarmer ? $atomicState.userWantsWarmer"
-
+    logtrace "current need: ${need1 != "off" ? "${need1}ing" : need1} contacts open? ${contactsAreOpen()} (${contactsAreOpen() ? "${atomicState.listOfOpenContacts}" : ""})| userWantsCooler ? $atomicState.userWantsCooler | userWantsWarmer ? $atomicState.userWantsWarmer"
 
     if(need1 == "cool" && atomicState.lastNeed == "heat") atomicState.lastTimeCool = now() // keep track of time to avoid oscillations between cool / heat during shoulder season
     if(need1 == "heat" && atomicState.lastNeed == "cool") atomicState.lastTimeHeat = now() // same idea
-
 
     if(need1 == "heat" && atomicState.userWantsWarmer) 
     {
@@ -4030,82 +4031,14 @@ inside > criticalcold :  ${inside > criticalcold}
 
     need = [need0, need1]
 
-    
-    
-
     descriptionText "atomicState.lastNeed = $atomicState.lastNeed"
-    log.trace "need: $need | target: $target | outside: $outsideTemperature | inside: $inside 65fhjk45"
-
-    
+    log.trace "need: $need | target: $target | outside: $outsideTemperature | inside: $inside | inside hum: ${getInsideHumidity()} | outside hum ${getOutsideHumidity()} 65fhjk45"
 
     return need
 
-
 }
-def getAutoVal(){
 
-    def outside = outsideTemp?.currentValue("temperature") 
-    def need = outside >= getOutsideThershold() ? "cool" : "heat"
-    def result = celsius ? getCelsius(73):73 // just a temporary default value  
-    def defaultV = result
-    //def humidity = outsideTemp?.currentValue("humidity") // outside humidity
-    def humidity = getInsideHumidity() // in auto mode we evaluate based only on inside humidity
-    humidity = humidity != null ? humidity : 50 // assume 50 as a temporary value to prevent errors when a sensor has just been installed by user and humidity value has yet to be parsed
 
-    def humThres = getHumidityThreshold() // linear equation: hum thres varies with outside temp
-
-    def variation = getVariationAmplitude(outside, need)
-
-    logging "variation amplitude = $variation | absolute need (auto method, not from getNeed()) is $need outside: $outside "
-
-    result = need == "cool" ? humidity >= humThres ? outside - (variation + 1) : outside - variation : need == "heat" ? humidity >= humThres ? outside + variation + 1 : outside + variation : "ERROR"
-
-    //result = need == "cool" ? outside - Math.abs(variation) : need == "heat" ? outside + Math.abs(variation) : "ERROR"
-
-    //log.error "result = $result"
-
-    if(result == "ERROR") { 
-        log.error """ERROR at getAutoVal()
-need = $need
-atomicState.lastNeed = $atomicState.lastNeed
-humidity inside = $humidity 
-humThres = $humThres
-outside = $outside
-"""     
-        return defaultV
-    }
-
-    logging """need = $need
-atomicState.lastNeed = $atomicState.lastNeed
-humidity inside = $humidity 
-insideHum = $insideHum
-humThres = $humThres
-outside = $outside"""
-
-    def hiCool = celsius ? getCelsius(77) : 77
-    def loCool = celsius ? getCelsius(70) : 70
-    def hiHeat = celsius ? getCelsius(75) : 75
-    def loHeat = celsius ? getCelsius(70) : 70
-    def maxAH = maxAutoHeat != null ? maxAutoHeat : hiHeat
-    def minAC = minAutoCool != null ? minAutoCool : loCool
-    def minAH = minAutoHeat != null ? minAutoHeat : loHeat
-    def maxAC = maxAutoCool != null ? maxAutoCool : hiCool
-
-    logging """
-maxAH = $maxAH
-minAC = $minAC
-minAH = $minAH
-maxAC = $maxAC
-"""
-
-    result = result > maxAH && need == "heat" ? maxAH : result // in this scope need is always either "cool" or "heat", never "off" so these conditions won't be ignored
-    result = result < minAC && need == "cool" ? minAC : result
-    result = result < minAH && need == "heat" ? minAH : result
-    result = result > maxAC && need == "cool" ? maxAC : result
-
-    descriptionText "target temperature (auto) in this room is: $result (${humidity > humThres ? "humid condition true" : "humid condition false"}(${humidity}%) | outside temp: $outside) "
-    return result
-}
 def getVariationAmplitude(outside, need){
 
     def y = 0 // value to find
@@ -4114,8 +4047,7 @@ def getVariationAmplitude(outside, need){
 
     y = 314.734*Math.log(16.2364-0.018708*x)-839.624 // 
 
-
-    logtrace "atomicState.db //= ${atomicState.db.sort{it.value.toInteger()}}"
+    logtrace "atomicState.db //= ${atomicState.db}"
 
     // we want to find the temperature value (key) that is the closest to current temperature. For that, we find the minimum difference between current temp and list of temps
     def differences = []
@@ -4123,10 +4055,13 @@ def getVariationAmplitude(outside, need){
 
     atomicState.db.eachWithIndex { 
         key, val, index ->
-        def diff = Math.abs(x - key.toInteger()).toInteger()
+        def parts = key.split("-")
+        def outsideTempFromKey = parts[1].toInteger() // Assuming the 2nd part is the outside temperature
+        def diff = Math.abs(x - outsideTempFromKey).toInteger()
         differences += diff
         childMap."$diff" = key // remember the key in a separate map
     }
+
     def minD = differences.min() // closest temperature in db to current temperature
     //descriptionText "childMap = $childMap"
     def keySearch = childMap."$minD"
@@ -4137,14 +4072,11 @@ def getVariationAmplitude(outside, need){
     y = Math.abs(y)
 
     logging """
-y = ${Math.abs(y)}
-x / outside = $outside
-theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}
+    y = ${Math.abs(y)}
+    x / outside = $outside
+    theoretical target temperature (before humidity adjustments) = ${outside - y.toInteger()}"""
 
-"""
     descriptionText "db variation amplitude = ${y}"
-
-
 
     return y
 
@@ -4189,10 +4121,10 @@ def getInsideTemp(){
             def device = sensor[i]
             def val = device?.currentValue("temperature")
 
-            logging "--${device}'s temperature is: $val"
+            logging "--${device} returns temperature: $val device id: ${device.id}"
             if(val == null){
                 s -= 1
-                log.warn "${device} did not return any temperature: ${val}"
+                log.warn "${device} did not return any temperature: ${val} device id: ${device.id}"
                 continue                
             } 
             sum += val
@@ -4285,10 +4217,6 @@ def getInsideTemp(){
 
     logtrace "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${sensor.join(", ")} ${sensor.collect{it.currentValue("temperature")}.join("°F, ")}°F" : inside}"
 
-
-
-
-   
     return inside
 }
 def getOutsideThershold(){
@@ -4297,7 +4225,6 @@ def getOutsideThershold(){
     // modulated with outside humidity 
 
     def outsideTemperature = outsideTemp?.currentValue("temperature")
-
 
     return getHumidityThreshold()
 }
@@ -4354,14 +4281,12 @@ If this message still shows within an hour, check your thermostat configuration.
     def hi = celsius ? getCelsius(72):72 // not ok to run the heat if temp ouside is above 72
     def result = y > hi ? hi : (y < lo ? lo : y) // max and min //  
 
-
     descriptionText "humidity threshold (cool/heat decision or/and windows decision) is ${y != result ? "$result (corrected from y=$y)" : "$result"} (humidity being ${humidity < 40 ? "low at ${humidity}%" : "high at ${humidity}%"})"
 
     return result
 }
 def getLastMotionEvents(Dtime, testType){
 
-    
     int events = 0
 
     /******************************IF ANY ACTIVE, THEN NO NEED FOR COLLECTION***********************************************/
@@ -4373,7 +4298,6 @@ def getLastMotionEvents(Dtime, testType){
         if(testType == "motionTest") descriptionText "$atomicState.activeMotionCount active events in the last ${Dtime/1000/60} minutes (currently active)"
         return events // so we must return a number equal or greater than 1
     }
-
 
     /******************************COLLECTION  O(n)!!!**********************************************************/
     collection = motionSensors.collect{it.eventsSince(new Date(now() - Dtime)).findAll{it.value == "active"}}.flatten()
@@ -4437,26 +4361,428 @@ def getFahrenheit(int value){
     descriptionText "${value}F converted to ${F}F"
     return F.toInteger()
 }
-/************************************************A.I. LEARNING (beta) ******************************************************/
-def learn(val){
-    def outside = outsideTemp.currentValue("temperature")
-    def amplitude = outside.toInteger() - val.toInteger()
-    logwarn "atomicState.lastNeed = $atomicState.lastNeed"
+/************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
 
-    if(!atomicState.setpointSentByApp)
-    {
-        descriptionText "LEARNING $outside : $amplitude => new target: ${atomicState.lastNeed == "cool" ? outside - amplitude : atomicState.lastNeed == "heat" ? outside + Math.abs(amplitude) : null} "
+Boolean createFile(String fName, String fData) {
+    try {
+        def params = [
+            uri: 'http://127.0.0.1:8080',
+            path: '/hub/fileManager/upload',
+            query: [
+                'folder': '/'
+            ],
+            headers: [
+                'Content-Type': 'multipart/form-data; boundary=----BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh'
+            ],
+            body: """------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
+Content-Disposition: form-data; name=\"uploadFile\"; filename=\"${fName}\"
+Content-Type: text/plain
 
-        def db = atomicState.db
-        db."${outside}" = amplitude
+${fData}
 
-        atomicState.db = db
-        descriptionText "Updated map : $atomicState.db"
+------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh
+Content-Disposition: form-data; name=\"folder\"
+
+
+------BoundaryStringKDJfkhsdkhfzuUUUenfunrghedkh--""",
+            timeout: 300,
+            ignoreSSLIssues: true
+        ]
+        httpPost(params) { resp ->
+            log.info resp.data.status;
+            return resp.data.success;
+        }
+    } catch (e) {
+        log.error "Error creating file $fName: ${e}"
+        return false;
     }
-    else
-    {
-        logging "not learning from this entry ($val) because it doesn't seem to be coming from a user's input"
+}
+
+def call_create_file(){
+    if(app.label.contains("Elfege")){
+        log.debug "This is Elfege's sandbox... "
+            
+        try{
+            String fileName = "myFile2.txt";
+            // Check if the file already exists
+            if (!fileExists(fileName)) {
+                // Create a text file named "myFile.txt" with the initial content "Hello, World!"
+                Boolean result = createFile(fileName, "Hello, World!");
+
+                // Check if the file was successfully created
+                if (result) {
+                    log.info "File successfully created.";
+                } else {
+                    log.error "Failed to create the file.";
+                }
+            } else {
+                log.info "File already exists. No need to create.";
+            }
+        }
+        catch (e) {
+            log.error "Error attempting to create a file: $e";
+        }
     }
+}
+
+Boolean fileExists(String fName) {
+    def uri = "http://127.0.0.1:8080/local/${fName}"
+    def params = [uri: uri]
+
+    try {
+        httpGet(params) { resp ->
+            return resp.status == 200
+        }
+    } catch (Exception e) {
+        return false
+    }
+}
+
+def readFromFile(fileName) {
+    def host = "localhost"  // or "127.0.0.1"
+    def port = "8080"  
+    def path = "/local/" + fileName
+    def uri = "http://" + host + ":" + port + path
+
+    logtrace "HTTP GET URI ====> $uri"
+
+    def fileData = null
+    
+    try {
+        httpGet(uri) { resp ->
+            logging "HTTP Response Code: ${resp.status}"
+            logging "HTTP Response Headers: ${resp.headers}"
+            if (resp.success) {
+                logging "HTTP GET successful."
+                fileData = resp.data.text
+                // logging "resp.data =================================> \n\n ${resp.data}"
+            } else {
+                log.error "HTTP GET failed. Response code: ${resp.status}"
+            }
+        }
+    } catch (Exception e) {
+        log.error "HTTP GET call failed: ${e.message}"
+    }
+    
+    logging "HTTP GET RESPONSE DATA: ${fileData}"
+    return fileData
+}
+
+Boolean writeToFile(String fileName, String data) {
+    // Create boundary and payload
+    String boundary = "----CustomBoundary"
+    String payloadTop = "--${boundary}\r\nContent-Disposition: form-data; name=\"uploadFile\"; filename=\"${fileName}\"\r\nContent-Type: text/plain\r\n\r\n"
+    String payloadBottom = "\r\n--${boundary}--"
+
+    String fullPayload = "${payloadTop}${data}${payloadBottom}"
+
+    try {
+        def hubAction = new hubitat.device.HubAction(
+            method: "POST",
+            path: "/hub/fileManager/upload",
+            headers: [
+                HOST: "127.0.0.1:8080",
+                'Content-Type': "multipart/form-data; boundary=${boundary}"
+            ],
+            body: fullPayload
+        )
+        
+        // Assuming sendHubCommand is available in your code
+        sendHubCommand(hubAction)
+        
+        logging "HTTP POST was successful."
+        return true
+    } catch (Exception e) {
+        log.error "HTTP POST failed: ${e.message}"
+        return false
+    }
+}
+
+def serializeHashTable(hashTable) {
+    return JsonOutput.toJson(hashTable)
+}
+
+def deserializeHashTable(jsonString) {
+
+    // logtrace "deserializeHashTable ====> $jsonString"
+
+    JsonSlurper jsonSlurper = new JsonSlurper()
+    return jsonSlurper.parseText(jsonString)
+}
+
+// Function to learn from a new setpoint
+def learn(value) {
+    def conditions = getConditions()
+    def dimmerValue = value ? value : getDimmerValue() 
+    
+    // Calculate grid ID (simplified example)
+    def gridID = conditions.join("-")
+    
+    // Read existing hash table
+    def hashTableJson = readFromFile("hash_table.txt")
+
+    logging "hashTableJson ===> $hashTableJson"
+
+    def hashTable = deserializeHashTable(hashTableJson)
+    
+    // Update hash table
+    hashTable[gridID] = dimmerValue
+    
+    // Write updated hash table back to file
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+}
+
+
+// Reset database function
+def reset_db() {    
+    // Initialize an empty hash table
+    def hashTable = [:]
+    log.warn "DATABASE DROPPED !"
+
+    def indoorTempRange = [65, 70, 75]
+    def outdoorTempRange = [30, 50, 70, 90, 100]
+    def indoorHumidityRange = [20, 40, 60]
+    def outdoorHumidityRange = [20, 50, 80, 100]
+
+    for (indoorTemp in indoorTempRange) {
+        for (outdoorTemp in outdoorTempRange) {
+            for (indoorHumidity in indoorHumidityRange) {
+                for (outdoorHumidity in outdoorHumidityRange) {
+                    def conditions = [indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity]
+                    def conditionsKey = conditions.join('-')
+                    def initialValue = calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity)
+                    hashTable[conditionsKey] = Math.round(initialValue)
+                }
+            }
+        }
+    }
+    def newHashTableJson = serializeHashTable(hashTable)
+    writeToFile("hash_table.txt", newHashTableJson)
+    log.warn("Database has been reset and populated.")
+}
+
+
+// HELPER FUNCTION TO CALCULATE COMFORT SCORE
+def calculateComfortScore(indoorTemp, outdoorTemp, indoorHumidity, outdoorHumidity) {
+    // Higher weight to indoor conditions
+    return (0.6 * indoorTemp + 0.2 * indoorHumidity + 0.1 * outdoorTemp + 0.1 * outdoorHumidity) / 4
+}
+
+
+// Function to calculate the Wet-Bulb temperature as the default setpoint
+def defaultSetpoint(insideTemp=null, insideHum=null, dimmerPref=null) {
+    // Fetch the current indoor temperature, humidity, and other factors
+    def currentInsideTemp = getInsideTemp()
+    def currentInsideHumidity = getInsideHumidity()
+    
+    // Define personal preference (0 for neutral, positive for warmer, negative for cooler)
+    def personalPreference = 0
+
+    dimmerPreference = getDimmerValue()
+    // Calculate the PMV (Predicted Mean Vote) using environmental parameters
+    def pmv = calculatePMV(currentInsideTemp, currentInsideHumidity,dimmerPreference)
+
+    // Adjust the personal preference based on PMV
+    if (pmv > 0) {
+        personalPreference += 1 // Slightly warmer
+    } else if (pmv < 0) {
+        personalPreference -= 1 // Slightly cooler
+    }
+
+    // Calculate the ideal room temperature based on the adjusted personal preference
+    def idealTemperature = currentInsideTemp + personalPreference
+
+    // Ensure the ideal temperature is within a reasonable range
+    idealTemperature = Math.max(65, Math.min(78, idealTemperature))
+
+    return idealTemperature
+}
+
+// Function to calculate PMV based on temperature, humidity, and dimmer preference
+def calculatePMV(temperature, humidity, dimmerPreference) {
+    // Here, you can implement a simplified PMV calculation
+    // using the ASHRAE Standard 55 or ISO 7730 guidelines.
+    // This calculation can be more complex and depends on
+    // factors like clothing insulation, metabolic rate, etc.
+    
+    // For simplicity, we'll return a constant value for now.
+    
+    // Calculate a comfort score based on temperature and humidity.
+    // Adjust the formula based on your specific comfort model.
+    def comfortScore = temperature - (humidity / 2)
+
+    // Adjust the comfort score based on the user's dimmer preference.
+    comfortScore += dimmerPreference / 10 // Adjust as needed
+
+    // Map the comfort score to a PMV value (-2 to 2 for simplicity).
+    def pmv = mapComfortScoreToPMV(comfortScore)
+
+    return pmv
+}
+
+// Function to map a comfort score to a PMV value (simplified)
+def mapComfortScoreToPMV(comfortScore) {
+    // Map the comfort score to a PMV value (-2 to 2).
+    // You can fine-tune this mapping based on your comfort model.
+    if (comfortScore < -2) {
+        return -2
+    } else if (comfortScore > 2) {
+        return 2
+    } else {
+        return comfortScore
+    }
+}
+
+def getDimmerValue(){
+    return dimmer?.currentValue("level")
+}
+
+
+// Function to get current conditions (for demonstration purposes)
+def getConditions() {
+    // Replace with actual logic to get current conditions
+    def inside = Math.round(getInsideTemp())
+    def outside = Math.round(getOutsideTemp())
+    def insideHumidity = Math.round(getInsideHumidity()) // Round humidity values
+    def outsideHumidity = Math.round(getOutsideHumidity()) // Round humidity values
+    return [inside as int, outside as int, insideHumidity as int, outsideHumidity as int]
+}
+
+def getAutoVal() {
+    // Get current conditions and round temperature values to integers
+    def outside = Math.round(getOutsideTemp())
+    def inside = Math.round(getInsideTemp())
+    def insideHumidity = getInsideHumidity()
+    def outsideHumidity = getOutsideHumidity()
+
+    // Create the conditions array and key
+    def conditions = [inside, outside, insideHumidity, outsideHumidity].collect { it as int }
+    def conditionsKey = conditions.join('-')
+
+    // NEW CODE STARTS HERE
+    // Read existing hash table from your HTTP server
+    def hashTableJson = readFromFile("hash_table.txt")
+    def hashTable =hashTableJson ? deserializeHashTable(hashTableJson) : [:] // Helper function to deserialize JSON string to hash table
+    // NEW CODE ENDS HERE
+
+    def learnedTarget = hashTable[conditionsKey] // Modified to use the newly read hashTable
+
+    pauseExecution(1000)
+
+    // log.warn("next loop over: $hashTable")  // Modified to use the newly read hashTable
+    logtrace("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
+
+    logging "outside =========> $outside"
+    logging "inside =========> $inside"
+    logging "insideHumidity =========> $insideHumidity"
+    logging "outsideHumidity =========> $outsideHumidity"
+    logging "Generated conditionsKey =========> ${conditionsKey}"
+    logging "learnedTarget =========> ${learnedTarget}"
+
+    def level = getDimmerValue()
+
+    if (learnedTarget == null && level) {
+        log.info "No corresponding conditions in the database. Adding current conditions and set point..."
+
+        // Add the conditions to the hash table with dimmer level as the value
+        hashTable[conditionsKey] = level  // Modified to use the newly read hashTable
+        log.warn "Added conditions to the hash table with dimmer level as the value."
+
+        // Write updated hash table back to your HTTP server
+        def newHashTableJson = serializeHashTable(hashTable)  // Helper function to serialize hash table to JSON string
+        writeToFile("hash_table.txt", newHashTableJson)
+        
+
+        learnedTarget = hashTable[conditionsKey]  // Modified to use the newly read hashTable
+
+        log.trace "${learnedTarget == null ? 'FAILED to retrieve any value despite adding one... investigate.' : 'Successfully added and retrieved: ' + learnedTarget}"
+
+        logging(hashTable)  // Modified to use the newly read hashTable
+        log.warn("hashTable size: ${hashTable.size()}")  // Modified to use the newly read hashTable
+    }
+
+    if (learnedTarget != null) {
+        logging "Learned target applied: $learnedTarget"
+        return learnedTarget // Return the target based on learned data
+    } else if (useDryBulbEquation) {
+        // Fallback to dry-bulb temperature if no learned data is available
+        def drybulbval = defaultSetpoint()
+        log.warn "drybulbval fallback value => ${drybulbval}"
+        return drybulbval
+    } else {
+        // If nothing else, 
+        log.warn "------------conditions: $conditions"
+        // log.warn "******* level: ${level}"
+        return level
+    }
+}
+
+
+
+def getOutsideTemp(){
+    return outsideTemp.currentValue("temperature")
+}
+def getOutsideHumidity(){
+    return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
+}
+
+
+def convert_db_to_celsius() {
+
+    if (atomicState.currentUnit == "fahrenheit"){
+        // Read existing hash table from HTTP server
+        def hashTableJson = readFromFile("hash_table.txt")
+        def hashTable = deserializeHashTable(hashTableJson)
+        
+        // Convert each dimmer value to Celsius
+        try{
+                hashTable.collectEntries { key, value ->
+                [(key): (value - 32) * 5 / 9]
+            }
+        }
+        catch(e){
+            log.warn"hastable not computable at the moment... "
+        }
+        
+        // Serialize and write the updated hash table back to your HTTP server
+        def newHashTableJson = serializeHashTable(hashTable)
+        writeToFile("hash_table.txt", newHashTableJson)
+
+        atomicState.currentUnit = "celsius"
+        
+        log.warn("Database has been converted to Celsius.")
+    }
+    else {
+      log.warn "database already in celcius"  
+    }
+}
+
+
+def convert_db_to_fahrenheit() {
+
+    if (atomicState.currentUnit == "celcius"){
+
+        // Read existing hash table from HTTP server
+        def hashTableJson = readFromFile("hash_table.txt")
+        def hashTable = deserializeHashTable(hashTableJson)
+        
+        // Convert each dimmer value to Fahrenheit
+        hashTable.collectEntries { key, value ->
+            [(key): (value * 9 / 5) + 32]
+        }
+        
+        // Serialize and write the updated hash table back to your HTTP server
+        def newHashTableJson = serializeHashTable(hashTable)
+        writeToFile("hash_table.txt", newHashTableJson)
+        
+        log.warn("Database has been converted to Fahrenheit.")
+
+        atomicState.currentUnit = "celsius"
+    }
+    else {
+    log.warn "database already in fahrenheit"  
+    }    
 }
 
 /************************************************BOOLEANS******************************************************/
@@ -4466,6 +4792,9 @@ boolean contactsAreOpen(){
         def listOfOpenContacts = []
         listOfOpenContacts = WindowsContact?.findAll{it.currentValue("contact") == "open"}
         atomicState.listOfOpenContacts = listOfOpenContacts.join(", ")
+        if (atomicState.listOfOpenContacts.size() > 0){
+            log.trace "Contacts are open: ${listOfOpenContacts}"
+        }
         return Open
     }
     else
@@ -4522,6 +4851,7 @@ boolean doorsContactsAreOpen(){
     descriptionText "------------------ doors: $doorsContacts open ?: ${listOpen.join(', ')}"
     return Open
 }
+
 boolean Active(){
     boolean result = true // default is true  always return Active = true when no sensor is selected by the user
 
@@ -4571,17 +4901,16 @@ boolean Active(){
         {
             logtrace("motion returns true because outside of motion modes")
         }
-    
 
         // this must happen outside of getLastMotionEvents() collection, because the latter isn't called when outside of motion modes.  
         atomicState.activeMotionCount = atomicState.activeMotionCount ? atomicState.activeMotionCount : 0
 
-        // log.debug "now() - atomicState.lastMotionEvent > 1000 => ${(now() - atomicState.lastMotionEvent) > 1000}"
+        // logging "now() - atomicState.lastMotionEvent > 1000 => ${(now() - atomicState.lastMotionEvent) > 1000}"
         if((now() - atomicState.lastMotionEvent) > Dtime && atomicState.activeMotionCount != 0) // if time is up, reset atomicState events value
         {
             
             atomicState.activeMotionCount = 0 // time is up, reset this variable
-            // log.debug "atomicState.activeMotionCount set to $atomicState.activeMotionCount"
+            // logging "atomicState.activeMotionCount set to $atomicState.activeMotionCount"
             //events = 0
         }
     }
@@ -4624,7 +4953,6 @@ boolean okToTurnOff(){
     }
 }
 
-
 /************************************************MISCELANEOUS*********************************************************/
 def stop(data){
     //logwarn "STOP STOP STOP STOP ++++++++++++++++++++++++++++++customCommand = $customCommand"
@@ -4640,7 +4968,6 @@ def stop(data){
     }
     else {
 
-
         int s = windows.size()
         int i = 0
         for(s!=0;i<s;i++)
@@ -4650,7 +4977,6 @@ def stop(data){
         }
         
     }
-
 
 }
 
@@ -4673,7 +4999,6 @@ def Poll(){
     boolean thermRefresh = thermostat.hasCommand("refresh") 
     boolean outsidePoll = outsideTemp.hasCommand("poll")
     boolean outsideRefresh = outsideTemp.hasCommand("refresh") 
-
 
     if(thermRefresh){
         thermostat.refresh()
@@ -4813,7 +5138,6 @@ def check_logs_timer(){
         <br>end debug ? ${(now() - atomicState.EnableDebugTime) >=  30 * 30 * 1000}
         <br>end descr ? ${(now() - atomicState.enableDescriptionTime) >=  30 * 30 * 1000}
         <br>end warn ? ${(now() - atomicState.EnableWarningTime) >=  30 * 30 * 1000}
-    
 
         """
         }

@@ -232,7 +232,8 @@ def initialize() {
 def appButtonHandler(btn) {
 
     switch(btn) {
-        case "pause":atomicState.paused = !atomicState.paused
+        case "pause":
+        atomicState.paused = !atomicState.paused
         logging "atomicState.paused = $atomicState.paused"
         if(atomicState.paused)
         {

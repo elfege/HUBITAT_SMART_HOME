@@ -5,7 +5,7 @@ def NAME_SPACE = "Denon AVR";
 metadata {
     
     definition(name: NAME, namespace: NAME_SPACE, author: "Thomas Howard") {        
-		capability "Actuator"
+        capability "Actuator"
         
         deviceSetup(TYPE); 
       
@@ -296,7 +296,7 @@ def methodMissing(String name, Object args) {
 
 def refresh(){
     
-	deviceCommands = getDeviceCommands();
+    deviceCommands = getDeviceCommands();
     
     devName = device.getDataValue("type");
     
@@ -308,7 +308,7 @@ def refresh(){
             }
         }
     }
-	
+    
 }
 
 

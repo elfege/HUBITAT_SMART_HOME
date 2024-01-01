@@ -56,8 +56,8 @@ preferences {
 }
 
 def mainPage() {
-	dynamicPage(name: "mainPage", uninstall: true, install: true) {
-		section() {
+    dynamicPage(name: "mainPage", uninstall: true, install: true) {
+        section() {
             if(state.endpoint) {
                 input(type: "text", name: "dashboardToken", title: "Base Dashboard App Access Token - Can be obtained from any dashboard, try activating fullscreen and checking the url bar\nEx: (http://255.255.255.255/apps/api/1/menu?access_token=<span style='font-weight: bold;'>xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span>))", required: true)
                 input(type: "number", name: "dashboardAppId", title: "Base Dashboard App Id - Can be obtained from any dashboard, try activating fullscreen and checking the url bar\nEx: (http://255.255.255.255/apps/api/<span style='font-weight: bold;'>1</span>/menu?access_token=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx))", required: true)
@@ -65,11 +65,11 @@ def mainPage() {
                 paragraph("""<a href="${state.fullEndpoint}/settings/?access_token=${state.secret}&dashboardAppId=${dashboardAppId}&dashboardAccessToken=${dashboardToken}" target="_blank">Click Here to go to settings if you get locked out</a>""")
             }
             else paragraph("Click done to enable OAuth and return to the app to get the link.");
-		}
+        }
         section(){
             input( type: "text", name: "app_name", title: "<b>Rename the Application?</b>", default: "HubiPanel", submitOnChange: true ) 
         }
-	}
+    }
 }
 
 
@@ -80,18 +80,18 @@ def initOAuth() {
 }
 
 def installed() {
-	log.debug("Installed")
+    log.debug("Installed")
     initOAuth()
     app.updateLabel(app_name);
 }
 
 def updated() {
-	log.debug("Updated")
+    log.debug("Updated")
     app.updateLabel(app_name);
 }
 
 def uninstalled() {
-	log.debug("Uninstalled")
+    log.debug("Uninstalled")
 }
 
 def getHubIP() {

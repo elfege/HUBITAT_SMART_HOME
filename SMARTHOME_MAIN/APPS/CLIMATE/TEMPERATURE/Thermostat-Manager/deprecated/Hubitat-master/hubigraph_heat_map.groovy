@@ -490,7 +490,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 
@@ -576,16 +576,16 @@ def getChartOptions(){
                      ],
             "annotations" : [    "alwaysOutside": "false",
                                  "textStyle": [
-      					            "fontSize": annotation_font,
-      					            "bold":     annotation_bold,
-      					            "italic":   annotation_italic,
-      	         					"color":    annotation_color_transparent ? "transparent" : annotation_color,
-      					            "auraColor":annotation_aura_color_transparent ? "transparent" : annotation_aura_color,
-				                 ],
+                                      "fontSize": annotation_font,
+                                      "bold":     annotation_bold,
+                                      "italic":   annotation_italic,
+                                       "color":    annotation_color_transparent ? "transparent" : annotation_color,
+                                      "auraColor":annotation_aura_color_transparent ? "transparent" : annotation_aura_color,
+                                 ],
                                  "stem": [ "color": "transparent",
                                           ],
                                  "highContrast": "false"
-                             ],		 
+                             ],         
          ],
     ]
     return options;
@@ -946,7 +946,7 @@ function drawChart(callback) {
     let header = [];
     header.push('Device');
     for (i=0; i< cols; i++){
-      	header.push("R"+i);
+          header.push("R"+i);
         header.push({role:"style"});
         header.push({role:"tooltip"});
         header.push({role:"annotation"});
@@ -963,8 +963,8 @@ function drawChart(callback) {
     let line_color = subscriptions.line_color;
     let fill_opacity = 1.0;
     for (i=0; i<rows; i++){
-      	tempArray = [];
-      	tempArray.push("Row"+i);
+          tempArray = [];
+          tempArray.push("Row"+i);
         for (j=0; j<cols; j++){
             
             if (idx>= numElements) {
@@ -993,7 +993,7 @@ function drawChart(callback) {
                 }
             }
             
-        	tempArray.push('stroke-color: '+line_color+'; stroke-opacity: '+opacity+'; stroke-width: '+width+'; color: '+color+'; fill-opacity: '+fill_opacity );
+            tempArray.push('stroke-color: '+line_color+'; stroke-opacity: '+opacity+'; stroke-width: '+width+'; color: '+color+'; fill-opacity: '+fill_opacity );
             tempArray.push(str);
             tempArray.push(attr);     
             idx++;
@@ -1068,18 +1068,18 @@ def getColorCode(code){
     ret = "#FFFFFF"
     switch (code){
         case 7:  ret = "#800000"; break;
-        case 1:	 ret = "#FF0000"; break;
-        case 6:	ret = "#FFA500"; break;	
-        case 8:	ret = "#FFFF00"; break;	
-        case 9:	ret = "#808000"; break;	
-        case 2:	ret = "#008000"; break;	
-        case 5:	ret = "#800080"; break;	
-        case 4:	ret = "#FF00FF"; break;	
-        case 10: ret = "#00FF00"; break;	
-        case 11: ret = "#008080"; break;	
-        case 12: ret = "#00FFFF"; break;	
-        case 3:	ret = "#0000FF"; break;	
-        case 13: ret = "#000080"; break;	
+        case 1:     ret = "#FF0000"; break;
+        case 6:    ret = "#FFA500"; break;    
+        case 8:    ret = "#FFFF00"; break;    
+        case 9:    ret = "#808000"; break;    
+        case 2:    ret = "#008000"; break;    
+        case 5:    ret = "#800080"; break;    
+        case 4:    ret = "#FF00FF"; break;    
+        case 10: ret = "#00FF00"; break;    
+        case 11: ret = "#008080"; break;    
+        case 12: ret = "#00FFFF"; break;    
+        case 3:    ret = "#0000FF"; break;    
+        case 13: ret = "#000080"; break;    
     }
     return ret;
 }

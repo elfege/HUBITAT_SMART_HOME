@@ -5,7 +5,7 @@ AC (SPLIT AC) VIRTUAL THERMOSTAT
 */
 
 metadata {
-    definition (name: "SPLIT AC THERMOSTAT", namespace: "elfege", author: "elfege") {
+    definition(name: "SPLIT AC THERMOSTAT", namespace: "elfege", author: "elfege") {
         capability "Configuration"
         capability "Switch"
         capability "Refresh"
@@ -70,7 +70,7 @@ metadata {
         input "IP", "text", title: "Ip address (xxx.xxx.xxx.xxx)", required: false
         input "APInumber", "text", title: "Maker API's number", required: false
         input "accessToken", "text", title: "Access Token", required: false
-        input "refreshRate",  "number", title: "Refresh Rate (in minutes)", required:false, defaultValue:5
+        input "refreshRate", "number", title: "Refresh Rate (in minutes)", required: false, defaultValue: 5
 
     }
 }
@@ -85,8 +85,7 @@ def parse(String description) {
     state.lastEventName = state.lastEventName ? state.lastEventName : ""
     state.lastEventValue = state.lastEventValue ? state.lastEventValue : ""
 
-    if(enablelogging && now() - state.enableLoggingTime > 30 * 60 * 1000)
-    {
+    if (enablelogging && now() - state.enableLoggingTime > 30 * 60 * 1000) {
         disablelogging()
     }
 
@@ -107,41 +106,46 @@ def parse(String description) {
     }
     else {
         def parts = bodyString.split(" ")
-        def name  = parts.length > 0 ? parts[0].trim() : null
+        def name = parts.length > 0 ? parts[0].trim() : null
         def value = parts.length > 1 ? parts[1].trim() : null
-        
+
         boolean isStateChanged = false
 
-        def timeThreshold = 2000
+        def timeThreshold = 20000 // now() - state.lastEvent > timeThreshold  must take precedence to prevent filling the event queue
 
-        if(now() - state.lastEvent > timeThreshold || isStateChanged || state.refreshRequest) 
-        {
+        if (now() - state.lastEvent > timeThreshold && (isStateChanged || state.refreshRequest)) {
             state.lastEventName = name
             state.lastEventValue = value
             state.lastEvent = now()
             state.refreshRequest = false
-            
-            logging("$name, $value")
-            sendEvent(name: name, value: value)       
 
-            // no feedback from the unit since this is an infra-red controller, so default operatingState value to mode's value
-            if(value in ["heat", "cool"]){
-                sendEvent(name:"thermostatOperatingState", value: "${value}ing")
-            }  
-            else if(value == "fanCirculate"){
-                sendEvent(name:"thermostatOperatingState", value: value)
+            logging("$name, $value")
+            try {
+
+                sendEvent(name: name, value: value)
+
+                // no feedback from the unit since this is an infra-red controller, so default operatingState value to mode's value
+                if (value in ["heat", "cool"]) {
+                    sendEvent(name: "thermostatOperatingState", value: "${value}ing")
+
+                }
+                else if (value == "fanCirculate") {
+                    sendEvent(name: "thermostatOperatingState", value: value)
+                }
+                else {
+                    sendEvent(name: "thermostatOperatingState", value: "idle")
+                }
             }
-            else {
-                sendEvent(name:"thermostatOperatingState", value: "idle")
+            catch (Exception e) {
+                log.error "CUST. ERR. MSG. (try/catch): $e"
             }
-            
         }
-        else
-        {
+        else {
             logging "duplicate event less than ${timeThreshold/1000} seconds apart, skipping"
         }
     }
 }
+
 private getHostAddress() {
     def ip = settings.ip
     def port = settings.port
@@ -154,7 +158,7 @@ def sendEthernet(message) {
     new hubitat.device.HubAction(
         method: "POST",
         path: "/${message}?",
-        headers: [ HOST: "${getHostAddress()}" ]
+        headers: [HOST: "${getHostAddress()}"]
     )
 }
 
@@ -181,13 +185,11 @@ def ToggleLED() {
 }
 def setThermostatFanMode(String value){
     logging "setThermostatFanMode $value"
-    if(value == "on") 
-    {
+    if (value == "on") {
         logging "fanOn()"
         fanOn()
     }
-    else 
-    {
+    else {
         logging "fanOff()"
         fanAuto()
     }
@@ -200,7 +202,7 @@ def setThermostatMode(String value) {
 }
 def fanOn() {
     //sendEvent(name:"thermostatFanMode", value:"on")
-    logging("Executing 'fan on'")    
+    logging("Executing 'fan on'")
     sendEthernet("fanOn")
 }
 def fanAuto(){
@@ -263,7 +265,7 @@ def setCoolingSetpoint(cmd) {
 
 
     logging("COOLING")
-       //sendEvent(name: "coolingSetpoint", value: cmd) // event should be triggered by device's feedback
+    //sendEvent(name: "coolingSetpoint", value: cmd) // event should be triggered by device's feedback
 
     state.lastCoolSetpoint = cmd.toInteger()
     //sendEvent(name: "switch", value: "on")
@@ -329,25 +331,26 @@ def fanLow() {
 
 def getTemperature(){
 
-    if(!IP || !APInumber || !tempSensor) { 
-        log.warn "missing device... getTemperature() canceled" 
+    if (!IP || !APInumber || !tempSensor) {
+        log.warn "missing device... getTemperature() canceled"
         return
     }
 
-    def uri =  "http://"+IP+"/apps/api/"+APInumber+"/devices/"+tempSensor+"?access_token="+accessToken
+    def uri = "http://" + IP + "/apps/api/" + APInumber + "/devices/" + tempSensor + "?access_token=" + accessToken
 
     //http://192.168.10.69/apps/api/1035/devices/1835?access_token=ae3f6fe1-10d5-44b9-841c-81ef66260314
     //http://192.168.10.69/apps/api/1035/devices/1835?access_token=ae3f6fe1-10d5-44b9-841c-81ef66260314
     logging "Sending  URI request to $uri"
-  
+
     def value = null
     def name = null
     try {
-        httpGet(uri) { resp ->
-            if (resp.success) {  
+        httpGet(uri) {
+            resp ->
+            if (resp.success) {
                 // log.debug "resp.data = $resp.data"
                 def attributes = resp.data.attributes
-                value = attributes.find{it -> it.name == "temperature"}.currentValue                
+                value = attributes.find{ it -> it.name == "temperature" }.currentValue
                 log.info "temperature: ${value}"
                 sendEvent(name: "temperature", value: value)
             }
@@ -357,26 +360,28 @@ def getTemperature(){
         log.warn "getTemperature() URI HttpGet call failed: ${e.message}"
         sendEvent(name: "temperature", value: "API ERROR")
     }
-  
 }
+
+
 def getHumidity(){
-    if(!IP || !APInumber || !humSensor) { 
-        log.warn "missing device... getHumidity() canceled" 
+    if (!IP || !APInumber || !humSensor) {
+        log.warn "missing device... getHumidity() canceled"
         return
     }
 
-    def uri =  "http://"+IP+"/apps/api/"+APInumber+"/devices/"+humSensor+"?access_token="+accessToken
+    def uri = "http://" + IP + "/apps/api/" + APInumber + "/devices/" + humSensor + "?access_token=" + accessToken
 
     logging "Sending  URI request to $uri"
-    
+
     def value = null
     def name = null
     try {
-        httpGet(uri) { resp ->
+        httpGet(uri) {
+            resp ->
             if (resp.success) {  
                 logging "${resp.data}"
                 def attributes = resp.data.attributes
-                value = attributes.find{it -> it.name == "humidity"}.currentValue
+                value = attributes.find{ it -> it.name == "humidity" }.currentValue
                 log.info "humidity: ${value}"
                 sendEvent(name: "humidity", value: value)
             }
@@ -387,20 +392,18 @@ def getHumidity(){
     }
 }
 def getsupportedattributes(){
-    def a = ["heatingSetpoint","coolingSetpoint","coolingSetpoint","thermostatSetpoint","thermostatMode","fanSpeed","low","medium","high","lastUpdated"]
+    def a = ["heatingSetpoint", "coolingSetpoint", "coolingSetpoint", "thermostatSetpoint", "thermostatMode", "fanSpeed", "low", "medium", "high", "lastUpdated"]
     return a
 }
-def refresh() {  
+def refresh() {
     log.debug("Refresh...")
     state.refreshRequest = true
     sendEthernet("refresh")
-   
-    if(tempSensor)
-    {
+
+    if (tempSensor) {
         getTemperature()
     }
-    if(humSensor)
-    {
+    if (humSensor) {
         getHumidity()
     }
 }
@@ -414,8 +417,8 @@ def configure() {
     state.lastDeclaredEvent = state.lastDeclaredEvent ? state.lastDeclaredEvent : now()
     state.lastEvenName = state.lastEvenName ? state.lastEvenName : ""
     state.lastEventValue = state.lastEventValue ? state.lastEventValue : ""
-    
-    
+
+
     updated()
 }
 def updateDeviceNetworkID() {
@@ -427,7 +430,7 @@ def updateDeviceNetworkID() {
 }
 def updated() {
     unschedule()
-    schedule("0 0/$refreshRate * * * ?", refresh) 
+    schedule("0 0/$refreshRate * * * ?", refresh)
     if (!state.updatedLastRanAt || now() >= state.updatedLastRanAt + 5000) {
         state.updatedLastRanAt = now()
         log.info("Executing 'updated'")
@@ -436,11 +439,11 @@ def updated() {
     else {
         log.trace "updated(): Ran within last 5 seconds so aborting."
     }
-    if(enablelogging){
+    if (enablelogging) {
         runIn(1800, disablelogging)
         descriptionText("disablelogging scheduled to run in ${1800/60} minutes")
     }
-  
+
 
 }
 def reset() {
@@ -448,16 +451,16 @@ def reset() {
     sendEthernet("reset")
 }
 def logging(String message){
-    if(enabledebug){
+    if (enabledebug) {
         log.debug message
     }
 }
 def descriptionText(String message){
-    if(enabledescription){
-        log.info message 
+    if (enabledescription) {
+        log.info message
     }
 }
 def disablelogging(){
-    device.updateSetting("enabledebug",[value:"false",type:"bool"])
+    device.updateSetting("enabledebug", [value: "false", type: "bool"])
     log.warn "logging disabled!"
 }

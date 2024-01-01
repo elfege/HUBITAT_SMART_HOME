@@ -158,14 +158,14 @@ def attributeConfigurationPage() {
                                                                                name: "attribute_${sensor.id}_${attribute}_opacity", 
                                                                                default_value: 100, min: 1, max: 100, units: "%");
  
-                            container << parent.hubiForm_line_size  (this,  	title: "Bar Border", 	
-								     		                                    name: "attribute_${sensor.id}_${attribute}_current_border", 
-								     		                                    default: 2, min: 1, max: 10);
-			 
-                            container << parent.hubiForm_switch     (this,  	title: "Show Current Value on Bar", 
-								     		                                    name: "attribute_${sensor.id}_${attribute}_show_value", 
-								     		                                    default: false, 
-								     		                                    submit_on_change: true);
+                            container << parent.hubiForm_line_size  (this,      title: "Bar Border",     
+                                                                                 name: "attribute_${sensor.id}_${attribute}_current_border", 
+                                                                                 default: 2, min: 1, max: 10);
+             
+                            container << parent.hubiForm_switch     (this,      title: "Show Current Value on Bar", 
+                                                                                 name: "attribute_${sensor.id}_${attribute}_show_value", 
+                                                                                 default: false, 
+                                                                                 submit_on_change: true);
                      
                             if (settings["attribute_${sensor.id}_${attribute}_show_value"]==true){
                                 container<< parent.hubiForm_text_input(this, "Units", "attribute_${sensor.id}_${attribute}_annotation_units", "", false)
@@ -351,7 +351,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 
@@ -434,17 +434,17 @@ def getChartOptions(){
                        ],
             "annotations" : [    "alwaysOutside": annotation_inside,
                                  "textStyle": [
-      					            "fontSize": annotation_font,
-      					            "bold":     annotation_bold,
-      					            "italic":   annotation_italic,
-      	         					"color":    annotation_color_transparent ? "transparent" : annotation_color,
-      					            "auraColor":annotation_aura_color_transparent ? "transparent" : annotation_aura_color,
-				                 ],
+                                      "fontSize": annotation_font,
+                                      "bold":     annotation_bold,
+                                      "italic":   annotation_italic,
+                                       "color":    annotation_color_transparent ? "transparent" : annotation_color,
+                                      "auraColor":annotation_aura_color_transparent ? "transparent" : annotation_aura_color,
+                                 ],
                                  "stem": [ "color": "transparent" ],
                                  "highContrast": "false"
                              ],
               
-        			 
+                     
          ],
         "graphLow": graph_min,
         "graphHigh": graph_max,
@@ -800,18 +800,18 @@ def getColorCode(code){
     ret = "#FFFFFF"
     switch (code){
         case 7:  ret = "#800000"; break;
-        case 1:	    ret = "#FF0000"; break;
-        case 6:	ret = "#FFA500"; break;	
-        case 8:	ret = "#FFFF00"; break;	
-        case 9:	ret = "#808000"; break;	
-        case 2:	ret = "#008000"; break;	
-        case 5:	ret = "#800080"; break;	
-        case 4:	ret = "#FF00FF"; break;	
-        case 10: ret = "#00FF00"; break;	
-        case 11: ret = "#008080"; break;	
-        case 12: ret = "#00FFFF"; break;	
-        case 3:	ret = "#0000FF"; break;	
-        case 13: ret = "#000080"; break;	
+        case 1:        ret = "#FF0000"; break;
+        case 6:    ret = "#FFA500"; break;    
+        case 8:    ret = "#FFFF00"; break;    
+        case 9:    ret = "#808000"; break;    
+        case 2:    ret = "#008000"; break;    
+        case 5:    ret = "#800080"; break;    
+        case 4:    ret = "#FF00FF"; break;    
+        case 10: ret = "#00FF00"; break;    
+        case 11: ret = "#008080"; break;    
+        case 12: ret = "#00FFFF"; break;    
+        case 3:    ret = "#0000FF"; break;    
+        case 13: ret = "#000080"; break;    
     }
     return ret;
 }

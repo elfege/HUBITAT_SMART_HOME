@@ -447,7 +447,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 def updated() {
@@ -596,7 +596,7 @@ private getPWSData() {
             resp << ["current_wind_speed":          [ "value" : sensor.currentValue(override_wind_speed),       "units": settings["override_wind_speed_units"]]];
         }
         if (override_feels_like != "openweather") {
-            resp << ["current_feels_like":          [ "value" : sensor.currentValue(override_feels_like	),       "units": settings["override_feels_like_units"]]];
+            resp << ["current_feels_like":          [ "value" : sensor.currentValue(override_feels_like    ),       "units": settings["override_feels_like_units"]]];
         }
         if (override_wind_gust != "openweather") {       
             resp << ["current_wind_gust":           [ "value" : sensor.currentValue(override_wind_gust),        "units": settings["override_wind_gust_units"]]];

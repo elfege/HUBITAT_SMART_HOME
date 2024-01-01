@@ -96,7 +96,7 @@ def deviceSelectionPage() {
         
     dynamicPage(name: "deviceSelectionPage") {
         
-        parent.hubiForm_section(this,"Device Selection", 1){	    
+        parent.hubiForm_section(this,"Device Selection", 1){        
             
             input "sensor_", "capability.*", title: "Sensor", multiple: false, required: true, submitOnChange: true
             
@@ -195,13 +195,13 @@ def graphSetupPage(){
                 
                 container << parent.hubiForm_switch (this, title: "Use Custom Tics/Labels", name: "default_major_ticks", default: false, submit_on_change: true);
                 if (default_major_ticks == true){
-			if (gauge_major_tics == null) { 
-				gauge_major_tics=3;
-			}
-			container << parent.hubiForm_slider (this, title: "Number Major Tics", name: "gauge_major_tics",  default_value: 3, min: 0, max: 20, units: " tics");
-                    	for (tic = 0; tic<gauge_major_tics.toInteger(); tic++){
-                        	container << parent.hubiForm_text_input (this, "Input the Label for Tick ${tic+1}", "tic_title${tic}", "Label", false);
-                    	}
+            if (gauge_major_tics == null) { 
+                gauge_major_tics=3;
+            }
+            container << parent.hubiForm_slider (this, title: "Number Major Tics", name: "gauge_major_tics",  default_value: 3, min: 0, max: 20, units: " tics");
+                        for (tic = 0; tic<gauge_major_tics.toInteger(); tic++){
+                            container << parent.hubiForm_text_input (this, "Input the Label for Tick ${tic+1}", "tic_title${tic}", "Label", false);
+                        }
                 } 
                parent.hubiForm_container(this, container, 1);   
         }
@@ -320,7 +320,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 
@@ -574,22 +574,22 @@ def initializeAppEndpoint() {
 def getColorCode(code){
     switch (code){
         case "Maroon":  ret = "#800000"; break;
-        case "Red":	    ret = "#FF0000"; break;
-        case "Orange":	ret = "#FFA500"; break;	
-        case "Yellow":	ret = "#FFFF00"; break;	
-        case "Olive":	ret = "#808000"; break;	
-        case "Green":	ret = "#008000"; break;	
-        case "Purple":	ret = "#800080"; break;	
-        case "Fuchsia":	ret = "#FF00FF"; break;	
-        case "Lime":	ret = "#00FF00"; break;	
-        case "Teal":	ret = "#008080"; break;	
-        case "Aqua":	ret = "#00FFFF"; break;	
-        case "Blue":	ret = "#0000FF"; break;	
-        case "Navy":	ret = "#000080"; break;	
-        case "Black":	ret = "#000000"; break;	
-        case "Gray":	ret = "#808080"; break;	
-        case "Silver":	ret = "#C0C0C0"; break;	
-        case "White":	ret = "#FFFFFF"; break;
+        case "Red":        ret = "#FF0000"; break;
+        case "Orange":    ret = "#FFA500"; break;    
+        case "Yellow":    ret = "#FFFF00"; break;    
+        case "Olive":    ret = "#808000"; break;    
+        case "Green":    ret = "#008000"; break;    
+        case "Purple":    ret = "#800080"; break;    
+        case "Fuchsia":    ret = "#FF00FF"; break;    
+        case "Lime":    ret = "#00FF00"; break;    
+        case "Teal":    ret = "#008080"; break;    
+        case "Aqua":    ret = "#00FFFF"; break;    
+        case "Blue":    ret = "#0000FF"; break;    
+        case "Navy":    ret = "#000080"; break;    
+        case "Black":    ret = "#000000"; break;    
+        case "Gray":    ret = "#808080"; break;    
+        case "Silver":    ret = "#C0C0C0"; break;    
+        case "White":    ret = "#FFFFFF"; break;
         case "Transparent": ret = "transparent"; break;
     }
 }

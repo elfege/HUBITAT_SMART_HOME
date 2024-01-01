@@ -10,7 +10,7 @@ metadata {
     
     definition(name: NAME, namespace: NAME_SPACE, author: "Thomas Howard") {        
         capability "Refresh"
-		capability "Actuator"
+        capability "Actuator"
           
         deviceSetup(TYPE); 
         if (device) {
@@ -19,7 +19,7 @@ metadata {
     }
     
     preferences {
-		input ("deviceIp", "text", title: "Denon AVR IP Address");
+        input ("deviceIp", "text", title: "Denon AVR IP Address");
         getChildrenDevices(TYPE);
         getOverrides(TYPE, "Input");
     }    
@@ -466,34 +466,34 @@ def initialized(){
 }
 
 def init(ip, port) {
-	disconnect();
+    disconnect();
     log.debug("Connecting to ${ip}@${port}");
-	connect(ip, port);
+    connect(ip, port);
 }
 
 def close() {
-	disconnect()
+    disconnect()
 }
 
 def connect(ip, port) {
-	telnetConnect([termChars:[13]], ip, port.toInteger(), null, null)	
+    telnetConnect([termChars:[13]], ip, port.toInteger(), null, null)    
 }
 
 
 def disconnect() {
-	telnetClose()
+    telnetClose()
 }
 
 //commands
 def executeCommand(command) {
     log.debug("Sending command: $command");
     command = command;
-	sendHubCommand(new hubitat.device.HubAction(command, hubitat.device.Protocol.TELNET))
+    sendHubCommand(new hubitat.device.HubAction(command, hubitat.device.Protocol.TELNET))
 }
 
 def refresh(){
     
-	deviceCommands = getDeviceCommands();
+    deviceCommands = getDeviceCommands();
     
     devName = device.getDataValue("type");
     
@@ -505,7 +505,7 @@ def refresh(){
             }
         }
     }
-	
+    
 }
 def getNumbers(input){
     return input.findAll("[0-9][0-9]")*.toInteger()
@@ -587,14 +587,14 @@ def parseResponseDev(dev, name, resp){
 
 
 def parse(command) {
-	log.debug("Got Response: ${command}");
-	commandReceived = true;
+    log.debug("Got Response: ${command}");
+    commandReceived = true;
     parseResponse(command);
     
     return null;
 }
 
 def refreshTimeout(){
-	log.debug("commandReceived = ${commandReceived}");
+    log.debug("commandReceived = ${commandReceived}");
 }
 

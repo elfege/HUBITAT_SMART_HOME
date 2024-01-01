@@ -1,4 +1,5 @@
 /**
+
  *  WeatherFlow Lite driver for Hubitat
  *
  *  Copyright (c) 2019 Justin Walker
@@ -20,11 +21,11 @@
 import groovy.transform.Field
 
 metadata {
-	definition (name: 'WeatherFlow Lite', namespace: 'augoisms', author: 'Justin Walker', importUrl: 'https://raw.githubusercontent.com/augoisms/hubitat/master/weatherflow/weatherflow.driver.groovy') {
+    definition (name: 'WeatherFlow Lite', namespace: 'augoisms', author: 'Justin Walker', importUrl: 'https://raw.githubusercontent.com/augoisms/hubitat/master/weatherflow/weatherflow.driver.groovy') {
         capability 'IlluminanceMeasurement'
         capability 'Initialize'
         capability 'PressureMeasurement'
-        capability 'RelativeHumidityMeasurement'	
+        capability 'RelativeHumidityMeasurement'    
         capability 'Sensor'
         capability 'TemperatureMeasurement'
         capability 'UltravioletIndex'
@@ -40,10 +41,10 @@ metadata {
         attribute 'windChill', 'number'
         attribute 'windDirection', 'string'
         attribute 'windSpeed', 'number'
-	}
+    }
 
-	preferences {
-		input name: 'apiKey', type: 'string', title: '<b>WeatherFlow API Key</b>', description: '<div><i>Visit: <a href="https://weatherflow.github.io/SmartWeather/api/" target="_blank">WeatherFlow Smart Weather API</a></i></div><br>', required: true
+    preferences {
+        input name: 'apiKey', type: 'string', title: '<b>WeatherFlow API Key</b>', description: '<div><i>Visit: <a href="https://weatherflow.github.io/SmartWeather/api/" target="_blank">WeatherFlow Smart Weather API</a></i></div><br>', required: true
         input name: 'stationId', type: 'string', title: '<b>Station ID</b>', description: '<div><i>ID of your station/hub.</i></div><br>', required: true
         
         if (connectionValidated()) {
@@ -59,8 +60,8 @@ metadata {
             input name: 'refreshRate', type: 'enum', title: '<b>Refresh Rate for Events</b>', required: true, options: ['Real Time', '1 Minute', '5 Minutes', '10 Minutes', '15 Minutes', '30 Minutes', '1 Hour', '3 Hours'], defaultValue: 'Real Time'
         }
 
-		input name: 'logEnable', type: 'bool', title: 'Enable debug logging', defaultValue: false
-	}
+        input name: 'logEnable', type: 'bool', title: 'Enable debug logging', defaultValue: false
+    }
 }
 
 ///

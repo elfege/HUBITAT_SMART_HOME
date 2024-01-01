@@ -5,7 +5,7 @@ def NAME_SPACE = "Denon AVR";
 metadata {
     
     definition(name: NAME, namespace: NAME_SPACE, author: "Thomas Howard") {        
-		capability "Actuator"
+        capability "Actuator"
         
         deviceSetup(TYPE); 
       

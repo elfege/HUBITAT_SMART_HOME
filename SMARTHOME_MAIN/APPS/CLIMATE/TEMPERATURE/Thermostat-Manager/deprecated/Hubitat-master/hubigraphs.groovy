@@ -1,3 +1,4 @@
+
 definition(
     name: "Hubigraphs",
     namespace: "tchoward",
@@ -107,7 +108,7 @@ def mainPage(){
         section {
             app(name: "hubiWidget",    appName: "Hubigraph Bubble Widget",    namespace: "tchoward", title: "Create New Bubble Widget", multiple: true)
             app(name: "hubiBarGraph",  appName: "Hubigraph Bar Graph",     namespace: "tchoward", title: "Create New Bar Graph", multiple: true)
-			app(name: "hubiRangeBar",  appName: "Hubigraph Range Bar",     namespace: "tchoward", title: "Create New Range Bar", multiple: true)
+            app(name: "hubiRangeBar",  appName: "Hubigraph Range Bar",     namespace: "tchoward", title: "Create New Range Bar", multiple: true)
             app(name: "hubiGraphTime", appName: "Hubigraph Time Line",     namespace: "tchoward", title: "Create New Time Line", multiple: true)
             app(name: "hubiGauge",     appName: "Hubigraph Gauge",         namespace: "tchoward", title: "Create New Gauge", multiple: true)
             app(name: "hubiTimeGraph", appName: "Hubigraph Time Graph",    namespace: "tchoward", title: "Create New Time Graph", multiple: true)
@@ -321,7 +322,7 @@ def hubiForm_page_button(child, title, page, width, icon=""){
 
 
 def hubiForm_section(child, title, pos, icon="", Closure code) {
-	
+    
         child.call(){
                 def id = title.replace(' ', '_').replace('(', '').replace(')','');
                 def title_ = title.replace("'", "").replace("`", "");
@@ -371,20 +372,20 @@ def hubiForm_section(child, title, pos, icon="", Closure code) {
 def hubiForm_enum(Map map, child){
          
         child.call(){
-             	def title = map.title;
-		        def var = map.name;
+                 def title = map.title;
+                def var = map.name;
                 def list = map.list;
-		        def defaultVal = map.default;
-		        def submit_on_change = map.submit_on_change;
-		
-		
+                def defaultVal = map.default;
+                def submit_on_change = map.submit_on_change;
+        
+        
                 if (settings[var] == null){
                     app.updateSetting ("${var}", defaultVal);
                 }
 
                 def actualVal = settings[var] != null ? "${settings[var]}" : defaultVal;
                 def submitOnChange = submit_on_change ? "submitOnChange" : "";
-		 
+         
                 def html_ = """    
                     <div class="form-group">
                         <input type="hidden" name="${var}.type" value="enum">
@@ -431,15 +432,15 @@ def hubiForm_enum(Map map, child){
 def hubiForm_switch(Map map, child){
          
         child.call(){
-             	def title = map.title;
-		        def var = map.name;
-		        def defaultVal = map.default;
-		        def submit_on_change = map.submit_on_change;
-		
-		
+                 def title = map.title;
+                def var = map.name;
+                def defaultVal = map.default;
+                def submit_on_change = map.submit_on_change;
+        
+        
                 def actualVal = settings[var] != null ? settings[var] : defaultVal;
                 def submitOnChange = submit_on_change ? "submitOnChange" : "";
-		 
+         
                 def html_ = """      
                                 <div class="form-group">
                                         <input type="hidden" name="${var}.type" value="bool">
@@ -503,11 +504,11 @@ def hubiForm_font_size(Map map, child){
         def max = map.max;
         def submit_on_change = map.submit_on_change;
         def baseId = varname;
-	
-	    def varFontSize = "${varname}_font"    
+    
+        def varFontSize = "${varname}_font"    
         settings[varFontSize] = settings[varFontSize] ? settings[varFontSize] : default_;
         submitOnChange = submit_on_change ? "submitOnChange" : "";
-	    
+        
         def html_ = 
                 """
                 <table style="width:100%">
@@ -519,15 +520,15 @@ def hubiForm_font_size(Map map, child){
                 </tr>
                 </table>
                 <input type="range" min = "$min" max = "$max" name="settings[${varFontSize}]" 
-							      class="mdl-slider $submit_on_change " 
-							      value="${settings[varFontSize]}" 
-							      id="settings[${varFontSize}]"
-							      onchange="${baseId}_updateFontSize(this.value);">
+                                  class="mdl-slider $submit_on_change " 
+                                  value="${settings[varFontSize]}" 
+                                  id="settings[${varFontSize}]"
+                                  onchange="${baseId}_updateFontSize(this.value);">
                 <div class="form-group">
                         <input type="hidden" name="${varFontSize}.type" value="number">
                         <input type="hidden" name="${varFontSize}.multiple" value="false">
                 </div>
-		        <script>
+                <script>
                       function ${baseId}_updateFontSize(val) {
                             var text = "";
                             text += "Font Size: "+val;
@@ -575,11 +576,11 @@ def hubiForm_fontvx_size(Map map, child){
                     """    
         }
         
-	
-	    
+    
+        
         settings[varFontSize] = settings[varFontSize] ? settings[varFontSize] : default_;
         submitOnChange = submit_on_change ? "submitOnChange" : "";
-	    
+        
         def html_ = 
                 """
                 <label for="settings[${varFontSize}]" class="control-label" style= "vertical-align: bottom;">
@@ -590,15 +591,15 @@ def hubiForm_fontvx_size(Map map, child){
                 </label>
                         
                 <input type="range" min = "$min" max = "$max" name="settings[${varFontSize}]" 
-							      class="mdl-slider $submit_on_change " 
-							      value="${settings[varFontSize]}" 
-							      id="settings[${varFontSize}]"
-							      onchange="${baseId}_updateFontSize(this.value);">
+                                  class="mdl-slider $submit_on_change " 
+                                  value="${settings[varFontSize]}" 
+                                  id="settings[${varFontSize}]"
+                                  onchange="${baseId}_updateFontSize(this.value);">
                 <div class="form-group">
                         <input type="hidden" name="${varFontSize}.type" value="number">
                         <input type="hidden" name="${varFontSize}.multiple" value="false">
                 </div>
-		        <script>
+                <script>
                       function ${baseId}_updateFontSize(val) {
                             var text = "";
                             text += val;"""
@@ -624,8 +625,8 @@ def hubiForm_line_size(Map map, child){
         def max = map.max;
         def submit_on_change = map.submit_on_change;
         def baseId = varname;
-	   
-	    def varLineSize = "${varname}_line_size"     
+       
+        def varLineSize = "${varname}_line_size"     
         settings[varLineSize] = settings[varLineSize] ? settings[varLineSize] : default_;
         submitOnChange = submit_on_change ? "submitOnChange" : "";
         
@@ -634,23 +635,23 @@ def hubiForm_line_size(Map map, child){
                 <table style="width:100%">
                 <tr><td><label for="settings[${varLineSize}]" class="control-label"><b>${title} Width</b></td>
                         <td border=1 style="text-align:right;">
-			                <span id="${baseId}_line_size_text" name="testing" >
-				                Width: ${settings[varLineSize]} <hr id='${baseId}_line_size_draw' style='background-color:#1A77C9; height:${settings[varLineSize]}px; border: 0;'>
-			                </span>
-			</td>
+                            <span id="${baseId}_line_size_text" name="testing" >
+                                Width: ${settings[varLineSize]} <hr id='${baseId}_line_size_draw' style='background-color:#1A77C9; height:${settings[varLineSize]}px; border: 0;'>
+                            </span>
+            </td>
                         </label>
                 </tr>
                 </table>
                 <input type="range" min = "$min" max = "$max" name="settings[${varLineSize}]" 
                                   class="mdl-slider ${submitOnChange}"
-							      value="${settings[varLineSize]}" 
-							      id="settings[${varLineSize}]"
-							      onchange="${baseId}_updateLineInput(this.value);">
+                                  value="${settings[varLineSize]}" 
+                                  id="settings[${varLineSize}]"
+                                  onchange="${baseId}_updateLineInput(this.value);">
                 <div class="form-group">
                         <input type="hidden" name="${varLineSize}.type" value="number">
                         <input type="hidden" name="${varLineSize}.multiple" value="false">
                 </div>
-		<script>
+        <script>
                       function ${baseId}_updateLineInput(val) {
                             var text = "";
                             text += "Width: "+val;
@@ -703,8 +704,8 @@ def hubiForm_slider(Map map, child){
                         <input type="hidden" name="${varSize}.multiple" value="false">
                 </div>
                 <script>
-		
-		                function ${baseId}_updateTextInput(val) {
+        
+                        function ${baseId}_updateTextInput(val) {
                             var text = "";
                             text += val+"${units}";
                             jQuery('#${baseId}_slider_val').text(text); 
@@ -814,7 +815,7 @@ def hubiForm_graph_preview(child){
 
 def hubiForm_sub_section(child, myText=""){
 
-		child.call(){
+        child.call(){
                 def id = myText.replaceAll("[^a-zA-Z0-9]", "");
                 def newText = myText.replaceAll("'", "").replaceAll("`", "")
                 def html_ = 
@@ -968,7 +969,7 @@ def hubiForm_list_reorder(child, var, var_color, solid_background="") {
 *********************************************************************************************************************************/
 
 def hubiTool_create_tile(child, location="graph") {
-	child.call(){
+    child.call(){
 
                 log.info "Creating HubiGraph Child Device"
         
@@ -981,8 +982,8 @@ def hubiTool_create_tile(child, location="graph") {
                         log.info "Created HTTP Switch [${childDevice}]"
                         
                         //Send the html automatically
-			childDevice.setGraph("${state.localEndpointURL}${location}/?access_token=${state.endpointSecret}");
-			log.info "Sent setGraph: ${state.localEndpointURL}${location}/?access_token=${state.endpointSecret}"
+            childDevice.setGraph("${state.localEndpointURL}${location}/?access_token=${state.endpointSecret}");
+            log.info "Sent setGraph: ${state.localEndpointURL}${location}/?access_token=${state.endpointSecret}"
                         }
                 else {
                         
@@ -1059,22 +1060,22 @@ def hubiTools_get_color_code(input_color){
     
     switch (new_color){
         
-        case "WHITE" :	return "#FFFFFF"; break;
-        case "SILVER" :	return "#C0C0C0"; break;
-        case "GRAY" :	return "#808080"; break;
-        case "BLACK" :	return "#000000"; break;
-        case "RED" :	return "#FF0000"; break;
-        case "MAROON" :	return "#800000"; break;
-        case "YELLOW" :	return "#FFFF00"; break;
-        case "OLIVE" :	return "#808000"; break;
-        case "LIME" :	return "#00FF00"; break;
-        case "GREEN" :	return "#008000"; break;
-        case "AQUA" :	return "#00FFFF"; break;
-        case "TEAL" :	return "#008080"; break;
-        case "BLUE" :	return "#0000FF"; break;
-        case "NAVY" :	return "#000080"; break;
+        case "WHITE" :    return "#FFFFFF"; break;
+        case "SILVER" :    return "#C0C0C0"; break;
+        case "GRAY" :    return "#808080"; break;
+        case "BLACK" :    return "#000000"; break;
+        case "RED" :    return "#FF0000"; break;
+        case "MAROON" :    return "#800000"; break;
+        case "YELLOW" :    return "#FFFF00"; break;
+        case "OLIVE" :    return "#808000"; break;
+        case "LIME" :    return "#00FF00"; break;
+        case "GREEN" :    return "#008000"; break;
+        case "AQUA" :    return "#00FFFF"; break;
+        case "TEAL" :    return "#008080"; break;
+        case "BLUE" :    return "#0000FF"; break;
+        case "NAVY" :    return "#000080"; break;
         case "FUCHSIA" :return "#FF00FF"; break;
-        case "PURPLE" :	return "#800080"; break;
+        case "PURPLE" :    return "#800080"; break;
     }
 }
    

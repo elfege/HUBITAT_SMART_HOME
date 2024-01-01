@@ -4,14 +4,14 @@
 public static String version()      {  return '4.5.1'  }
 
 metadata {
-	definition (name: 'OpenWeather Hubigraph Driver',
-		        namespace: 'tchoward',
-		        author: 'Thomas Howard',
-		        importUrl: '') {
+    definition (name: 'OpenWeather Hubigraph Driver',
+                namespace: 'tchoward',
+                author: 'Thomas Howard',
+                importUrl: '') {
                     capability 'Sensor'
             
-	    attribute 'current_weather', 'string'
-	    
+        attribute 'current_weather', 'string'
+        
         command 'pollData'
     }
     
@@ -64,7 +64,7 @@ void pollOpenWeather() {
     state.ow_uri = 'https://api.openweathermap.org/data/2.5/onecall?lat=' + latitude + '&lon=' + longitude + '&exclude=minutely&mode=json&units=imperial&appid=' + apiKey;
     ParamsOWM = [ uri: state.ow_uri]
     //log.debug('Poll OpenWeatherMap.org: ' + ParamsOWM)
-	asynchttpGet('openWeatherHandler', ParamsOWM)
+    asynchttpGet('openWeatherHandler', ParamsOWM)
     return;
 }
 
@@ -74,7 +74,7 @@ void openWeatherHandler(resp, data) {
     if(resp.getStatus() != 200 && resp.getStatus() != 207) {
         log.warn 'Calling' + atomicState.ow_uri
         log.warn resp.getStatus() + ':' + resp.getErrorMessage()
-	} else {
+    } else {
         now = new Date();       
         sendEvent(name: 'current_weather', value: now.getTime());
         state.weatherData = resp.data;

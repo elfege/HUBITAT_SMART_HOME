@@ -110,7 +110,7 @@ def tileSetupPage() {
     dynamicPage(name: "tileSetupPage") {
         
         def location = getLocation();
-        parent.hubiForm_section(this,"Tile Setup", 1){	    
+        parent.hubiForm_section(this,"Tile Setup", 1){        
             container = [];
             container << parent.hubiForm_text_input (this, "<b>Latitude (Default = Hub location)</b>", "latitude", location.latitude, false);
             container << parent.hubiForm_text_input (this, "<b>Longitude (Default = Hub location)</b>", "longitude", location.longitude, false);
@@ -281,7 +281,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 

@@ -774,7 +774,7 @@ def getPreviewWindow(var, page){
     
     def params = [
         uri: "${state.localEndpointURL}",
-		path: "graph/?access_token=${state.endpointSecret}",
+        path: "graph/?access_token=${state.endpointSecret}",
         requestContentType: "application/json",
     ]
     
@@ -853,7 +853,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 def updated() {
@@ -1724,7 +1724,7 @@ def addColorPicker(Map map){
       <script language="javascript">
         function ${var}_showMessage(value) {
           document.getElementById("${var}_message").innerHTML = value + "%";
-        }	   
+        }       
       </script>
 """
     return html;
@@ -1929,7 +1929,7 @@ def addSlider(Map map){
     <script language="javascript">
         function ${var}_showMessage(value) {
             document.getElementById("${var}_message").innerHTML = value + "%";
-        }	   
+        }       
     </script>
     """
     return html;
@@ -2470,7 +2470,7 @@ def defineScript(){
  
     def html = """
     <script type="text/javascript">
-  	
+      
 
   </script>
 """

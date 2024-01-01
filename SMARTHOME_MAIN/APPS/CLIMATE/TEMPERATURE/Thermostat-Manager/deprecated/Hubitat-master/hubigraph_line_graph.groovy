@@ -535,7 +535,7 @@ def uninstalled() {
 }
 
 private removeChildDevices(delete) {
-	delete.each {deleteChildDevice(it.deviceNetworkId)}
+    delete.each {deleteChildDevice(it.deviceNetworkId)}
 }
 
 def updated() {
@@ -1223,18 +1223,18 @@ def getColorCode(code){
     ret = "#FFFFFF"
     switch (code){
         case 7:  ret = "#800000"; break;
-        case 1:	    ret = "#FF0000"; break;
-        case 6:	ret = "#FFA500"; break;	
-        case 8:	ret = "#FFFF00"; break;	
-        case 9:	ret = "#808000"; break;	
-        case 2:	ret = "#008000"; break;	
-        case 5:	ret = "#800080"; break;	
-        case 4:	ret = "#FF00FF"; break;	
-        case 10: ret = "#00FF00"; break;	
-        case 11: ret = "#008080"; break;	
-        case 12: ret = "#00FFFF"; break;	
-        case 3:	ret = "#0000FF"; break;	
-        case 13: ret = "#000080"; break;	
+        case 1:        ret = "#FF0000"; break;
+        case 6:    ret = "#FFA500"; break;    
+        case 8:    ret = "#FFFF00"; break;    
+        case 9:    ret = "#808000"; break;    
+        case 2:    ret = "#008000"; break;    
+        case 5:    ret = "#800080"; break;    
+        case 4:    ret = "#FF00FF"; break;    
+        case 10: ret = "#00FF00"; break;    
+        case 11: ret = "#008080"; break;    
+        case 12: ret = "#00FFFF"; break;    
+        case 3:    ret = "#0000FF"; break;    
+        case 13: ret = "#000080"; break;    
     }
     return ret;
 }

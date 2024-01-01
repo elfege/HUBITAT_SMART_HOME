@@ -543,47 +543,47 @@ def getEvents(Map map){
 
 def login() {
     
-	if (settings["hpmSecurity"] && settings["hpmSecurity"]==true)
-	{
-		def result = false
-		try
-		{
-			httpPost(
-				[
-					uri: "http://127.0.0.1:8080",
-					path: "/login",
-					query: 
-					[
-						loginRedirect: "/"
-					],
-					body:
-					[
-						username: username,
-						password: password,
-						submit: "Login"
-					],
-					textParser: true,
-					ignoreSSLIssues: true
-				]
-			)
-			{ resp ->
-				if (resp.data?.text?.contains("The login information you supplied was incorrect."))
-					result = false
-				else {
-					atomicState.cookie = resp?.headers?.'Set-Cookie'?.split(';')?.getAt(0)
-					result = true
-				}
-			}
-		}
-		catch (e)
-		{
-			log.error "Error logging in: ${e}"
-			result = false
-		}
-		return result
-	}
-	else
-		return true
+    if (settings["hpmSecurity"] && settings["hpmSecurity"]==true)
+    {
+        def result = false
+        try
+        {
+            httpPost(
+                [
+                    uri: "http://127.0.0.1:8080",
+                    path: "/login",
+                    query: 
+                    [
+                        loginRedirect: "/"
+                    ],
+                    body:
+                    [
+                        username: username,
+                        password: password,
+                        submit: "Login"
+                    ],
+                    textParser: true,
+                    ignoreSSLIssues: true
+                ]
+            )
+            { resp ->
+                if (resp.data?.text?.contains("The login information you supplied was incorrect."))
+                    result = false
+                else {
+                    atomicState.cookie = resp?.headers?.'Set-Cookie'?.split(';')?.getAt(0)
+                    result = true
+                }
+            }
+        }
+        catch (e)
+        {
+            log.error "Error logging in: ${e}"
+            result = false
+        }
+        return result
+    }
+    else
+        return true
 }
 
 def fileExists(sensor, attribute){
@@ -802,19 +802,19 @@ def writeFile(sensor, attribute, contents) {
     filename_ = getFileName(sensor, attribute);
 
     if (!login()) return;
-	try
-	{
-		def params = [
-			uri: "http://127.0.0.1:8080",
-			path: "/hub/fileManager/upload",
-			query: [
-				"folder": "/"
-			],
-			headers: [
-				"Cookie": atomicState.cookie,
-				"Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryDtoO2QfPwfhTjOuS"
-			],
-			body: """------WebKitFormBoundaryDtoO2QfPwfhTjOuS
+    try
+    {
+        def params = [
+            uri: "http://127.0.0.1:8080",
+            path: "/hub/fileManager/upload",
+            query: [
+                "folder": "/"
+            ],
+            headers: [
+                "Cookie": atomicState.cookie,
+                "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryDtoO2QfPwfhTjOuS"
+            ],
+            body: """------WebKitFormBoundaryDtoO2QfPwfhTjOuS
 Content-Disposition: form-data; name="uploadFile"; filename="${filename_}"
 Content-Type: text/plain
 
@@ -825,17 +825,17 @@ Content-Disposition: form-data; name="folder"
 
 
 ------WebKitFormBoundaryDtoO2QfPwfhTjOuS--""",
-			timeout: 300,
-			ignoreSSLIssues: true
-		]
-		httpPost(params) { resp ->	
-		}
-		return true
-	}
-	catch (e) {
-		log.error "Error installing file: ${e}"
-	}
-	return false
+            timeout: 300,
+            ignoreSSLIssues: true
+        ]
+        httpPost(params) { resp ->    
+        }
+        return true
+    }
+    catch (e) {
+        log.error "Error installing file: ${e}"
+    }
+    return false
 }
 
 

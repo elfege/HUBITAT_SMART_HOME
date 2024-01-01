@@ -7,7 +7,7 @@
 *
 *    Light / motion Management
 *
-*  Author: Elfege test///
+*  Author: Elfege 
 */
 
 import java.text.SimpleDateFormat
@@ -29,9 +29,7 @@ definition(
 )
 
 preferences {
-
     page name: "pageSetup"
-
 }
 def pageSetup() {
 
@@ -64,10 +62,12 @@ def pageSetup() {
                 input "overrideDelay", "number", title: "App override duration (in hours)", required: false
                 paragraph formatText("Manually turning on/off one of your lights momentarily overrides automation (default is 2 hours)", "white", "grey")
             }
-
         }
         section("modes"){
             input "restrictedModes", "mode", title: "Pause this app if location is in one of these modes", required: false, multiple: true, submitOnChange: true 
+            if(restrictedModes){
+                input "keepLightsOffInRestrictedMode", "bool", title: "Keeps all lights off when in restricted mode", submitOnChange:true 
+            }
 
             input "restrictedTimeSlots", "bool", title: "Pause this app between times of day", defaultValue: false, submitOnChange: true
 
@@ -109,12 +109,11 @@ def pageSetup() {
                 boolean holdable = buttonPause.every{ element -> element.hasCapability("HoldableButton") }
                 boolean pushable = buttonPause.every{ element -> element.hasCapability("PushableButton") }
                 boolean releasable = buttonPause.every{ element -> element.hasCapability("ReleasableButton") }
-                logging """
-                doubletapable ? $doubletapable
-holdable ? $holdable
-pushable ? $pushable
-releasable ? $releasable
-"""
+                logging "doubletapable ? $doubletapable"
+                logging "holdable ? $holdable"
+                logging "pushable ? $pushable"
+                logging "releasable ? $releasable"
+
                 def list = releasable ? ["pushed", "held", "doubleTapped", "released"] : doubletap ? ["pushed", "held", "doubleTapped"] : holdable ? ["pushed", "held"] : ["push"]
 
 
@@ -681,7 +680,7 @@ def illuminanceHandler(evt){
     atomicState.daytimeSwitchExecuted = atomicState.daytimeSwitchExecuted == null ? atomicState.daytimeSwitchExecuted = false : atomicState.daytimeSwitchExecuted
 
     if (daytime && anyOn && !atomicState.daytimeSwitchExecuted) { // turn off at first occurence of light sup to threshold but don't reiterate
-        descriptionText "turning off $switches 545r"
+        descriptionText "turning off ${switches} 545r"
         off()
         atomicState.daytimeSwitchExecuted = true
     }
@@ -912,8 +911,8 @@ def off(){
     atomicState.mainHandlerEventTime = now()
     if (anyOn) {
         if (!atomicState.test && (atomicState.switches == "on" || !allowOverride)) {
-            switches.off()
-            descriptionText "turning off $switches 59989e"
+            switchesOff()
+            descriptionText "turning off ${switches.join(", ")} 59989e"
             atomicState.switches = "off"
         }
         else if (allowOverride && !atomicState.test && atomicState.switches == "off" && switches.any{ it -> it.currentValue("switch") == "on" })
@@ -1014,8 +1013,9 @@ def on(){
             boolean anyOn = switches.any{ it -> it.currentValue("switch") == "on" }
             if (anyOn && daytime && !atomicState.daytimeSwitchExecuted && (atomicState.switches == "on" || !allowOverride)) {
                 // turn off at first occurence of light sup to threshold but don't reiterate so if user turns them back on they'll stay on
-                descriptionText "turning off $switches due to daytime - you can still turn them back on manually if you wish"
-                switches.off()
+                descriptionText "turning off $switches.join(", ") due to daytime - you can still turn them back on manually if you wish"
+                // switches.off()
+                switchesOff() 
                 atomicState.switches = "off"
                 atomicState.daytimeSwitchExecuted = true
             }
@@ -1032,6 +1032,26 @@ def on(){
     if (atomicState.LuxCanceledbyButtonEvt) {
         checkLuxCancel()
     }
+}
+
+def switchesOff(){
+    atomicState.dimmersSetToOffByRestrictedMode = atomicState.dimmersSetToOffByRestrictedMode == null ? false : atomicState.dimmersSetToOffByRestrictedMode
+    
+    if (location.mode in restrictedModes && keepLightsOffInRestrictedMode) {
+        log.warn "location in restricted mode (${location.mode})"
+        
+
+        //make sure this runs only once so user can turn and keep lights on if they wish when in restricted mode
+        if (!atomicState.dimmersSetToOffByRestrictedMode) {
+            switches.off()()
+            pauseExecution(100)
+            atomicState.dimmersSetToOffByRestrictedMode = true
+        }
+        return
+    }
+    atomicState.dimmersSetToOffByRestrictedMode = false
+
+    switches.off()
 }
 
 def powerSwitchOff(){

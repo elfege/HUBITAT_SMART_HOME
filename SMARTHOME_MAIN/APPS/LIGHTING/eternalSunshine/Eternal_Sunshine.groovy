@@ -68,7 +68,7 @@ def pageSetup() {
              boolean holdable = buttonPause.every{ element -> element.hasCapability("HoldableButton") }
              boolean pushable = buttonPause.every{ element -> element.hasCapability("PushableButton") }
              boolean releasable = buttonPause.every{ element -> element.hasCapability("ReleasableButton") }
-             logging """
+                if (enabledebug) log.debug  """
                 doubletapable ? $doubletapable
 holdable ? $holdable
 pushable ? $pushable
@@ -113,7 +113,7 @@ releasable ? $releasable
                     paragraph "It will take up to 72 hours for the app to learn the maxium illuminance value this device can return, but it will start working immediately based on a preset value"
                     atomicState.maxValue = atomicState.maxValue == null ? 1000 : atomicState.maxValue // temporary value
                 }
-                logging("maxValue = $atomicState.maxValue")
+                if (enabledebug) log.debug("maxValue = $atomicState.maxValue")
 
             }
 
@@ -180,7 +180,7 @@ releasable ? $releasable
             input"logarithm", "bool", title: "Use logarithmic variations (beta)", value: false, submitOnChange: true
 
             if (logarithm) {
-                log.debug "logarithm menu..."
+                if (enabledebug) log.debug "logarithm menu..."
                 input "advanced", "bool", title: "Advanced logarithm settings (use with caution and with the graph helper)", submitOnChange: true, defaultValue: false
                 if (!advanced) {
                     logarithmPref()
@@ -190,15 +190,43 @@ releasable ? $releasable
                 }
             }
         }
-        section("logging"){
-            input"enablewarning", "bool", title: "Enable Warning logs", defaultValue: false, submitOnChange: true
-            input"enablelogging", "bool", title: "Enable Debug logs", defaultValue: false, submitOnChange: true
+        section("Logging"){
 
-            input"enabledescription", "bool", title: "Enable Description text", defaultValue: false, submitOnChange: true
-            log.debug "enablelogging => ${enablelogging}"
+            def now = now()
 
-            if (enablelogging) atomicState.enableLogging = now()
-            if (enablewarning) atomicState.enableWarning = now()
+            input "enabledebug", "bool", title: "Debug logs", submitOnChange: true
+            input "tracedebug", "bool", title: "Trace logs", submitOnChange: true
+            input "logwarndebug", "bool", title: "Warning logs", submitOnChange: true
+            input "description", "bool", title: "Description Text", submitOnChange: true
+
+            atomicState.EnableDebugTime = atomicState.EnableDebugTime == null ? now : atomicState.EnableDebugTime
+            atomicState.enableDescriptionTime = atomicState.enableDescriptionTime == null ? now : atomicState.enableDescriptionTime
+            atomicState.EnableWarningTime = atomicState.EnableWarningTime == null ? now : atomicState.EnableWarningTime
+            atomicState.EnableTraceTime = atomicState.EnableTraceTime == null ? now : atomicState.EnableTraceTime
+
+            if (enabledebug) {
+            def m = [
+                    "<br>test:$test",
+                    "<br>enabledebug: $enabledebug",
+                    "<br>tracedebug: $tracedebug",
+                    "<br>logwarndebug: $logwarndebug",
+                    "<br>description: $description",
+                    "<br>atomicState.EnableDebugTime = $atomicState.EnableDebugTime",
+                    "<br>atomicState.enableDescriptionTime = $atomicState.enableDescriptionTime",
+                    "<br>atomicState.EnableWarningTime = $atomicState.EnableWarningTime",
+                    "<br>atomicState.EnableTraceTime = $atomicState.EnableTraceTime",
+                ]
+                log.debug m.join()
+            }
+
+
+
+            if (enabledebug) atomicState.EnableDebugTime = now
+            if (description) atomicState.enableDescriptionTime = now
+            if (logwarndebug) atomicState.EnableWarningTime = now
+            if (tracedebug) atomicState.EnableTraceTime = now
+
+            atomicState.lastCheckTimer = now // ensure it won't run check_logs_timer right away to give time for states to update
 
         }
         section(""){
@@ -223,7 +251,7 @@ def appLabel(){
     }
     else if (app.label.contains("(Paused)")) {
         restoreLabel()
-        log.debug "new app label: ${app.label}"
+        if (enabledebug) log.debug "new app label: ${app.label}"
     }
 }
 def restoreLabel(){
@@ -244,7 +272,7 @@ def restoreLabel(){
 
 def advancedLogPref(){
 
-    log.debug "advancedLogPref////////////"
+    if (enabledebug) log.debug "advancedLogPref"
 
     if (advanced) {
             def url = "<a href='https://www.desmos.com/calculator/vi0qou21ol' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>CLICK HERE TO OPEN THE GRAPH HELPER</center></div></a>"
@@ -254,7 +282,7 @@ def advancedLogPref(){
             input "multiplier", "number", range: "3..3000", required: true, title: "Multipler: value named 'c' in graph tool", description: "Integer between 3 and 3000", submitOnChange: true
 
             def message = """In the graph helper, move the cursors to create the ideal curve for your specific environment.
-                            <div style="color:black;font-weight:bold;text-align:center;">Instructions:</div>
+            < div style = "color:black;font-weight:bold;text-align:center;" > Instructions:</div >
                             <ul>
                             <li>a.Cursor named "a" is an offset. It moves the curve up and down, without changing the curve's shape.</li>
                             <li>b.Cursor named "b" is the logarithm's base. It changes the shape of the curve by making it slightly steeper or flatter.</li>
@@ -279,17 +307,17 @@ def advancedLogPref(){
                             <td>c = 70 (multiplier; sets the gradient of the curve)</td>
                             </tr>
                             </table>
-                            """
+        """
 
-            paragraph message   
+            paragraph message
 
 
-            // paragraph """<div style=\"width:102%;background-color:grey;color:white;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"""
+        // paragraph """<div style=\"width:102%;background-color:grey;color:white;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"""
     }
 }
 def logarithmPref(){
 
-    log.debug "logarithmPref++++++++++++"
+    if (enabledebug) log.debug "logarithmPref"
 
     def title = advanced ? "Base: value named 'b' in the graph tool (decimal value such as '5.0' or '4.9')" : "set a sensitivity value"
     input "sensitivity", "decimal", range: "1.0..200.0", required: true, title: "$title", description: "DECIMAL between 1.0 and 50.0", submitOnChange: true // serves as xa basis in linear determination of log() function's multiplier
@@ -303,35 +331,24 @@ def logarithmPref(){
 
         if (wrong) {
             paragraph "<div style=\"width:102%;background-color:red;color:black;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"
-            log.warn message
+            if (logwarndebug) log.warn message
         }
         else {
-            logging message
+            if (enabledebug) log.debug  message
         }
     }
 }
 def installed() {
-    logging("Installed with settings: ${settings}")
+    if (enabledebug) log.debug("Installed with settings: ${settings}")
     initialize()
 }
 def updated() {
-    logging("updated with settings: ${settings}")
+    if (enabledebug) log.debug("updated with settings: ${settings}")
     unsubscribe()
     unschedule()
     initialize()
 }
 def initialize() {
-    atomicState.enableWarning = now()
-    atomicState.enableLogging = now()
-    atomicState.maxValue = !idk && !logarithm ? maxValue : 1000
-
-    if (enablelogging == true) {
-        runIn(1800, disablelogging)
-        descriptiontext("disablelogging scheduled to run in ${1800/60} minutes")
-    }
-    else {
-        log.warn "debug logging disabled!"
-    }
 
     atomicState.motionEvents = 0
 
@@ -351,7 +368,7 @@ def initialize() {
         s = motionSensors.size()
         for (s != 0; i < s; i++) {
             subscribe(motionSensors[i], "motion", motionHandler)
-            log.trace "${motionSensors[i]} subscribed to motion events"
+            if (tracedebug) log.trace "${motionSensors[i]} subscribed to motion events"
         }
     }
     i = 0
@@ -384,11 +401,11 @@ def initialize() {
 
     if (presenceRestricted) {
         subscribe(presenceRestricted, "presence", presenceHandler)
-        log.debug "$presenceRestricted subscribed to events"
+        if (enabledebug) log.debug "$presenceRestricted subscribed to events"
     }
     if (absenceRestricted) {
         subscribe(absenceRestricted, "presence", presenceHandler)
-        log.debug "$absenceRestricted subscribed to events"
+        if (enabledebug) log.debug "$absenceRestricted subscribed to events"
     }
     subscribe(modes, "mode", locationModeChangeHandler)
     subscribe(sensor, "illuminance", illuminanceHandler)
@@ -396,23 +413,22 @@ def initialize() {
     schedule("0 0/1 * * * ?", mainloop)
     schedule("0 0/10 * * * ?", poll)
 
-    logging("initialization ok")
-    mainloop()
+    if (enabledebug) log.debug("initialization ok")
 }
 def switchHandler(evt){
 
     atomicState.timeCmd = atomicState.timeCmd != null ? atomicState.timeCmd : now()
-    logwarn "switchHandler event after ${now() - atomicState.timeCmd} millis"
+    if (logwarndebug) log.warn "switchHandler event after ${now() - atomicState.timeCmd} millis"
 
     if (atomicState.paused) {
         return
     }
     if (location.mode in restrictedModes) {
-        log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} 4zg"
+        if (description) log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} 4zg"
         return
     }
 
-    logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
+    if (enabledebug) log.debug("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     atomicState.lastEvent = evt.name
     //mainloop() // infinite feedback loop!
 }
@@ -421,11 +437,11 @@ def doubleTapableButtonHandler(evt){
     appLabel()
     atomicState.paused = !atomicState.paused
     if (atomicState.paused) {
-        log.info formatText("${app.label} is now paused", "white", "red")
+        if (description) log.info formatText("${app.label} is now paused", "white", "red")
         atomicState.pauseTime = now()
     }
     else {
-        log.info formatText("Resuming ${app.label}", "white", "red")
+        if (description) log.info formatText("Resuming ${app.label}", "white", "red")
         updated()
     }
 }
@@ -433,10 +449,10 @@ def locationModeChangeHandler(evt){
     if (atomicState.paused) {
         return
     }
-    logging("$evt.name is now in $evt.value mode")
+    if (enabledebug) log.debug("$evt.name is now in $evt.value mode")
 
     if (evt.value in restrictedModes && keepLightsOffInRestrictedMode) {
-        log.debug "restricted mode, all lights are turned off"
+        if (enabledebug) log.debug "restricted mode, all lights are turned off"
         dimmersOff()
     }
     else {
@@ -451,10 +467,10 @@ def dimmersHandler(evt){
         return
     }
     if (location.mode in restrictedModes) {
-        log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} trfh5"
+        if (description) log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} trfh5"
         return
     }
-    logging """
+    if (enabledebug) log.debug  """
     $evt.device set to $evt.value
     atomicState.lastDimValSetByApp = $atomicState.lastDimValSetByApp
     atomicState.override = $atomicState.override """
@@ -462,13 +478,13 @@ def dimmersHandler(evt){
     atomicState.lastDimValSetByApp = atomicState.lastDimValSetByApp != null ? atomicState.lastDimValSetByApp : true
 
     if (override && !atomicState.lastDimValSetByApp && !atomicState.override) {
-        log.trace "USER OVERRIDE (will be canceled in 2 hours)"
+        if (tracedebug) log.trace "USER OVERRIDE (will be canceled in 2 hours)"
         atomicState.overrideTime = now()
         atomicState.override = true
     }
     if (atomicState.override) {
         atomicState.override = false
-        log.trace "END OF USER OVERRIDE DUE TO NEW USER NEW INPUT"
+        if (tracedebug) log.trace "END OF USER OVERRIDE DUE TO NEW USER NEW INPUT"
     }
 
     //atomicState.lastDimValSetByApp = false // get ready for a new user input 
@@ -480,10 +496,10 @@ def illuminanceHandler(evt){
         return
     }
     if (location.mode in restrictedModes) {
-        log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} 2z6rg7"
+        if (description) log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} 2z6rg7"
         return
     }
-    descriptiontext("$evt.name is now $evt.value")
+    if (description) log.info("$evt.name is now $evt.value")
 
     // learn max value if required
     def currentSensor = switchSensor2 == null || sensor2 == null ? sensor : switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor 
@@ -491,10 +507,10 @@ def illuminanceHandler(evt){
     def maxVal = atomicState.maxValue.toInteger()
     if (idk && illum?.toInteger() > maxVal && !logarithm) {
         atomicState.maxValue = illum
-        logging("new maximum lux value registered as: $atomicState.maxValue")
+        if (enabledebug) log.debug("new maximum lux value registered as: $atomicState.maxValue")
     }
     else {
-        logging "max value preset by user: ${maxValue}lux"
+        if (enabledebug) log.debug  "max value preset by user: ${maxValue}lux"
         atomicState.maxValue = maxValue
     }
 
@@ -506,11 +522,11 @@ def motionHandler(evt){
         return
     }
     if (location.mode in restrictedModes) {
-        log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")}8erthj"
+        if (description) log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")}8erthj"
         return
     }
 
-    log.trace "MOTION EVT ----- $evt.device is $evt.value"
+    if (tracedebug) log.trace "MOTION EVT ----- $evt.device is $evt.value"
 
     if (usemotion) {
         if (evt.value == "active") {
@@ -526,15 +542,15 @@ def motionHandler(evt){
     }
 }
 def presenceHandler(evt){
-    log.info "$evt.device is $evt.value"
+    if (description) log.info "$evt.device is $evt.value"
     mainloop()
 }
 def appButtonHandler(btn) {
-    logwarn "atomicState.paused = $atomicState.paused"
+    if (logwarndebug) log.warn "atomicState.paused = $atomicState.paused"
 
     switch (btn) {
         case "pause": atomicState.paused = !atomicState.paused
-            log.debug "atomicState.paused = $atomicState.paused"
+            if (enabledebug) log.debug "atomicState.paused = $atomicState.paused"
             appLabel()
             break
         case "update":
@@ -550,18 +566,15 @@ def appButtonHandler(btn) {
 
     }
 }
-
 def mainloop(){
 
     def start = now()
 
-    if (enablelogging && now() - atomicState.enableLogging > 1800 * 60) {
-        disablelogging()
-        log.debug "logging disabled"
-    }
+    // check_logs_timer()
+
 
     if (location.mode in restrictedModes) {
-        log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} 8rth4zj"
+        if (description) log.info "App paused due to modes restrictions (current mode: $location.mode | restricted Modes: ${restrictedModes?.join(", ")} 8rth4zj"
         return
     }
 
@@ -572,14 +585,14 @@ def mainloop(){
             def list = presenceRestricted.findAll{ it.currentValue("presence") == "present" }
             def listOfPresence = list?.join(", ")
 
-            log.info "App is paused because $listOfPresence ${list.size() > 1 ? "are" : "is"} present"
+            if (description) log.info "App is paused because $listOfPresence ${list.size() > 1 ? "are" : "is"} present"
             atomicState.pausedByPresenceSensor = true
             atomicState.paused = true
         }
         else if (absenceRestriction) {
             def listOfPresence = absenceRestricted?.join(", ")
 
-            log.info "App is paused because $listOfPresence ${list.size() > 1 ? "are" : "is"} NOT present"
+            if (description) log.info "App is paused because $listOfPresence ${list.size() > 1 ? "are" : "is"} NOT present"
             atomicState.pausedByPresenceSensor = true
             atomicState.paused = true
         }
@@ -604,18 +617,18 @@ def mainloop(){
 
     if (override) {
         if (atomicState.override && now() - atomicState.overrideTime < overrideDuration * 60 * 60 * 1000) {
-            log.trace("App paused for $overrideDuration ${overrideDuration>1 ? "hours":"hour"} due to user's manual input override")
+            if (tracedebug) log.trace("App paused for $overrideDuration ${overrideDuration>1 ? "hours":"hour"} due to user's manual input override")
             return
         }
         else if (atomicState.override && atomicState.overrideTime >= overrideDuration * 60 * 60 * 1000) {
             atomicState.override = false
             atomicState.lastDimValSetByApp = true // prevent false positive on next cycle
-            log.trace "END OF OVERRIDE, RESUMING NORMAL OPERATION"
+            if (tracedebug) log.trace "END OF OVERRIDE, RESUMING NORMAL OPERATION"
         }
     }
 
 
-    boolean Active = stillActive()
+    boolean motionActive = Active()
 
     boolean dimOff = dimmers.findAll{ it.currentValue("switch") == "off" }.size() == dimmers.size() 
     boolean keepDimmersOff = false
@@ -624,7 +637,7 @@ def mainloop(){
 
 
 
-    if (Active && (!keepDimmersOff || atomicState.turnedOffByNoMotionEvent)) {
+    if (motionActive && (!keepDimmersOff || atomicState.turnedOffByNoMotionEvent)) {
         atomicState.turnedOffByNoMotionEvent = false
         def dimVal = logarithm ? getDimValLog() : getDimVal()
 
@@ -632,29 +645,29 @@ def mainloop(){
         runIn(10, resetLastDimBool) // get ready for a new user manual override input 
         //dimVal = dimVal == 0 ? 1 : dimVal // 0 can't seem to go through data parameter with runin / platform inteprets it as boolean "false" and throws MissingMethodExceptionNoStack
         //dimVal = 10
-        //log.warn "dimVal = $dimVal"
+        //if(logwarndebug) log.warn "dimVal = $dimVal"
         //setDimmers(dimVal)
         runIn(5, setDimmers, [data: [dimVal: dimVal]])
 
         //switches?.on()
-        if (switches) logging "${switches} turned off"
+        if (switches) if (enabledebug) log.debug  "${switches} turned off"
     }
-    else if (Active && keepDimmersOff) {
+    else if (motionActive && keepDimmersOff) {
         def message = ""
         if (override) message = "App in override mode for $overrideDuration ${overrideDuration > 1 ? "hours":"hour"} - or dimmers turned off by a different app or by user"
         if (!override) message = "dimmers are off and managed by a different app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
         description message
     }
-    else if (!Active) {
-        descriptiontext "no motion..."
+    else if (!motionActive) {
+        if (description) log.info "no motion..."
         atomicState.turnedOffByNoMotionEvent = true
         dimmersOff()
         switches?.off()
-        if (switches) logging "${switches} turned off"
+        if (switches) if (enabledebug) log.debug  "${switches} turned off"
     }
 
     if (atomicState.turnedOffByNoMotionEvent) {
-        log.trace "keepDimmersOff not set to true because atomicState.turnedOffByNoMotionEvent = true : turned off by no motion event, not user or other app input"
+        if (tracedebug) log.trace "keepDimmersOff not set to true because atomicState.turnedOffByNoMotionEvent = true : turned off by no motion event, not user or other app input"
     }
 
     if (highLuxSwitch) {
@@ -667,19 +680,68 @@ def mainloop(){
         if (switchSensor2 && NeedCurtainOff && !atomicState.curtainsWereTurnedOff) {
             switchSensor2."${switchState}"()
             atomicState.curtainsWereTurnedOff = true
-            logging "turning $switchSensor2 $switchState due to excess of illuminance"
+            if (enabledebug) log.debug  "turning $switchSensor2 $switchState due to excess of illuminance"
         }
         else if (switchSensor2 && !NeedCurtainOff && toggleBack && atomicState.curtainsWereTurnedOff) {
             switchSensor2."${switchState == "off" ? "on" : "off"}"()
             atomicState.curtainsWereTurnedOff = false
-            logging "turning $switchSensor2 ${switchState == "off" ? "on" : "off"} because illumiance is low again"
+            if (enabledebug) log.debug  "turning $switchSensor2 ${switchState == "off" ? "on" : "off"} because illumiance is low again"
         }
 
     }
 
-    logwarn "mainloop duration: ${(now() - start)} millis"
+    if (logwarndebug) log.warn "mainloop duration: ${(now() - start)} millis"
 }
+def check_logs_timer(){
+    
+    long now = now()
 
+    if (atomicState.lastCheckTimer == null || (now - atomicState.lastCheckTimer) >= 60000) {
+
+        atomicState.lastCheckTimer = now
+
+        long days = 30L
+        def hours = 10
+        def minutes = 30
+        //the int data type is a 32-bit signed integer, which has a maximum value of 2,147,483,647. 
+        // 30 * 24 * 60 * 60 * 1000, exceeds this maximum value, resulting in an integer overflow and thus a negative number.
+    
+        long longTerm = days * 24L * 60L * 60L * 1000L 
+        long mediumTerm = hours * 60 * 60 * 1000
+        long shortTerm = minutes * 60 * 1000
+    
+        boolean endDebug = (now - atomicState.EnableDebugTime) >= shortTerm
+        boolean endDescription = (now - atomicState.enableDescriptionTime) >= longTerm
+        boolean endWarning = (now - atomicState.EnableWarningTime) >= mediumTerm
+        boolean endTrace = (now - atomicState.EnableTraceTime) >= mediumTerm
+
+        if (enabledebug) {
+            def message = [
+                "<br>end debug  ? $endDebug",
+                "<br>end descr  ? $endDescription",
+                "<br>end warn   ? $endWarning",
+                "<br>end trace  ? $endTrace",
+                "<br>now - atomicState.EnableDebugTime: ${now - atomicState.EnableDebugTime}",
+                "<br>now - atomicState.enableDescriptionTime: ${now - atomicState.enableDescriptionTime}",
+                "<br>now - atomicState.EnableWarningTime: ${now - atomicState.EnableWarningTime}",
+                "<br>now - atomicState.EnableTraceTime: ${now - atomicState.EnableTraceTime}",
+                "<br>longTerm: $longTerm",
+                "<br>mediumTerm: $mediumTerm",
+                "<br>shortTerm: $shortTerm",
+            ]
+            if (enabledebug) log.debug message.join()
+        }
+
+
+        if (endDebug && enabledebug) disablelogging()
+        if (endDescription && description) disabledescription()
+        if (endWarning && logwarndebug) disablewarnings()
+        if (endTrace && tracedebug) disabletrace()
+    }
+    else {
+        if (tracedebug) log.trace "log timer already checked in the last 60 seconds"
+    }
+}
 def resetLastDimBool(){
     atomicState.lastDimValSetByApp = false
 }
@@ -692,14 +754,14 @@ def getDimVal(){
     def currentSensor = switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
 
-    logging "LINEAR"
-    logging "${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}"
-    logging "${switchSensor2 ? "${ switchSensor2?.currentValue("switch") } " : ""}"
-    logging "${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}"
-    logging "${switchSensor2 ? "switchState boolean reference is: $switchState" : ""}"
-    logging "illuminance sensor is: $currentSensor"
-    logging "illuminance is: $illum lux"
-    logging "maxValue = ${maxValue ? "$maxValue(user defined value, no learning)" : "atomicState.maxValue = $atomicState.maxValue(learned value)"}"
+    if (enabledebug) log.debug  "LINEAR"
+    if (enabledebug) log.debug  "${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}"
+    if (enabledebug) log.debug  "${switchSensor2 ? "${ switchSensor2?.currentValue("switch") } " : ""}"
+    if (enabledebug) log.debug  "${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}"
+    if (enabledebug) log.debug  "${switchSensor2 ? "switchState boolean reference is: $switchState" : ""}"
+    if (enabledebug) log.debug  "illuminance sensor is: $currentSensor"
+    if (enabledebug) log.debug  "illuminance is: $illum lux"
+    if (enabledebug) log.debug  "maxValue = ${maxValue ? "$maxValue(user defined value, no learning)" : "atomicState.maxValue = $atomicState.maxValue(learned value)"}"
 
     def maxIllum = idk && !logarithm ? atomicState.maxValue : maxValue  // if idk selected, then use last learned max value (atomicState.maxValue)
 
@@ -712,12 +774,12 @@ def getDimVal(){
     def m = -0.1 // multiplier/slope 
 
     y = m * (x - xa) + ya // solving y-ya = m*(x-xa)
-    //logging "algebra found y = $y"
+    //if(enabledebug) log.debug  "algebra found y = $y"
     dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal // useless due to slope being -0.1 but just in case I forget about the slope's value function, I leave this line and its comment here
 
-    logging """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxValue = $maxValue)" : ""}
+    if (enabledebug) log.debug  """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxValue = $maxValue)" : ""}
 
 linear dimming value result = ${ dimVal }
     """
@@ -733,14 +795,14 @@ def getDimValLog(){ // logarithmic
     def illum = currentSensor.currentValue("illuminance")
 
 
-    logging "LOGARITHMIC"
-    logging "${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}"
-    logging "${switchSensor2 ? "${ switchSensor2?.currentValue("switch") } " : ""}"
-    logging "${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}"
-    logging "${switchSensor2 ? "switchState boolean reference is: $switchState" : ""}"
-    logging "illuminance sensor is: $currentSensor"
-    logging "illuminance is: $illum lux"
-    logging "No max value in logarithmic mode."
+    if (enabledebug) log.debug  "LOGARITHMIC"
+    if (enabledebug) log.debug  "${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}"
+    if (enabledebug) log.debug  "${switchSensor2 ? "${ switchSensor2?.currentValue("switch") } " : ""}"
+    if (enabledebug) log.debug  "${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}"
+    if (enabledebug) log.debug  "${switchSensor2 ? "switchState boolean reference is: $switchState" : ""}"
+    if (enabledebug) log.debug  "illuminance sensor is: $currentSensor"
+    if (enabledebug) log.debug  "illuminance is: $illum lux"
+    if (enabledebug) log.debug  "No max value in logarithmic mode."
 
     def y = null // value to find
     def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
@@ -751,21 +813,20 @@ def getDimValLog(){ // logarithmic
     def c = multiplier ? multiplier : 70
 
     y = (Math.log10(1 / x) / Math.log10(b)) * c + a
-    logging "log${b}(1/${x})*${c}+${a} -> $y"
+    if (enabledebug) log.debug  "log${b}(1/${x})*${c}+${a} -> $y"
     dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
-    dimVal = dimVal > 100 ? 100 : dimVal 
+    dimVal = dimVal > 100 ? 100 : dimVal
 
-    logging "LOGARITHMIC dimming value = ${dimVal} (illuminance: $illum)"
+    if (enabledebug) log.debug  "LOGARITHMIC dimming value = ${dimVal} (illuminance: $illum)"
     return dimVal
 }
-
 def dimmersOff(){
     if (atomicState.paused) {
         return
     }
     if (location.mode in restrictedModes) {
-        log.debug "location in restricted mode (${location.mode})"
+        if (enabledebug) log.debug "location in restricted mode (${location.mode})"
         return
     }
     // allow manual usage after turned off in restricted mode
@@ -779,7 +840,7 @@ def setDimmers(val){
 
     val = val.dimVal
     //val = val == "null" || val == null ? 0 : val
-    log.warn "setDimmers to $val"
+
 
     if (atomicState.paused) {
         return
@@ -787,7 +848,7 @@ def setDimmers(val){
 
     atomicState.dimmersSetToOffByRestrictedMode = atomicState.dimmersSetToOffByRestrictedMode == null ? false : atomicState.dimmersSetToOffByRestrictedMode
     if (location.mode in restrictedModes && keepLightsOffInRestrictedMode) {
-        log.debug "location in restricted mode (${location.mode})"
+        if (enabledebug) log.debug "location in restricted mode (${location.mode})"
 
 
         //make sure this runs only once so user can turn and keep lights on if they wish when in restricted mode
@@ -814,11 +875,13 @@ def setDimmers(val){
             def maxvalinthismode = settings.find{ it.key == valMode }.value
 
             if (val > maxvalinthismode) {
-                logging("ADJUSTED WITH CURRENT MODE == > valMode = $valMode && maxvalinthismode = $maxvalinthismode")
+                if (enabledebug) log.debug("ADJUSTED WITH CURRENT MODE == > valMode = $valMode && maxvalinthismode = $maxvalinthismode")
                 val = maxvalinthismode
             }
         }
     }
+
+    if (logwarndebug) log.warn "setDimmers to $val"
 
     val = val < 0 ? 0 : (val > 100 ? 100 : val) // just a precaution
     if (val == 0) {
@@ -829,11 +892,10 @@ def setDimmers(val){
     }
     if (minimumValue && val < minimumValue) val = minimumValue
     dimmers.setLevel(val)
-    logging("${dimmers.join(", ")} set to $val ---")
+    if (enabledebug) log.debug("${dimmers.join(", ")} set to $val ---")
 }
-
-boolean stillActive(){
-    logwarn "motion test start"
+boolean Active(){
+    if (logwarndebug) log.warn "motion test start"
     def start = now()
 
     boolean result = true
@@ -845,13 +907,13 @@ boolean stillActive(){
 
     if (modetimeout && !inTimeOutModes) // if use timeout modes and not in this mode, then ignore motion (keep lights on)
     {
-        log.trace "Location is outside of timeout modes, ignoring motion events"
+        if (tracedebug) log.trace "Location is outside of timeout modes, ignoring motion events"
         return result
     }
     if (usemotion) {
         def currentlyActive = motionSensors.findAll{ it -> it.currentValue("motion") == "active" }
         if (currentlyActive?.size() > 0) {
-            log.trace "${currentlyActive.join(", ")} ${currentlyActive?.size() > 1 ? "are" : "is"} currently active"
+            if (tracedebug) log.trace "${currentlyActive.join(", ")} ${currentlyActive?.size() > 1 ? "are" : "is"} currently active"
             return true
         }
 
@@ -868,12 +930,12 @@ boolean stillActive(){
                 events += sensor.eventsSince(period, [max: 200]).findAll{ it.value == "active" }.size()
         }
 
-        descriptiontext "atomicState.activeEvents = $atomicState.activeEvents | collectionSize = $events | timeout: $timeOut minutes"
+        if (description) log.info  "atomicState.activeEvents = $atomicState.activeEvents | collectionSize = $events | timeout: $timeOut minutes"
 
         result = events > 0 || atomicState.activeEvents > 0
     }
 
-    logwarn "motion test duration: ${(now() - start)} millis"
+    if (logwarndebug) log.warn "motion test duration: ${(now() - start)} millis"
     //return true
     return result
 }
@@ -884,56 +946,34 @@ def getTimeout(){
     if (modetimeout && location.mode in timeoutModes) {
         int s = timeoutModes.size()
         int i = 0
-        logging("timeoutModes: $timeoutModes")
+        if (enabledebug) log.debug("timeoutModes: $timeoutModes")
         while (i < s && location.mode != timeoutModes[i]) { i++ }
-        logging("${location.mode} == ${timeoutModes[i]} (timeoutModes${i} : index $i) ?: ${location.mode == timeoutModes[i]}")
+        if (enabledebug) log.debug("${location.mode} == ${timeoutModes[i]} (timeoutModes${i} : index $i) ?: ${location.mode == timeoutModes[i]}")
         valMode = "timeoutValMode${i}" // get the key as string to search its corresponding value within settings
-        logging("valMode = $valMode")
+        if (enabledebug) log.debug("valMode = $valMode")
         result = settings.find{ it.key == valMode }?.value
-        logging("valMode.value == $result")
+        if (enabledebug) log.debug("valMode.value == $result")
     }
     if (result == null) {
         result = noMotionTime
     }
-    logging("timeout is: $result  ${if(modetimeout){"because home is in $location.mode mode"}}")
+    if (enabledebug) log.debug("timeout is: $result  ${if(modetimeout){"because home is in $location.mode mode"}}")
 
 
     return result
 }
 def resetMotionEvents(){
-    logging("No motion event has occured during the past $noMotionTime minutes")
+    if (enabledebug) log.debug("No motion event has occured during the past $noMotionTime minutes")
     atomicState.motionEvents = 0
 }
-def logging(msg){
-    //def debug = settings.find{it.key == "enablelogging"}?.value
-    //log.warn "debug = $debug"
-    if (enablelogging) log.debug msg
-}
-def descriptiontext(msg){
-    //def debug = settings.find{it.key == "enablelogging"}?.value
-    //log.warn "debug = $debug"
-    if (enabledescription) log.info msg
-}
-def logwarn(msg){
-    if (enablewarning) log.warn msg
-    if (enablewarning && now() - atomicState.enableWarning > 30 * 60 * 1000) {
-        disablelogging()
-    }
-}
-def disablelogging(){
 
-    app.updateSetting("enablelogging", [value: "false", type: "bool"])
-    app.updateSetting("enablewarning", [value: "false", type: "bool"])
-    atomicState.enableLogging = now()
-    log.debug "logging disabled!"
-}
 def poll(){
-    logging "polling devices"
+    if (enabledebug) log.debug  "polling devices"
     boolean haspoll = false
     boolean hasrefresh = false
     dimmers.each{
-        if (it.hasCommand("poll")) { it.poll() } else { logging("$it doesn't have poll command") }
-        if (it.hasCommand("refresh")) { it.refresh() } else { logging("$it doesn't have refresh command") }
+        if (it.hasCommand("poll")) { it.poll() } else { if (enabledebug) log.debug("$it doesn't have poll command") }
+        if (it.hasCommand("refresh")) { it.refresh() } else { if (enabledebug) log.debug("$it doesn't have refresh command") }
     }
 }
 def formatText(title, textColor, bckgColor){

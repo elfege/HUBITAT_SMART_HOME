@@ -20,7 +20,6 @@ definition(
     iconX2Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
     iconX3Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
 )
-
 preferences {
 
     page name: "pageSetup"
@@ -243,7 +242,6 @@ releasable ? $releasable
         }
     }
 }
-
 def appLabel(){
     if (atomicState.paused) {
         restoreLabel()
@@ -269,7 +267,6 @@ def restoreLabel(){
         }
     }
 }
-
 def advancedLogPref(){
 
     if (enabledebug) log.debug "advancedLogPref"
@@ -570,7 +567,12 @@ def mainloop(){
 
     def start = now()
 
-    // check_logs_timer()
+    check_logs_timer()
+
+    boolean motionActive = Active()
+    boolean dimOff = dimmers.findAll{ it.currentValue("switch") == "off" }.size() == dimmers.size() 
+    boolean keepDimmersOff = false
+    keepDimmersOff = usemotion ? dimOff && (otherApp || override) && !atomicState.turnedOffByNoMotionEvent : dimOff && (otherApp || override)
 
 
     if (location.mode in restrictedModes) {
@@ -628,12 +630,7 @@ def mainloop(){
     }
 
 
-    boolean motionActive = Active()
-
-    boolean dimOff = dimmers.findAll{ it.currentValue("switch") == "off" }.size() == dimmers.size() 
-    boolean keepDimmersOff = false
-
-    keepDimmersOff = usemotion ? dimOff && (otherApp || override) && !atomicState.turnedOffByNoMotionEvent : dimOff && (otherApp || override)
+    
 
 
 
@@ -966,7 +963,6 @@ def resetMotionEvents(){
     if (enabledebug) log.debug("No motion event has occured during the past $noMotionTime minutes")
     atomicState.motionEvents = 0
 }
-
 def poll(){
     if (enabledebug) log.debug  "polling devices"
     boolean haspoll = false
@@ -979,7 +975,6 @@ def poll(){
 def formatText(title, textColor, bckgColor){
     return "<div style=\"width:102%;background-color:${bckgColor};color:${textColor};padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${title}</div>"
 }
-
 def donate(){
     def a = """
         < form action = "https://www.paypal.com/cgi-bin/webscr" method = "post" target = "_top" >

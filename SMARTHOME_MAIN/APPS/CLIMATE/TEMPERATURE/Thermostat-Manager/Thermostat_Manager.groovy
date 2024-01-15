@@ -18,7 +18,7 @@ definition(
     iconX3Url: "https://www.elfege.com/penrose.jpg",
     image: "https://www.elfege.com/penrose.jpg"
 )
-/************************************************SETTINGS******************************************************/
+/* ################################*SETTINGS* #################################*/
 preferences {
 
     page name: "MainPage"
@@ -1079,7 +1079,7 @@ def pageNameUpdate(){
     }
 }
 
-/************************************************DEBUG TIMER*************************************************/
+/* ############################### DEBUG TIMER* ################################ */
 def check_logs_timer(){
     
     long now = now()
@@ -1131,7 +1131,7 @@ def check_logs_timer(){
     }
 }
 
-/************************************************INITIALIZATION*************************************************/
+/* ############################### INITIALIZATION* ################################ */
 def installed() {
     if (enabledebug) log.debug "Installed with settings: ${settings}"
 
@@ -1287,7 +1287,7 @@ def initialize(){
 
 }
 
-/************************************************EVT HANDLERS***************************************************/
+/* ############################### EVT HANDLERS* ################################# */
 def modeChangeHandler(evt){
     if (enableinfo) log.info "$evt.name is now $evt.value"
 
@@ -1746,7 +1746,7 @@ def windowsHandler(evt){
     }
 }
 
-/************************************************MAIN OPERATIONS*************************************************/
+/* ############################### MAIN OPERATIONS ############################### */
 def resetBusy(){
     atomicState.busy = false
     log.debug "atomicState.busy reset to false"
@@ -3466,7 +3466,8 @@ def resetUserWants(){
 }
 
 
-/************************************************DECISIONS******************************************************/
+/* ############################### DECISIONS ############################### */
+
 def getTarget(simpleModeActive, inside, outside){
 
     int target = 74 // default value
@@ -4366,7 +4367,7 @@ def getInsideTemp(){
     return inside
 }
 
-/************************************************GETTERS******************************************************/
+/* ############################### GETTERS ############################### *******/
 
 def getOutsideThershold(){
 
@@ -4434,7 +4435,8 @@ def getLastMotionEvents(Dtime, testType){
 
     int events = 0
 
-    /******************************IF ANY ACTIVE, THEN NO NEED FOR COLLECTION***********************************************/
+    /* ############################### IF ANY ACTIVE, THEN NO NEED FOR COLLECTION ############################### */
+    
     //this is faster to check if a sensor is still active than to collect past events
     if (motionSensors.any{ it -> it.currentValue("motion") == "active" })
     {
@@ -4447,7 +4449,7 @@ def getLastMotionEvents(Dtime, testType){
     /******************************COLLECTION  O(n)!!!**********************************************************/
     collection = motionSensors.collect{ it.eventsSince(new Date(now() - Dtime)).findAll{ it.value == "active" } }.flatten()
     events = collection.size()
-    /**************************************************************************************************/
+    /* ########################################################################################################## */
 
     if (testType == "motionTest") if (enabletrace) log.trace  "$events active events collected within the last ${Dtime/1000/60} minutes (eventsSince)"
 
@@ -4599,7 +4601,7 @@ def getOutsideHumidity(){
     return outsideTemp.hasCapability("RelativeHumidityMeasurement") ? outsideTemp.currentValue("humidity") : getInsideHumidity()
 }
 
-/************************************************A.I. LEARNING (beta 2 October 2023) ******************************************************/
+ /* ############################### A.I. LEARNING (beta 2 October 2023) ############################### */
 
 Boolean createFile(String fName, String fData) {
     try {
@@ -4911,7 +4913,7 @@ def convert_db_to_fahrenheit() {
     }
 }
 
-/* *********************************************BOOLEANS***************************************************** */
+/* ############################### BOOLEANS ###############################****** */
 
 boolean simpleModeIsActive(){
     atomicState.lastButtonEvent = atomicState.lastButtonEvent != null ? atomicState.lastButtonEvent : now()
@@ -5068,16 +5070,18 @@ boolean checkIgnoreTarget(){
     def result = simpleModeIsActive() && doNotIgnoreTargetInSimpleMode ? false : ignoreTarget
     return result
 }
-/**
- * This function uses a calculateScalingFactor method to dynamically adjust the scaling factor for the delay.
- * In this updated version, the `calculateScalingFactor` method uses a logarithmic function to calculate
- * the scaling factor based on the temperature difference from the threshold.
- * The function ensures that the calculated delay is within the specified range of 5 to 30 minutes. 
- * The logarithmic approach provides a nuanced and responsive adjustment to the delay, particularly beneficial in 
- * environments where the outside temperature can vary significantly. This method ensures that the system responds more 
- * sensitively to larger temperature differences while avoiding overreaction to minor temperature fluctuations.
- */
+
 boolean need_to_wait_between_modes(need, inside, target, outside) {
+    /**
+     * This function uses a calculateScalingFactor method to dynamically adjust the scaling factor for the delay.
+     * The `calculateScalingFactor` method uses a logarithmic function to calculate
+     * the scaling factor based on the temperature difference from the threshold.
+     * The function ensures that the calculated delay is within the specified range of 5 to 30 minutes. 
+     * The logarithmic approach provides a nuanced and responsive adjustment to the delay, particularly beneficial in 
+     * environments where the outside temperature can vary significantly. This method ensures that the system responds more 
+     * sensitively to larger temperature differences while avoiding overreaction to minor temperature fluctuations.
+     */
+
     if (enabledebug) log.debug "atomicState.lastTimeHeat => $atomicState.lastTimeHeat"
     if (enabledebug) log.debug "atomicState.lastNeed => $atomicState.lastNeed"
     if (enabledebug) log.debug "need => $need"
@@ -5112,16 +5116,15 @@ boolean need_to_wait_between_modes(need, inside, target, outside) {
     // log.warn "need_to_wait_between_modes ===> $result"
     return result
 }
-
-/**
- * Calculate the scaling factor for delay based on the outside temperature using a logarithmic approach.
- * 
- * @param outside Current outside temperature
- * @param threshold Temperature threshold for scaling
- * @param decreaseDelay Flag to indicate if delay should be decreased (true) or increased (false)
- * @return The scaling factor for delay adjustment
- */
 def calculateScalingFactor(outside, threshold, decreaseDelay) {
+    /**
+     * Calculate the scaling factor for delay based on the outside temperature using a logarithmic approach.
+     * 
+     * @param outside Current outside temperature
+     * @param threshold Temperature threshold for scaling
+     * @param decreaseDelay Flag to indicate if delay should be decreased (true) or increased (false)
+     * @return The scaling factor for delay adjustment
+     */
     // Define minimum and maximum delay times (5 to 30 minutes in milliseconds)
     def minDelay = 5 * 60 * 1000
     def maxDelay = 30 * 60 * 1000
@@ -5147,15 +5150,11 @@ def calculateScalingFactor(outside, threshold, decreaseDelay) {
     // Ensure delay is within the allowed range
     def result = Math.max(minDelay, Math.min(delay, maxDelay)) / base_delay
     log.trace "calaculated scalling factor for wating time between modes: ${result / 60 / 1000} minutes"
-    return result 
+    return result
 }
 
+/* ################################# POLLING AND LOGGING ################################# */
 
-
-
-
-
-// ************************************************MISCELANEOUS*********************************************************/
 
 def stop(data){
     //if(enablewarning) log.warn "STOP STOP STOP STOP ++++++++++++++++++++++++++++++customCommand = $customCommand"

@@ -191,7 +191,7 @@ releasable ? $releasable
         }
         section("Logging"){
 
-            def now = now()
+            long now = now()
 
             input "enabledebug", "bool", title: "Debug logs", submitOnChange: true
             input "tracedebug", "bool", title: "Trace logs", submitOnChange: true
@@ -204,18 +204,22 @@ releasable ? $releasable
             atomicState.EnableTraceTime = atomicState.EnableTraceTime == null ? now : atomicState.EnableTraceTime
 
             if (enabledebug) {
-            def m = [
-                    "<br>test:$test",
-                    "<br>enabledebug: $enabledebug",
-                    "<br>tracedebug: $tracedebug",
-                    "<br>logwarndebug: $logwarndebug",
-                    "<br>description: $description",
-                    "<br>atomicState.EnableDebugTime = $atomicState.EnableDebugTime",
-                    "<br>atomicState.enableDescriptionTime = $atomicState.enableDescriptionTime",
-                    "<br>atomicState.EnableWarningTime = $atomicState.EnableWarningTime",
-                    "<br>atomicState.EnableTraceTime = $atomicState.EnableTraceTime",
+                def message = [
+                    "<br>end debug  ? $endDebug",
+                    "<br>end descr  ? $endDescription",
+                    "<br>end warn   ? $endWarning",
+                    "<br>end trace  ? $endTrace",
+                    "<br>now = $now",
+                    "<br>now - atomicState.EnableDebugTime: ${now - atomicState.EnableDebugTime}",
+                    "<br>now - atomicState.enableDescriptionTime: ${now - atomicState.enableDescriptionTime}",
+                    "<br>now - atomicState.EnableWarningTime: ${now - atomicState.EnableWarningTime}",
+                    "<br>now - atomicState.EnableTraceTime: ${now - atomicState.EnableTraceTime}",
+                    "<br>now - atomicState.lastCheckTimer: ${now - atomicState.lastCheckTimer}",
+                    "<br>longTerm: $longTerm",
+                    "<br>mediumTerm: $mediumTerm",
+                    "<br>shortTerm: $shortTerm",
                 ]
-                log.debug m.join()
+                if (enabledebug) log.debug message.join()
             }
 
 
@@ -986,4 +990,16 @@ def donate(){
 
         """
     return a
+}
+def disablelogging(){
+    app.updateSetting("enabledebug", [type: "bool", value: false] )
+}
+def disabledescription(){
+    app.updateSetting("description", [type: "bool", value: false] )
+}
+def disablewarnings(){
+    app.updateSetting("logwarndebug", [type: "bool", value: false] )
+}
+def disabletrace(){
+    app.updateSetting("tracedebug", [type: "bool", value: false] )
 }

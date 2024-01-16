@@ -1849,7 +1849,7 @@ def mainloop(source = "UNDEFINED"){
         if (enabletrace) s = now()
         if (enabletrace) log.trace "Getting outside temperature from outsideTemp"
         try {
-            outside = outsideTemp.currentValue("temperature")
+            outside = outsideTemp.currentValue("temperature").toDouble()
         } catch (Exception e) {
             log.error "outsideTemp => $e"
         }
@@ -1879,6 +1879,16 @@ def mainloop(source = "UNDEFINED"){
             needData = getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContactsAreOpen, neededThermostats, "mainloop")
         } catch (Exception e) {
             log.error "getNeed => $e"
+            def m = [
+                "<br>target = $target",
+                "<br>simpleModeActive = $simpleModeActive",
+                "<br>inside = $inside",
+                "<br>outside = $outside",
+                "<br>motionActive = $motionActive",
+                "<br>doorsContactsAreOpen = $doorsContactsAreOpen",
+                "<br>neededThermostats = $neededThermostats"
+            ]
+            log.error m.join()
         }
         if (enabletrace) log.trace "Result of getNeed: $needData execution time: ${now() -s} ms"
 
@@ -1993,7 +2003,6 @@ def mainloop(source = "UNDEFINED"){
     atomicState.busy = false
     log.debug "end of mainloop. Duration: ${now() - start} ms"
 }
-
 def foolproof(){
     if (offrequiredbyuser && fanCirculateAlways) // fool proof, these two options must never be true together, fancirculate takes precedence
     {
@@ -2116,7 +2125,10 @@ def powerManagement(inside, outside, need, target, cmd, contactClosed, doorsCont
 
             try {
                 currentOperatingNeed = need == "cool" ? "cooling" : need == "heat" ? "heating" : need == "off" ? "idle" : "ERROR"
-                if (currentOperatingNeed == "ERROR") { log.error "currentOperatingNeed = $currentOperatingNeed" }
+                if (currentOperatingNeed == "ERROR") { 
+                    log.error "currentOperatingNeed = $currentOperatingNeed" 
+                    return 0
+                }
 
 
                 if (enablewarning) log.warn "Main thermostat = $thermostat"
@@ -3552,8 +3564,8 @@ def getTarget(simpleModeActive, inside, outside){
     return target
 }
 def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContactsAreOpen, neededThermostats, origin){
-
-    if (enabledebug) log.debug "getNeed called from $origin | target: $target | simpleModeActive: $simpleModeActive | inside: $inside"
+    
+    /*if (enabledebug)*/ log.debug "getNeed called from $origin | target: $target | outside: $outside | simpleModeActive: $simpleModeActive | inside: $inside"
 
     atomicState.userWantsWarmerTimeStamp = atomicState.userWantsWarmerTimeStamp == null ? now() : atomicState.userWantsWarmerTimeStamp
     atomicState.userWantsCoolerTimeStamp = atomicState.userWantsCoolerTimeStamp == null ? now() : atomicState.userWantsCoolerTimeStamp
@@ -3601,7 +3613,7 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
     def outsideThres = getOutsideThershold()
     def need0 = ""
     def need1 = ""
-    def need = []
+    def need = [need0, need1]
     def amplThreshold = 3
     def amplitude = Math.abs(inside - target)
     def lo = celsius ? getCelsius(50) : 50
@@ -3644,7 +3656,6 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
     boolean unacceptable = doorsContactsAreOpen && !atomicState.override && (inside < target - 2 || inside > target + 2) // if it gets too cold or too hot, ignore doorsManagement
 
     def message = ""
-
 
     if (enabletrace) {
         message = [
@@ -3701,7 +3712,7 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
         else if (offrequiredbyuser) {
             need0 = "off"
             need1 = "off"
-            if (enabledebug) log.debug "need set to OFF"
+            if (enabledebug) log.debug "need set to OFF 6f45h4"
         }
         else {
 
@@ -3717,7 +3728,7 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
     }
     else   // POWER SAVING MODE OR NO MOTION OR CONTACTS OPEN     
     {
-        if (enabletrace) log.trace "POWER SAVING MODE ACTIVE" 
+        log.warn "POWER SAVING MODE ACTIVE" 
 
         def cause = location.mode in powersavingmode ? "$location.mode" :
             !motionActive ? "no motion" :
@@ -3798,9 +3809,6 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
         if (enableinfo) log.info formatText("$simpleModeName Mode Disabled", "white", "grey")
     }
 
-    need = [need0, need1]
-
-
     if (differentiateThermostatsHeatCool) {
 
 
@@ -3857,6 +3865,53 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
         }
     }
 
+    // if lastNeed was A and new need is B, then it's a mode switch, which requires a delay for multiple reasons: 
+    // 1. HVAC or other electrical heaters/coolers operating stability and, in the long run, lifespan
+    // 2. Avoids wasting power cooling when it's cool enough outside for the house to cool on its own
+    // 3. Avoids wasting power heating when it's hot enough outside or through house's inertia (which is related to outside's temp and atm pressure anyway)
+    // 4. In simpler terms: we don't want cooling operation in the winter or heating in the summer. 
+
+    atomicState.waitAfterCoolConditionMet = atomicState.waitAfterCoolConditionMet == null ? false : atomicState.waitAfterCoolConditionMet
+    atomicState.waitAfterHeatlConditionMet = atomicState.waitAfterHeatlConditionMet == null ? false : atomicState.waitAfterHeatlConditionMet
+
+    if (need1 == "cool" && atomicState.lastNeed == "heat" && !atomicState.waitAfterCoolConditionMet) {
+        atomicState.lastTimeCool = now() // keep track of time to avoid oscillations between cool / heat during shoulder season
+        atomicState.waitAfterHeatlConditionMet = true
+    }
+    if (need1 == "heat" && atomicState.lastNeed == "cool" && !atomicState.waitAfterHeatlConditionMet) {
+        atomicState.lastTimeHeat = now() // same idea
+        atomicState.waitAfterCoolConditionMet = true
+    }
+    
+    need_to_wait = need_to_wait_between_modes(need1, inside, outside, target)
+
+    if (need1 == "heat" && atomicState.userWantsWarmer) {
+        if (enablewarning) log.warn "user wants a warmer room, shoulder season timed override ignored. Switching to heating mode"
+    }
+    else if (need_to_wait) {
+        if (enablewarning) log.warn "last cooling request was too close to switch to heating mode now"
+        need0 = "off"
+        need1 = "off"
+    }
+
+    if (need1 == "cool" && atomicState.userWantsCooler) {
+        if (enablewarning) log.warn "user wants a cooler room, shoulder season timed override ignored. Switching to cooling mode"
+    }
+    else if (need_to_wait) {
+        if (enablewarning) log.warn "last heating request was too close to switch to cooling mode now"
+        need0 = "off"
+        need1 = "off"
+    }
+
+    need = [need0, need1]
+
+    atomicState.lastNeed = need1 == "off" ? atomicState.lastNeed : need1  // need1 should always be "off" when need_to_wait_between_modes == true, so no need to verify this boolean here. 
+
+    if (enableinfo) log.info "atomicState.lastNeed = $atomicState.lastNeed"
+    if (enabletrace) log.trace  "need: $need1 | target: $target | outside: $outside | inside: $inside | inside hum: ${getInsideHumidity()} | outside hum ${getOutsideHumidity()} | Open Contacts:$doorsContactsAreOpen  65fhjk45"
+
+    atomicState.need1 = need1 // memoization for other methods that can't pass needed parameters for getNeed to work
+
     if (enabledebug) {
         message = [
             "<div style='background:darkgray;color:darkblue;display:inline-block:position:relative;inset-inline-start:-20%'> ",
@@ -3909,61 +3964,10 @@ def getNeed(target, simpleModeActive, inside, outside, motionActive, doorsContac
             "<br> --------------------------------------- ",
             "</div> ",
         ]
+        log.debug formatText(message.join(), "white", "blue")
     }
 
-    if (enabledebug) log.debug formatText(message.join(), "white", "blue")
-
-
-    // if lastNeed was A and new need is B, then it's a mode switch, which requires a delay for multiple reasons: 
-    // 1. HVAC or other electrical heaters/coolers operating stability and, in the long run, lifespan
-    // 2. Avoids wasting power cooling when it's cool enough outside for the house to cool on its own
-    // 3. Avoids wasting power heating when it's hot enough outside or through house's inertia (which is related to outside's temp and atm pressure anyway)
-    // 4. In simpler terms: we don't want cooling operation in the winter or heating in the summer. 
-
-    atomicState.waitAfterCoolConditionMet = atomicState.waitAfterCoolConditionMet == null ? false : atomicState.waitAfterCoolConditionMet
-    atomicState.waitAfterHeatlConditionMet = atomicState.waitAfterHeatlConditionMet == null ? false : atomicState.waitAfterHeatlConditionMet
-
-    if (need1 == "cool" && atomicState.lastNeed == "heat" && !atomicState.waitAfterCoolConditionMet) {
-        atomicState.lastTimeCool = now() // keep track of time to avoid oscillations between cool / heat during shoulder season
-        atomicState.waitAfterHeatlConditionMet = true
-    }
-    if (need1 == "heat" && atomicState.lastNeed == "cool" && !atomicState.waitAfterHeatlConditionMet) {
-        atomicState.lastTimeHeat = now() // same idea
-        atomicState.waitAfterCoolConditionMet = true
-    }
-
-
-    need_to_wait = need_to_wait_between_modes(need1, inside, outside, target)
-
-
-    if (need1 == "heat" && atomicState.userWantsWarmer) {
-        if (enablewarning) log.warn "user wants a warmer room, shoulder season timed override ignored. Switching to heating mode"
-    }
-    else if (need_to_wait) {
-        if (enablewarning) log.warn "last cooling request was too close to switch to heating mode now"
-        need0 = "off"
-        need1 = "off"
-    }
-
-    if (need1 == "cool" && atomicState.userWantsCooler) {
-        if (enablewarning) log.warn "user wants a cooler room, shoulder season timed override ignored. Switching to cooling mode"
-    }
-    else if (need_to_wait) {
-        if (enablewarning) log.warn "last heating request was too close to switch to cooling mode now"
-        need0 = "off"
-        need1 = "off"
-    }
-
-    need = [need0, need1]
-
-    atomicState.lastNeed = need1 == "off" ? atomicState.lastNeed : need1  // need1 should always be "off" when need_to_wait_between_modes == true, so no need to verify this boolean here. 
-
-    if (enableinfo) log.info "atomicState.lastNeed = $atomicState.lastNeed"
-    if (enabletrace) log.trace  "need: $need1 | target: $target | outside: $outside | inside: $inside | inside hum: ${getInsideHumidity()} | outside hum ${getOutsideHumidity()} | Open Contacts:$doorsContactsAreOpen  65fhjk45"
-
-    atomicState.need1 = need1 // memoization for other methods that can't pass needed parameters for getNeed to work
-
-    log.trace "need_to_wait: $need_to_wait | target: $target | inside: $inside | outside: $outside | need: ${need1 != "off" ? "${ need1 }ing" : need1} contacts open? ${contactsAreOpen()} (${contactsAreOpen() ? "${ atomicState.listOfOpenContacts } " : ""}) | userWantsCooler ? ${atomicState.userWantsCooler} | userWantsWarmer ? ${atomicState.userWantsWarmer}"
+    log.trace "need_to_wait: $need_to_wait | target: $target | inside: $inside | swing=$swing | outside: $outside | need: $need1 | contacts open? ${contactsAreOpen()} (${contactsAreOpen() ? "${ atomicState.listOfOpenContacts } " : ""}) | userWantsCooler ? ${atomicState.userWantsCooler} | userWantsWarmer ? ${atomicState.userWantsWarmer}"
 
     return need
 }
@@ -5071,7 +5075,7 @@ boolean checkIgnoreTarget(){
     return result
 }
 
-boolean need_to_wait_between_modes(need, inside, target, outside) {
+boolean need_to_wait_between_modes(need, inside, outside, target) {
     /**
      * This function uses a calculateScalingFactor method to dynamically adjust the scaling factor for the delay.
      * The `calculateScalingFactor` method uses a logarithmic function to calculate
@@ -5081,6 +5085,10 @@ boolean need_to_wait_between_modes(need, inside, target, outside) {
      * environments where the outside temperature can vary significantly. This method ensures that the system responds more 
      * sensitively to larger temperature differences while avoiding overreaction to minor temperature fluctuations.
      */
+
+    if (enabledebug) log.debug "inside: $inside"
+    if (enabledebug) log.debug "target: $target"
+    if (enabledebug) log.debug "outside: $outside"
 
     if (enabledebug) log.debug "atomicState.lastTimeHeat => $atomicState.lastTimeHeat"
     if (enabledebug) log.debug "atomicState.lastNeed => $atomicState.lastNeed"
@@ -5113,7 +5121,6 @@ boolean need_to_wait_between_modes(need, inside, target, outside) {
     else if (need == "cool" && atomicState.lastNeed == "heat" && now() - atomicState.lastTimeCool < delay_between_modes && !hotInHere) {
         result = true
     }
-    // log.warn "need_to_wait_between_modes ===> $result"
     return result
 }
 def calculateScalingFactor(outside, threshold, decreaseDelay) {

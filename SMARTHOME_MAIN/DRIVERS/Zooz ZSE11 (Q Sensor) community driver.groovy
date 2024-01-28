@@ -327,6 +327,9 @@ void installed(){
 
 void refresh() {
 
+   log.debug "------------------no refresh"
+   return 
+
    if (logEnable) log.debug "refresh()"
    state.pendingRefresh = true
    // if (device.currentValue("powerSource") == "dc") {

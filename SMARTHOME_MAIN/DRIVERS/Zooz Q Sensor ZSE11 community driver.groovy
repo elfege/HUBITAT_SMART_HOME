@@ -335,10 +335,6 @@ void refresh() {
    state.pendingRefresh = false
    state.initialized = true
    sendToDevice(cmds, 500)
-   // }
-   // else {
-   //    if (logEnable) log.debug "Device will fetch new data when the device wakes up. ${wakeUpInstructions}"
-   // }
 }
 
 void configure() {

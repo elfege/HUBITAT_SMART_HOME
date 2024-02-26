@@ -95,6 +95,8 @@ def pageSetup() {
             
             input "volumeLevel", "number", title: "Set the volume level", range: "0..100",required:true, submitOnChange: true 
             input "volumeRestore", "number", title: "restore to this volume level", range: "0..100", required:false, defaultValue: 50
+
+            input "notification", "capability.notification", title: "Select notification devices", multiple: true, required: false, submitOnChange: true
             
         }
 
@@ -185,13 +187,13 @@ def appButtonHandler(btn) {
         {
             if(speaker) playSound()
             if(musicPlayer) play_Track()
-        }
+            if(notification) send_notification()
         else
         {
             log.warn "App is paused!"
         }
         break
-
+        }
     }
 }
 def locationModeChangeHandler(evt){
@@ -208,12 +210,12 @@ def mainHandler(evt){
     {
         return
     }
-
-    log.warn "${evt.name}: $evt.device is $evt.value"
+    log.info "location is in ${location.mode} mode"
+    log.warn "${evt.name}: $evt.device is $evt.value (mainHandler)"
 
     if(location.mode in restrictedModes)
     {
-        descriptiontext "location in restricted mode, doing nothing"
+        log.info "location in restricted mode, doing nothing"
         return
     }
 
@@ -223,12 +225,20 @@ def mainHandler(evt){
         
         logging "music Players = ${musicPlayer?.join(", ")}"
         if(musicPlayer) play_Track()
+
+        logging "notification devices = ${notification?.join(", ")}"
+        if(notification) send_notification() 
     }
 
 }
 
 /* ECHO SPEAKERS */
 def playSound(){
+    if(location.mode in restrictedModes)
+    {
+        log.info "location in restricted mode, doing nothing"
+        return
+    }
 
     if(prioritySpeaker)
     {
@@ -242,6 +252,12 @@ def playSound(){
     }
 }
 def otherSpeakers(){
+    if(location.mode in restrictedModes)
+    {
+        log.info "location in restricted mode, doing nothing"
+        return
+    }
+
     for(int i=0; i < speaker.size(); i++)
     {
 
@@ -252,40 +268,127 @@ def otherSpeakers(){
 /***************************/
 
 /* NOTIFICATION DEVICES */
+def send_notification(){
+    def message = "Someone called on the INTERCOM on ${get_time()}"
+
+    for(int i = 0; i < notification.size(); i++){
+        def device = notification[i]
+        try {
+            notification?.deviceNotification(message)
+        }
+        catch(error){
+            log.error "Failed to send notification to $device"
+        }
+    }   
+      
+}
+
+
+/* MUSIC PLAYERS*/
 def play_Track(){
+    if(location.mode in restrictedModes)
+    {
+        log.info "location in restricted mode, doing nothing"
+        return
+    }
+
     for(int i=0; i < musicPlayer.size(); i++)
     {
-        try{
         def device = musicPlayer[i]
-        device.playTrack(uri)
-        device.setLevel(volumelevel)
-        device.setLevel(volumeRestore)
+        try{            
+            device.playTrack(uri)
+            device.setLevel(volumelevel)
+            device.setLevel(volumeRestore)
         }
         catch(error) {
-            log.warn: "Failed to access url: ${url}"
-            if(fallback){
+            log.warn "Failed to access url: ${url}. ERROR message: ${error}"
+            try {
                 log.info "Playing fallback url: ${fallbackUri}"
                 device.playTrack(fallbackUri)
-
             }
-
+            catch(err){
+                log.error "FAILED TO PLAY FALL BACK URL: ${err}"
+            }
         }
     }
 }
 
 def playSpeakers(device){
+    if(location.mode in restrictedModes)
+    {
+        log.info "location in restricted mode, doing nothing"
+        return
+    }
 
     logging "sending '$soundName sound to ${device}"
+    try {
+        // prevent the stupid echo's "BEEP" when changing volume level
+        device.doNotDisturbOn() 
+        device.setLevel(volumeLevel) 
+        device.doNotDisturbOff() 
+        pauseExecution(500)
 
-    // prevent the stupid echo's "BEEP" when changing volume level
-    device.doNotDisturbOn() 
-    device.setLevel(volumeLevel) 
-    device.doNotDisturbOff() 
-    pauseExecution(500)
+        device.playSoundByName(soundName)
+    }
+    catch(err) {
+        log.warn "Failed to access url: ${url}. ERROR message: ${err}"
+        if(musicPlayer){
+            for(int i=0; i < musicPlayer.size(); i++)
+            {
+                if(fallbackUri){
+                    try {
+                        log.info "Playing fallback url: ${fallbackUri}"
+                        device.playTrack(fallbackUri)
+                    }
+                    catch(error){
+                        log.error "FAILED TO PLAY FALL BACK URL: ${error}"
+                    }
 
-    device.playSoundByName(soundName)
+                }
+            }
+        }
+    }
+}
 
+def get_time() {
+    // Get the current time in milliseconds
+    def currentTimeMillis = now()
 
+    // Create a Date object from the current time milliseconds
+    def currentDate = new Date(currentTimeMillis)
+
+    // Format the month
+    def monthFormat = new SimpleDateFormat("MMM.")
+    def readableMonth = monthFormat.format(currentDate)
+
+    // Get the day of the month
+    def dayOfMonth = currentDate.date
+
+    // Determine the appropriate suffix for the day
+    def suffix = getDayOfMonthSuffix(dayOfMonth)
+
+    // Format the time
+    def timeFormat = new SimpleDateFormat("HH:mm:ss")
+    def readableTime = timeFormat.format(currentDate)
+
+    // Return the formatted date and time with the appropriate suffix
+    return "${readableMonth} ${dayOfMonth}${suffix} at ${readableTime}"
+}
+
+def getDayOfMonthSuffix(dayOfMonth) {
+    if (dayOfMonth in 11..13) {
+        return "th"
+    }
+    switch (dayOfMonth % 10) {
+        case 1:
+            return "st"
+        case 2:
+            return "nd"
+        case 3:
+            return "rd"
+        default:
+            return "th"
+    }
 }
 
 

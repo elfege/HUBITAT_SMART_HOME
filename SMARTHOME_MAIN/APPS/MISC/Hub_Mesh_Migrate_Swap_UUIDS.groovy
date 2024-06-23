@@ -76,7 +76,7 @@ def updateDeviceUUIDs() {
     devicesWithOldUUID.each {
         device ->
         if(device != null){
-            if(device.name.contains("OFFLINE")){
+            if(device.name.contains("OFFLINE") && device.name.contains("Home 2")){
             // def matcher = device.deviceNetworkId = ~ /.*-(\d+)$/
             // if (matcher.find()) {
             def DNI = device.deviceNetworkId

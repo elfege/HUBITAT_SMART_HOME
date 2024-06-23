@@ -21,6 +21,7 @@ metadata {
 
         command "configure"
         command "refresh"
+        command "refreshPowerMeter"
     }
 }
 
@@ -29,8 +30,8 @@ preferences {
         input name: "openToken", type: "string", title: "Your SwitchBot Open Token", required: true
         input name: "deviceId", type: "string", title: "Device ID of the bot", required: true
         input name: "switchBotMode", type: "enum", title: "Device mode of the bot", options: ["Press","Switch"], defaultValue: "Press", required: true
-        input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
-        input name: "warnEnable", type: "bool", title: "Enable debug logging", defaultValue: true
+        input name: "logEnable", type: "bool", title: "Enable Debug", defaultValue: true
+        input name: "warnEnable", type: "bool", title: "Enable Warnings", defaultValue: true
 
     }
     section("Power Measurement Device")
@@ -89,9 +90,9 @@ def push() {
 
 def on() {
 
-    if ( device.currentValue("switch") == "on" ) {
-        if (logEnable) log.debug "Getting on request - Switch already on - no action required"
-    } else {
+    // if ( device.currentValue("switch") == "on" ) {
+    //     if (logEnable) log.debug "Getting on request - Switch already on - no action required"
+    // } else {
 
         def postBody = '{ "command":"press" }'
         if ( switchBotMode == "Switch" ) postBody = '{ "command":"turnOn" }'
@@ -116,17 +117,18 @@ def on() {
         } catch (Exception e) {
             log.warn "Call to on failed: ${e.message}"
         }
-    }
-    runIn(20, refresh)
+    // }
+    sendEvent(name: "switch", value: "on", isStateChange: true)
+    runIn(30, refreshPowerMeter)
 }
 
 def off() {
 
-    if ( device.currentValue("switch") == "off" ) {
+    // if ( device.currentValue("switch") == "off" ) {
 
-        if (logEnable) log.debug "Getting off request - Switch already off - no action required"
+    //     if (logEnable) log.debug "Getting off request - Switch already off - no action required"
 
-    } else {
+    // } else {
 
         def postBody = '{ "command":"press" }'
         if ( switchBotMode == "Switch" ) postBody = '{ "command":"turnOff" }'
@@ -151,19 +153,22 @@ def off() {
         } catch (Exception e) {
             log.warn "Call to on failed: ${e.message}"
         }
-    }
-    runIn(30, refresh)
+    // }
+    sendEvent(name: "switch", value: "off", isStateChange: true)
+    runIn(30, refreshPowerMeter)
 }
 
 def refresh(){
     log.info "refresh()"
-    def val = getPowerValue()
+    def powerValue = getPowerValue()
+    def threshold = powerThres as float
    
     if(logEnable) log.info "power value is: "+powerValue
-    if(val)
+    if(logEnable) log.info "power threshold is: "+threshold
+    if(powerValue)
     {
-        float threshold = powerThres as float
-        if(val >= threshold)
+        
+        if(powerValue >= threshold)
         {
             sendEvent(name: "switch", value: "on", isStateChange: true)
         }
@@ -172,6 +177,37 @@ def refresh(){
             sendEvent(name: "switch", value: "off", isStateChange: true)
         }
     }
+}
+
+def refreshPowerMeter(){
+
+    if(powerDevId && AppNumber && MakerApiToken)
+    {
+        def uri = "http://"+localHub+"/apps/api/"+AppNumber+"/devices/"+powerDevId+"/refresh?access_token="+MakerApiToken
+        log.debug "refresh uri:::: "+uri
+        // `http://${ip}/apps/api/${appNumber}/devices/${device.id}/refresh?access_token=${access_token}`;
+
+        if (logEnable) log.debug uri
+
+        def DATA = []
+        def value = null
+        def name = null
+        try {
+            httpGet(uri) { resp ->
+                if (resp.success) {  
+                    if (logEnable) log.debug "resp.data = $resp.data"
+                }
+            }
+            sendEvent(name: "refreshPower", value: "ok")
+        } catch (Exception e) {
+            log.warn "getPowerValue URI HttpGet call failed: ${e.message}"
+            sendEvent(name: "refreshPower", value: "API ERROR")
+        }
+
+
+    }
+    runIn(3, refresh)
+
 }
 
 def getPowerValue(){

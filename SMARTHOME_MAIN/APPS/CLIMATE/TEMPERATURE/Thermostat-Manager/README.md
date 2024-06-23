@@ -1,44 +1,41 @@
-# Thermostat-Manager: the app that learns from your inputs and gets better over time. 
-This app allows you to manage a thermostat settings in many ways. It will learn from your input and get more efficient over time. 
+# Thermostat-Manager: The Smart Thermostat App That Learns and Adapts
 
-Among many other features, you will be able to: 
+Thermostat-Manager is an advanced Hubitat app designed to intelligently manage your thermostat settings, learning from your inputs and adapting over time to optimize both energy savings and comfort. This app goes beyond basic scheduling, employing AI and machine learning techniques to understand your preferences and automatically adjust settings based on factors like outside temperature, humidity, and your manual adjustments.
 
-1) Set contact sensors rules for both windows (to save power when windows are open) and inside doors (to coordinate with other thermostats states).  
-   
-2) Push a button to signal the app that you want your sleeping settings to be on.
+## Key Features
 
-3) Control some windows (with switch capability) and have them opened, weather permitting, in order to avoid overusing your Air Conditionner.
+1. **Contact Sensor Integration**: Set rules based on window and door contact sensors to save energy when windows are open and coordinate settings with other thermostats.
 
-4) Use a virtual dimmer that will serve as a desired temperature reference. Mostly, this is where the app learns from your inputs, even though it'll also learn from some inputs made on your thermostat directly. However, alexa can't adjust a setpoint on a thermostat that is set to "off", which is a bummer. This is why this also facilitates voice commands with Alexa or Google Home, even when your thermostat is set to off.
+2. **Sleep Mode**: Activate personalized sleep settings with the push of a button.
 
-5) You can also use the intelligent automatic evaluation of your needs (you will still need a virtual dimmer): let the app set everything for you. This algorithm is meant to optimize both power saving and comfort, but it can also be customized with maxima and minima inputs in settings.
+3. **Smart Window Control**: Automatically open windows when weather conditions are favorable to reduce AC usage.
 
-6) Use a switch to control a heater, another switch to control a cooler to add more power during polar vortex or heat waves. You can set the extra heater to be triggered only when it's really too cold outside.
+4. **Virtual Dimmer for Temperature Control**: Use a virtual dimmer as a temperature setpoint, allowing the app to learn your preferences and facilitate voice control via Alexa or Google Home.
 
-7) If your alternate heater is connected to a switch with power capability, the app will offer you to use this capability to select a total max power consumption and an order of priority under certain weather conditions: keep power consumption under control.
+5. **Intelligent Auto-Mode**: Let the app automatically determine optimal settings based on your learned preferences, current conditions, and customizable min/max thresholds.
 
-8) Use a power meter to assert your HVAC good operation (consistency between power consuption and desired state) so the app can try to send commands again (usefull under bad mesh conditions using Z-wave 1.0 thermostats).
+6. **Auxiliary Heating and Cooling**: Control supplementary heaters and coolers via switches to boost performance during extreme weather conditions.
 
-9)  Several air circulation options will allow you to optimize air distribution in your home when the thermostat is cooling. 
+7. **Power Consumption Optimization**: When paired with a power-metering switch, the app can prioritize devices and keep total consumption under a set limit based on conditions.
 
+8. **HVAC Health Monitoring**: Detects inconsistencies between power usage and expected state, re-sending commands if needed to overcome potential mesh network issues.
 
-NB: You'll need to have a weather station or a temperature sensor located outside your home.
+9. **Advanced Fan Circulation Control**: Multiple options to optimize air distribution while cooling.
 
-**Updates July 2021 :** 
+## Prerequisites
 
-Improved Celsius management. I still need feedback on this from those who might use Celsius as it would be very impractical for me to test it in my home. 
+- A compatible thermostat
+- An outdoor weather station or temperature sensor
+- (Optional) Contact sensors, switches, power meters for advanced features
 
-I added some simple but nonetheless powerful elements of A.I., with more to come in a near future. If you chose the full "auto" method, the app will progressively implement a map of your preferences each time you change your target temperature/ cooling or heating setpoint; it will then remember them to approximate your preferences under similar circumstances when they occur. 
+## Recent Updates
 
-For now the app learns based on outside temp and a basic preset map that gets implemented over time. In the future I'll implement more parameters, such as differentiated humidity values ([[inside humidity, outside humidity, outside temperature] : target amplitude]]), which will allow the app to be more thorough. 
+- Enhanced Celsius support (feedback from Celsius users appreciated for further tuning)
+- Initial AI/ML functionality for learning user temperature preferences over time
+- Improved fan circulation options
+- Refined window management algorithms  
+- Support for dedicated heating and cooling thermostats
+- Better humidity-based decision making
+- Strengthened safety, failsafe, and redundancy features
 
-Note that these features are already available with the app called "A.I. Thermostat manager" and supposed to work in parallel with "Thermostat Manager", using the dimmer to share computed results. However, this is an old workaround that takes too much ressources anyway so it is to be entirely reworked and implemented into Thermostat Manager directly, as I have started doing so with this new learning algorithm. In order to achieve complete learning abilities, I'll probably use the new file feature in Hubitat to store the "big data" needed to that effect.
-
-
-**Updates 2022 :** 
-
-- Improved and augmented fan circulation options
-- Improved windows management algos
-- Added the possibility to use 2 thermosats, one for heating only, another for cooling only
-- Improved humidity based decision making
-- Improved safeties and fail safe features and redundencies
+The Thermostat-Manager app is a powerful tool for optimizing your home's climate control, delivering comfort and efficiency through continuous learning and adaptation. Future enhancements will expand the AI's ability to learn from more parameters, further personalizing its behavior to your specific needs and preferences.

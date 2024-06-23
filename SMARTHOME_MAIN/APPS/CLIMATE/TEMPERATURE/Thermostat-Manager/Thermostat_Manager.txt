@@ -2993,20 +2993,7 @@ def antifreeze(inside, simpleModeActive){
                 heater?.on()// turn on the alternate heater, if any
                 set_thermostat_mode(altThermostat, "heat", "antiFreeze")
 
-                
-                def cmd = "setHeatingSetpoint"
-                def target = safeValue
-                def outside = get_outside_temperature() 
-                def motionActive = true 
-                def doorsContactsAreOpen = false 
-                def thermModes = get_thermostats_modes()
-                def humThres = get_humidity_threshold()
-                def origin = "antiFreeze"
-
-
-                set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, thermModes, humThres, origin)
-
-                // def set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, thermModes, humThres, origin)
+                set_target("setHeatingSetpoint", safeValue, inside, outside = get_outside_temperature(), motionActive = true, doorsContactsAreOpen = false, thermModes = get_thermostats_modes(), "antiFreeze")
 
                 // if there's an alt thermosat, it's not accounted for in set_target(). 
                 // so we run the command here directly. 
@@ -3773,6 +3760,8 @@ def get_target(simpleModeActive, inside, outside){
         }
     }
 
+
+
     if (problem) {
         if (enablewarning) log.warn "There's a problem with current target temperature ($target). Readjusting from $thermostat setpoints"
         
@@ -3824,7 +3813,6 @@ def get_target(simpleModeActive, inside, outside){
     }
     if (enabledebug) log.trace  "target temperature is: $target and current temperature is ${inside} (swing = $atomicState.swing) thermostat state is: ${thermostat.currentValue('thermostatMode')}"
 
-    if(enabledebug) log.debug format_text("get_target() =====returns====> $target", "white", "red")
     return target
 }
 def get_needed_thermosats(need){
@@ -3898,26 +3886,23 @@ def get_inside_temperature(){
         int substract = 0 // value to substract to s when a device is to be ignored
         for (i = 0; i < s; i++) {
             def device = sensor[i]
-            def val = 0
+
             def period = 1 // in hours
             def eventName = "temperature"
             def device_health_ok = hasRecentlyReportedEvents(device, period, eventName)
 
             if (!device_health_ok) {
                 
-                def m = "$device has not been sending any temperature value recently and it is being skipped in average temperature calculation"
+                def m = "device_health_ok ? ${device_health_ok}"
                 log.debug format_text(m, "black", "yellow")
 
-                atomicState.disabledSensors += device
-
-                s -= 1
+                sum -= 1
                 continue
 
             }
+            
 
-            val = device?.currentValue("temperature")
-
-            if(enabledebug) log.debug format_text("$device temperature: $val", "white", "black")
+            def val = device?.currentValue("temperature")
 
             if (enabledebug) log.debug "--${device} returns temperature: $val device id: ${device.id}"
             if (val == null) {
@@ -3926,6 +3911,46 @@ def get_inside_temperature(){
                 continue
             }
             sum += val
+
+            atomicState.lastSensorBatteryHealthCheck = atomicState.lastSensorBatteryHealthCheck == null ? now() : atomicState.lastSensorBatteryHealthCheck
+            // check sensors responsiveness
+            if (now() - atomicState.lastSensorBatteryHealthCheck >= intervalHours) {
+                events = device.eventsSince(new Date(now() - deltaHours)).size() // collect all events within 72 hours
+                if (enabledebug) log.debug "$device has returned $events events in the last 72 hours"
+                if (events == 0) {
+                    if (enablewarning) log.warn format_text("$device hasn't returned any event in the last 72 hours!", "white", "red")
+                    if (sensor.size() > 1) {
+                        if (atomicState.disabledSensors.contains("$device")) {
+                            //already in, do nothing 
+                            if (enablewarning) log.warn " INPUT ALREADY DONE --------"
+                        }
+                        else {
+                            atomicState.disabledSensors += "$device"
+                        }
+                        if (enabledebug) log.trace "$device is being ignored because it is unresponsive."
+                        sum -= val
+
+                    }
+                    substract += 1
+                }
+                else if (atomicState.disabledSensors.any{ it -> it == device.displayName })
+                {
+                    if (enablewarning) log.warn "deleting $device from disabledSensors because it is active again"
+                    atomicState.disabledSensors -= "$device"
+                }
+                if (device.hasCapability("Battery")) {
+                def batteryValue = device.currentValue("battery")
+                def batThreshold = lowBatLevel ? lowBatLevel : 40
+                    if (batteryValue <= batThreshold && batteryValue > 0) // batteryValue > 0 is because some cheap devices can return negative values when they're powered by AC current from and HVAC / PTAC
+                    {
+                        if (enablewarning) log.warn format_text("WARNING! ${device}'s BATTERY LEVEL IS LOW (${batteryValue}%)", "white", "red")
+                        atomicState.lowBatterySensor = true
+                    }
+                    else {
+                        atomicState.lowBatterySensor = false
+                    }
+                }
+            }
         }
 
         if (atomicState.disabledSensors.size() != 0) {
@@ -3950,7 +3975,6 @@ def get_inside_temperature(){
             atomicState.failedSensors = false
         }
         inside = sum / (s - substract)
-
     }
     else if (doorsManagement && doorsOpen() && doorSetOfSensors && useDifferentSetOfSensors) {
         def sum = 0

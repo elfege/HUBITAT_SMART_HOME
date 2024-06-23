@@ -1,0 +1,43 @@
+// Function to click on all matching buttons and handle confirmation dialogs
+async function clickCreateLocalLinkedDeviceButtons() {
+    // Helper function to delay execution
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
+    // Get all button elements with a title starting with "Create a local linked device for"
+    const buttons = document.querySelectorAll('button[title^="Create a local linked device for"]');
+    
+    for (const button of buttons) {
+        // Find the closest parent div with class 'col-12'
+        const parentDiv = button.closest('div.col-12');
+        
+        if (parentDiv) {
+            // Find the div containing the text link within the parent div
+            const textDiv = parentDiv.querySelector('div a');
+            
+            // Click the button if the button exists and the text is found
+            if (button && textDiv) {
+                console.log(`Clicking button with title: ${button.title}`);
+                button.click();
+                
+                // Wait for the confirmation dialog
+                await delay(50); // Adjust timeout as necessary
+
+                const confirmationMessage = document.querySelector('.p-confirm-dialog-message');
+                
+                if (confirmationMessage && confirmationMessage.textContent.includes(textDiv.textContent.trim())) {
+                    console.log(`Confirming creation for: ${textDiv.textContent.trim()}`);
+                    // Find and click the confirmation button (assuming it is the first button in the dialog)
+                    const confirmButton = document.querySelector('.p-confirm-dialog-accept');
+                    if (confirmButton) {
+                        confirmButton.click();
+                        // Wait for the confirmation action to complete
+                        await delay(1000); // Adjust timeout as necessary
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Execute the function
+clickCreateLocalLinkedDeviceButtons();

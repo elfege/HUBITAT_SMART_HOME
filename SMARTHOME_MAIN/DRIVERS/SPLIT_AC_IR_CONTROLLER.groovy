@@ -17,6 +17,8 @@ metadata {
         capability "Refresh"
         capability "Sensor"
         capability "Health Check"
+        capability "ThermostatFanMode"
+        capability "ThermostatMode"
 
         command "SetTemp"
         command "setThermostatMode"
@@ -55,6 +57,8 @@ metadata {
         attribute "medium", "string"
         attribute "high", "string"
         attribute "lastUpdated", "String"
+        attribute "supportedThermostatFanModes", "String"
+        attribute "supportedThermostatModes", "String"
     }
 
     preferences {
@@ -160,6 +164,11 @@ def sendEthernet(message) {
         path: "/${message}?",
         headers: [HOST: "${getHostAddress()}"]
     )
+}
+
+def initialize() {
+    sendEvent(name: "supportedThermostatFanModes", value: getSupportedThermostatFanModes().join(", "))
+    sendEvent(name: "supportedThermostatModes", value: getSupportedThermostatModes().join(", "))
 }
 
 // handle commands
@@ -362,6 +371,13 @@ def getTemperature(){
     }
 }
 
+def getSupportedThermostatFanModes() {
+    return ["auto", "on", "circulate"]
+}
+
+def getSupportedThermostatModes() {
+    return ["off", "heat", "cool", "auto", "emergency heat"]
+}
 
 def getHumidity(){
     if (!IP || !APInumber || !humSensor) {
@@ -411,6 +427,7 @@ def poll(){
     refresh()
 }
 def configure() {
+    initialize()
     logging("Executing 'configure'")
     state.lastDeclaredEvent = now()
     logging("state.lastDeclaredEvent = ${now()}")

@@ -137,7 +137,14 @@ def pageSetup() {
         }
         section("motion sensors")
         {
+            paragraph "<div style='color:darkgray;'>------------------------------------------------------------</div>"
             input "motionSensors", "capability.motionSensor", title: "Choose your motion sensors", despcription: "pick a motion sensor", required: true, multiple: true, submitOnChange: true
+            input "eventsOnly", "bool", title: "Events Based Behavior", defaultValue: true, submitOnChange: true
+            if (!eventsOnly) {
+                def m = "Ignore sensors' current state, decide upon events history only, except for turning the lights back on"
+                paragraph formatText(m, "darkgray", "teal")
+            }
+            paragraph "<div style='color:darkgray;'>------------------------------------------------------------</div>"
         }
         section("Timing")
         {
@@ -314,7 +321,7 @@ def pageSetup() {
 
 
             atomicState.lastCheckTimer = now // ensure it won't run check_logs_timer right away to give time for states to update
-            
+
 
         }
         section(){
@@ -873,10 +880,12 @@ boolean contactsAreOpen(){
 boolean Active(){
     if (enabledebug) log.debug "motionSensors = $motionSensors"
 
-    def currentlyActive = motionSensors.findAll{ it -> it.currentValue("motion") == "active" }
-    if (currentlyActive?.size() > 0) {
-        if (tracedebug) log.trace "${currentlyActive.join(", ")} ${currentlyActive?.size() > 1 ? "are" : "is"} currently active"
-        return true
+    if (!eventsOnly) {
+        def currentlyActive = motionSensors.findAll{ it -> it.currentValue("motion") == "active" }
+        if (currentlyActive?.size() > 0) {
+            if (tracedebug) log.trace "${currentlyActive.join(", ")} ${currentlyActive?.size() > 1 ? "are" : "is"} currently active"
+            return true
+        }
     }
 
     boolean result = true
@@ -903,14 +912,32 @@ boolean Active(){
 def getTimeout(){
     def result = noMotionTime // default
 
-    if (absenceTimeoutSensor) {
-        def listOfAbsents = absenceTimeoutSensor.findAll{ it.currentValue("presence") == "not present" }
-        boolean absenceRestriction = absenceTimeoutSensor ? listOfAbsents.size() == absenceTimeoutSensor.size() : false
-        if (absenceRestriction) {
-            if (description) log.info "$absenceTimeoutSensor not present, timeout returns $absenceTimeout absenceTimeoutSensor.size() = ${absenceTimeoutSensor.size()} listOfAbsents.size() = ${listOfAbsents.size()}"
-            return absenceTimeout
+    try {
+        if (absenceTimeoutSensor) {
+            def listOfAbsents = absenceTimeoutSensor.findAll{ it.currentValue("presence") == "not present" }
+            boolean absenceRestriction = absenceTimeoutSensor ? listOfAbsents.size() == absenceTimeoutSensor.size() : false
+            if (absenceRestriction) {
+                if (description) log.info "$absenceTimeoutSensor not present, timeout returns $absenceTimeout absenceTimeoutSensor.size() = ${absenceTimeoutSensor.size()} listOfAbsents.size() = ${listOfAbsents.size()}"
+                return absenceTimeout
+            }
         }
     }
+    catch (Exception e) {
+        def lineNumber = -1
+
+        try {
+            def stackTrace = e.stackTrace
+
+            if (stackTrace && stackTrace.size() > 0) {
+                console.log formatText(stackTrace, "white", "gray")
+                lineNumber = stackTrace[0].lineNumber
+            }
+        } catch (Exception er) {
+            def errorMessage = lineNumber != -1 ? "absenceTimeoutSensor setting value NO LONGER WORKS AND NEEDS REFACTORING (${app.label}): $e at line $lineNumber" : "absenceTimeoutSensor setting value NO LONGER WORKS AND NEEDS REFACTORING (${app.label}): $e"
+            log.error(formatText(errorMessage, "white", "red"))
+        }
+    }
+
 
     if (timeWithMode) {
         int i = 0
@@ -1247,7 +1274,7 @@ def check_logs_timer(){
 
     long now = now()
 
-    
+
     atomicState.EnableDebugTime = atomicState.EnableDebugTime == null ? now : atomicState.EnableDebugTime
     atomicState.enableDescriptionTime = atomicState.enableDescriptionTime == null ? now : atomicState.enableDescriptionTime
     atomicState.EnableWarningTime = atomicState.EnableWarningTime == null ? now : atomicState.EnableWarningTime
@@ -1318,17 +1345,17 @@ def check_logs_timer(){
 }
 def disablelogging(){
     log.warn "debug disabled..."
-    app.updateSetting("enabledebug", [type: "bool", value: false] )
+    app.updateSetting("enabledebug", [type: "bool", value: false])
 }
 def disabledescription(){
     log.warn "description text disabled..."
-    app.updateSetting("description", [type: "bool", value: false] )
+    app.updateSetting("description", [type: "bool", value: false])
 }
 def disablewarnings(){
     log.warn "warnings disabled..."
-    app.updateSetting("logwarndebug", [type: "bool", value: false] )
+    app.updateSetting("logwarndebug", [type: "bool", value: false])
 }
 def disabletrace(){
     log.warn "trace disabled..."
-    app.updateSetting("tracedebug", [type: "bool", value: false] )
+    app.updateSetting("tracedebug", [type: "bool", value: false])
 }

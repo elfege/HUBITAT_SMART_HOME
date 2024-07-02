@@ -37,7 +37,7 @@ preferences {
 }
 def MainPage() {
 
-    pageNameUpdate()   
+    update_app_label()   
 
     def pageProperties = [
         name: "MainPage",
@@ -1014,11 +1014,11 @@ def operationConsistency(){
         }
     }
 }
-def pageNameUpdate(){
+def update_app_label(text){
     closeBoolQuestions()
 
     def failedSensorsList = atomicState.disabledSensors ? atomicState.disabledSensors.join(", ") : "None"
-    def pauseVar = atomicState.disabledSensors && !atomicState.disabledSensors.isEmpty() ? "FAILED SENSORS: ${failedSensorsList}" : "paused"
+    def pauseVar = text ? text : atomicState.disabledSensors && !atomicState.disabledSensors.isEmpty() ? "FAILED SENSORS: ${failedSensorsList}" : "paused"
 
     // def pauseVar = atomicState.failedSensors ? "FAILED SENSORS" : "paused"
     def batteryVar = "LOW BATTERY"
@@ -1779,12 +1779,17 @@ def mainloop(source){
 }
 def master(source){
 
+    if (atomicState.paused) {
+        log.debug "App paused"
+        return
+    }
     atomicState.busy = atomicState.busy == null ? false : atomicState.busy
 
     atomicState.startMainLoop = now()
 
+
     if (atomicState.buttonPushed != null && UseSimpleMode) {
-    def status = atomicState.buttonPushed ? "ACTIVE" : "INACTIVE"
+        def status = atomicState.buttonPushed ? "ACTIVE" : "INACTIVE"
         log.info format_text("$simpleModeName Mode $status", "white", "grey")
     }
 
@@ -2993,7 +2998,20 @@ def antifreeze(inside, simpleModeActive){
                 heater?.on()// turn on the alternate heater, if any
                 set_thermostat_mode(altThermostat, "heat", "antiFreeze")
 
-                set_target("setHeatingSetpoint", safeValue, inside, outside = get_outside_temperature(), motionActive = true, doorsContactsAreOpen = false, thermModes = get_thermostats_modes(), "antiFreeze")
+                
+                def cmd = "setHeatingSetpoint"
+                def target = safeValue
+                def outside = get_outside_temperature() 
+                def motionActive = true 
+                def doorsContactsAreOpen = false 
+                def thermModes = get_thermostats_modes()
+                def humThres = get_humidity_threshold()
+                def origin = "antiFreeze"
+
+
+                set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, thermModes, humThres, origin)
+
+                // def set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, thermModes, humThres, origin)
 
                 // if there's an alt thermosat, it's not accounted for in set_target(). 
                 // so we run the command here directly. 
@@ -3760,8 +3778,6 @@ def get_target(simpleModeActive, inside, outside){
         }
     }
 
-
-
     if (problem) {
         if (enablewarning) log.warn "There's a problem with current target temperature ($target). Readjusting from $thermostat setpoints"
         
@@ -3813,6 +3829,7 @@ def get_target(simpleModeActive, inside, outside){
     }
     if (enabledebug) log.trace  "target temperature is: $target and current temperature is ${inside} (swing = $atomicState.swing) thermostat state is: ${thermostat.currentValue('thermostatMode')}"
 
+    if (enabledebug) log.debug format_text("get_target() =====returns====> $target", "white", "red")
     return target
 }
 def get_needed_thermosats(need){
@@ -3872,9 +3889,7 @@ def get_windows_operation_time(outside, max, min){
 }
 def get_inside_temperature(){
 
-    def inside = thermostat?.currentValue("temperature") 
-    def deltaHours = 72 * 3600 * 1000 // history collection length 
-    def intervalHours = 1 * 3600 * 1000 // interval for checking sensors health
+    def inside = thermostat?.currentValue("temperature")
 
     atomicState.disabledSensors = []
 
@@ -3886,23 +3901,26 @@ def get_inside_temperature(){
         int substract = 0 // value to substract to s when a device is to be ignored
         for (i = 0; i < s; i++) {
             def device = sensor[i]
-
-            def period = 1 // in hours
+            def val = 0
+            def period = 5 // history length in hours
             def eventName = "temperature"
             def device_health_ok = hasRecentlyReportedEvents(device, period, eventName)
 
             if (!device_health_ok) {
                 
-                def m = "device_health_ok ? ${device_health_ok}"
+                def m = "$device has not been sending any temperature value recently and it is being ignored during average temperature calculation"
                 log.debug format_text(m, "black", "yellow")
 
-                sum -= 1
+                atomicState.disabledSensors += device
+
+                s -= 1
                 continue
 
             }
-            
 
-            def val = device?.currentValue("temperature")
+            val = device?.currentValue("temperature")
+
+            if (enabledebug) log.debug format_text("$device temperature: $val", "white", "black")
 
             if (enabledebug) log.debug "--${device} returns temperature: $val device id: ${device.id}"
             if (val == null) {
@@ -3911,46 +3929,6 @@ def get_inside_temperature(){
                 continue
             }
             sum += val
-
-            atomicState.lastSensorBatteryHealthCheck = atomicState.lastSensorBatteryHealthCheck == null ? now() : atomicState.lastSensorBatteryHealthCheck
-            // check sensors responsiveness
-            if (now() - atomicState.lastSensorBatteryHealthCheck >= intervalHours) {
-                events = device.eventsSince(new Date(now() - deltaHours)).size() // collect all events within 72 hours
-                if (enabledebug) log.debug "$device has returned $events events in the last 72 hours"
-                if (events == 0) {
-                    if (enablewarning) log.warn format_text("$device hasn't returned any event in the last 72 hours!", "white", "red")
-                    if (sensor.size() > 1) {
-                        if (atomicState.disabledSensors.contains("$device")) {
-                            //already in, do nothing 
-                            if (enablewarning) log.warn " INPUT ALREADY DONE --------"
-                        }
-                        else {
-                            atomicState.disabledSensors += "$device"
-                        }
-                        if (enabledebug) log.trace "$device is being ignored because it is unresponsive."
-                        sum -= val
-
-                    }
-                    substract += 1
-                }
-                else if (atomicState.disabledSensors.any{ it -> it == device.displayName })
-                {
-                    if (enablewarning) log.warn "deleting $device from disabledSensors because it is active again"
-                    atomicState.disabledSensors -= "$device"
-                }
-                if (device.hasCapability("Battery")) {
-                def batteryValue = device.currentValue("battery")
-                def batThreshold = lowBatLevel ? lowBatLevel : 40
-                    if (batteryValue <= batThreshold && batteryValue > 0) // batteryValue > 0 is because some cheap devices can return negative values when they're powered by AC current from and HVAC / PTAC
-                    {
-                        if (enablewarning) log.warn format_text("WARNING! ${device}'s BATTERY LEVEL IS LOW (${batteryValue}%)", "white", "red")
-                        atomicState.lowBatterySensor = true
-                    }
-                    else {
-                        atomicState.lowBatterySensor = false
-                    }
-                }
-            }
         }
 
         if (atomicState.disabledSensors.size() != 0) {
@@ -3969,12 +3947,13 @@ def get_inside_temperature(){
             atomicState.failedSensors = true // force the user to attend the fact that all sensors are unrresponsive
 
             log.error "All temperature sensors have become unresponsive! User intervention is required."
-            return 0
+
         }
         else {
             atomicState.failedSensors = false
         }
         inside = sum / (s - substract)
+
     }
     else if (doorsManagement && doorsOpen() && doorSetOfSensors && useDifferentSetOfSensors) {
         def sum = 0
@@ -3995,37 +3974,74 @@ def get_inside_temperature(){
     inside = inside.round(2)
     atomicState.inside = inside
 
-    if (enabledebug) log.trace  "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${ sensor.join(", ") } ${ sensor.collect{ it.currentValue("temperature") }.join("°F, ") }°F" : inside}"
+    if (enabledebug || sum == 0) log.trace  "measured ${sensor && sensor.size() > 1 ? "temperatures are" : "is"}: ${sensor ? "${ sensor.join(", ") } ${ sensor.collect{ it.currentValue("temperature") }.join("°F, ") }°F" : inside}"
+
+    // inside = is_dev_app() ? 0 : inside /* ****************************************************** TEST */
+
+    if (inside == 0) {
+        inside = thermostat.currentValue("temperature")
+        log.warn format_text("Temperature sensors inconsistent data: falling back to $thermostat as default sensor (which returns: ${inside}F", "white", "red")
+
+        // inside = is_dev_app() ? 0 : inside /* ****************************************************** TEST */
+
+        atomicState.pausedByApp = atomicState.pausedByApp ? atomicState.pausedByApp : false
+
+        if (!inside || inside == 0) {
+
+            atomicState.pausedByApp = true
+            atomicState.paused = true // pause the app due to too many inconsistencies
+            log.warn format_text("PAUSING APP DUE TO FAILURE TO READ INSIDE TEMPERATURE - INTERVENTION REQUIRED", "white", "red")
+            runIn(10, check_inside_temp)
+        }
+    }
 
     return inside
 }
 
+boolean is_dev_app(){
+    is_dev_app()
+}
+
 boolean hasRecentlyReportedEvents(device, period, eventName) {
-    
     def deltaTime = period * 60 * 60 * 1000 // N hours in milliseconds
     def now = new Date()
     def recentPeriod = new Date(now.time - deltaTime)
 
-    // Construct the key name using the device ID
-    def lastEventTimeKey = "lastEventTime_${device.id}_${eventName}"
-
-    // Retrieve the last event timestamp from atomicState or default to a very old date
-    def lastEventTime = atomicState."${lastEventTimeKey}" ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", atomicState."${lastEventTimeKey}") : new Date(0) // Default to epoch if not found
-
-    // Check if the last event was within the recent period
-    def reportedInRecentPeriod = lastEventTime.after(recentPeriod)
-
     // Fetch events for the device in the recent period
     def events = device.eventsSince(recentPeriod)
-    if (events) {
-        def specificEvents = events.findAll { it.name == eventName }
-        if (specificEvents) {
-            atomicState."${lastEventTimeKey}" = specificEvents.last().date.format("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
-            reportedInRecentPeriod = true
-        }
-    }
 
-    return reportedInRecentPeriod
+    //return true if any, false if null. 
+    return events.any { it.name == eventName }
+
+}
+
+
+def check_inside_temp(){
+    if (thermostat?.currentValue("temperature") in [null, 0]) {
+        // if (true) { /* ****************************************************** TEST */
+
+        altThermostat?.off()
+        thermostatHeat?.setThermostatMode("auto")
+        thermostatCool?.setThermostatMode("auto")
+        heater?.off()
+        cooler?.off()
+        thermostat.setThermostatMode("auto")
+        log.warn format_text("Faulty Temperature Sensors!", "yellow", "black")
+        update_app_label("paused faulty inside temperature. Intervention needed.")
+        runIn(10, check_inside_temp)
+        return
+    }
+    if (atomicState.pausedByApp) {
+        atomicState.pausedByApp = false
+        atomicState.paused = false
+        altThermostat?.off()
+        thermostatHeat?.off()
+        thermostatCool?.off()
+        heater?.off()
+        cooler?.off()
+        thermostat.off()
+    }
+    app.label.minus("paused faulty inside temperature. Intervention needed.")
 }
 
 def get_outside_temperature(){
@@ -5164,7 +5180,7 @@ Content - Disposition: form - data; name =\"folder\"
     }
 }
 def call_create_file(){
-    if (app.label.contains("Elfege")) {
+    if (is_dev_app()) {
         if (enabledebug) log.debug "This is Elfege's sandbox... "
 
         try {
@@ -5636,7 +5652,7 @@ boolean need_to_wait_between_modes(String need, double inside, double perceivedT
             log.debug "Inside: $inside, Target: $target, Perceived Temperature: $perceivedTemp, Last Need: $atomicState.lastNeed, Need: $need"
         }
 
-        def offset = 2
+        def offset = 1
         boolean inertialRange = need == "heat" && perceivedTemp >= inside + offset ? true /** let inertial heat do its work */ : need == "cool" && perceivedTemp <= inside - offset /* Allow entropy */ ? true : false
 
         if (inertialRange == null) {
@@ -5645,9 +5661,9 @@ boolean need_to_wait_between_modes(String need, double inside, double perceivedT
         }
 
         def cause = ""
-        if (need == "heat" && perceivedTemp >= inside + offset) {
+        if (need == "heat" && perceivedTemp >= target + offset) {
             cause = "letting inertial heat do its work"
-        } else if (need == "cool" && perceivedTemp <= inside - offset) {
+        } else if (need == "cool" && perceivedTemp <= target - offset) {
             cause = "allowing entropy"
         }
         if (enableinfo) log.info "Need to wait between modes: ${inertialRange ? "Yes" : "No"} ${inertialRange ? "(Need: $need, Cause: $cause)": ""} | -- | perceivedTemp: $perceivedTemp | inside: $inside | offset: $offset"

@@ -369,6 +369,8 @@ def getTemperature(){
         log.warn "getTemperature() URI HttpGet call failed: ${e.message}"
         sendEvent(name: "temperature", value: "API ERROR")
     }
+
+    return value == null ? "72" : value
 }
 
 def getSupportedThermostatFanModes() {
@@ -406,23 +408,35 @@ def getHumidity(){
         log.warn "getHumidity URI HttpGet call failed: ${e.message}"
         sendEvent(name: "humidity", value: "API ERROR")
     }
+
+    return value == null ? "50" : value
 }
 def getsupportedattributes(){
     def a = ["heatingSetpoint", "coolingSetpoint", "coolingSetpoint", "thermostatSetpoint", "thermostatMode", "fanSpeed", "low", "medium", "high", "lastUpdated"]
     return a
 }
+
 def refresh() {
-    log.debug("Refresh...")
+    state.lastRefresh = state.lastRefresh == null ? now() : state.lastRefresh
+    state.lastTemperature = state.lastTemperature == null ? getTemperature() : state.lastTemperature
+    state.lastHumidity = state.lastHumidity == null ? getHumidity() : state.lastHumidity
+
+    refreshInterval = 2 * 60 * 1000
+    log.debug("${device.displayName} | Refresh()'s next request temperature and humidity will take place in ${(refreshInterval - (now() - state.lastRefresh))/1000} seeconds")
+    
     state.refreshRequest = true
     sendEthernet("refresh")
 
-    if (tempSensor) {
-        getTemperature()
-    }
-    if (humSensor) {
-        getHumidity()
+    if (now() - state.lastRefresh >= refreshInterval) {
+        if (tempSensor) {
+            state.lastTemperature = getTemperature()
+        }
+        if (humSensor) {
+            state.lastHumidity = getHumidity()
+        }
     }
 }
+
 def poll(){
     refresh()
 }

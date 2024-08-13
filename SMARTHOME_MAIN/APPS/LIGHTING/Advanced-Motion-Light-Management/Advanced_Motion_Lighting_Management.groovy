@@ -179,10 +179,9 @@ def pageSetup() {
         {
             input "switches", "capability.switch", title: "Control this light", required: true, multiple: true, description: "Select a switch", submitOnChange: true
             if (switches?.size() > 0) {
-                input "keepSomeSwitchesOffInCertainModes", "bool", title: "In certain modes, keep one ore some of those switches off", submitOnChange: true
+                input "keepSomeSwitches_Off_InCertainModes", "bool", title: "In certain modes, keep one ore some of those switches <b>OFF</b>", submitOnChange: true
 
-                if (keepSomeSwitchesOffInCertainModes) {
-                    def list = []
+                def list = []
                     int i = 0
                     int s = switches.size()
                     for (s != 0; i < s; i++) {
@@ -191,8 +190,11 @@ def pageSetup() {
 
                     list = list.sort()
 
-                    input "modeSpecificSwitches", "mode", title: "select the modes under which you want only some specific switches to stay off", multiple: true, required: true
-                    input "onlyThoseSwitchesStayOff", "enum", title: "Select the switches that will stay off in these modes", options: list, required: true, multiple: true
+                if (keepSomeSwitches_Off_InCertainModes) {
+                    
+
+                    input "modeSpecificSwitches_stay_Off", "mode", title: "select the modes under which you want only some specific switches to stay off", multiple: true, required: true
+                    input "onlyThoseSwitchesStay_Off", "enum", title: "Select the switches that will stay off in these modes", options: list, required: true, multiple: true
                     def switchesWithDimCap = switches.findAll{ it.hasCapability("Switch Level") }
                     if (enabledebug) log.debug "list of devices with dimming capability = $switchesWithDimCap"
                     haveDim = switchesWithDimCap.size() > 0
@@ -201,8 +203,24 @@ def pageSetup() {
                     }
                 }
                 else {
-                    app.updateSetting("onlyThoseSwitchesStayOff", [value: null, type: "enum"])
-                    app.updateSetting("modeSpecificSwitches", [value: null, type: "mode"])
+                    app.updateSetting("onlyThoseSwitchesStay_Off", [value: null, type: "enum"])
+                    app.updateSetting("modeSpecificSwitches_stay_Off", [value: null, type: "mode"])
+                }
+
+
+// ********************************************
+
+                input "keepSomeSwitches_On_InCertainModes", "bool", title: "In certain modes, keep one ore some of those switches <b>ON</b>", submitOnChange: true
+
+                if (keepSomeSwitches_On_InCertainModes) {
+                
+                    input "modeSpecificSwitches_stay_on", "mode", title: "select the modes under which you want only some specific switches to stay <b>ON</b>", multiple: true, required: true
+                    input "onlyThoseSwitchesStay_On", "enum", title: "Select the switches that will stay On in these modes", options: list, required: true, multiple: true
+                    
+                }
+                else {
+                    app.updateSetting("onlyThoseSwitchesStay_On", [value: null, type: "enum"])
+                    app.updateSetting("modeSpecificSwitches_stay_On", [value: null, type: "mode"])
                 }
             }
         }
@@ -1006,11 +1024,11 @@ def on(){
 
     if (InRestrictedModeOrTime()) return
 
-    if (!keepSomeSwitchesOffInCertainModes && noTurnOnMode) {
+    if (!keepSomeSwitches_Off_InCertainModes && noTurnOnMode) {
         app.updateSetting("noTurnOnMode", [type: "mode", value: []])
     }
 
-    if (location.mode in noTurnOnMode && keepSomeSwitchesOffInCertainModes) {
+    if (location.mode in noTurnOnMode && keepSomeSwitches_Off_InCertainModes) {
         if (description) log.info "$switches ${powerswitch ? " & $powerswitch":""} not turned on because location is in $noTurnOnMode modes (${location.mode}) 545r"
 
         if (switches.any{ it -> it.currentValue("switch") == "on" }) // this prevents the exception light from staying on during noTurnOnMode. Without this test, it would turn back on with motion. 
@@ -1031,7 +1049,7 @@ def on(){
     if (enabledebug) log.debug "anyOff = $anyOff ${checklux ? " | daytime = $daytime | illuminance = $illuminance" : ""}"
     //log.warn "atomicState.switchesExpectedStatesFailures = $atomicState.switchesExpectedStatesFailures"
 
-    if (anyOff || (keepSomeSwitchesOffInCertainModes && location.mode in modeSpecificSwitches)) { // run only if any is off or if there's need to update states with specific switches and modes
+    if (anyOff || (keepSomeSwitches_Off_InCertainModes && location.mode in modeSpecificSwitches_stay_Off)) { // run only if any is off or if there's need to update states with specific switches and modes
 
 
         if (!daytime) {
@@ -1042,7 +1060,7 @@ def on(){
                     log.warn "turnging on ${powerswitch.join(", ")} 1r2hk"
                 }
             }
-            if (keepSomeSwitchesOffInCertainModes && location.mode in modeSpecificSwitches) {
+            if (keepSomeSwitches_Off_InCertainModes && location.mode in modeSpecificSwitches_stay_Off) {
                 specificSwitch(false) // only the switches not selected by user will be turned on
             }
             else {
@@ -1133,8 +1151,8 @@ def specificSwitch(boolean exception){
     int s = switches.size()
     for (s != 0; i < s; i++) {
         def device = switches[i]
-        boolean thisIsTheSwitchToKeepOff = device.displayName in onlyThoseSwitchesStayOff
-        if (enabledebug) log.debug "onlyThoseSwitchesStayOff = $onlyThoseSwitchesStayOff | $device is to be kept off = $thisIsTheSwitchToKeepOff"
+        boolean thisIsTheSwitchToKeepOff = device.displayName in onlyThoseSwitchesStay_Off
+        if (enabledebug) log.debug "onlyThoseSwitchesStay_Off = $onlyThoseSwitchesStay_Off | $device is to be kept off = $thisIsTheSwitchToKeepOff"
 
         if (exception) // boolean declared true only when in notTurnOn Mode, so here we will turn lights off only
         {
@@ -1193,7 +1211,7 @@ def specificSwitch(boolean exception){
 }
 def dim(){
 
-    if (keepSomeSwitchesOffInCertainModes && location.mode in modeSpecificSwitches && !keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes) {
+    if (keepSomeSwitches_Off_InCertainModes && location.mode in modeSpecificSwitches_stay_Off && !keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes) {
         log.warn "not dimming because app is in specific switches mode"
     }
     else {
@@ -1208,7 +1226,7 @@ def dim(){
 
         if (closed) {
             for (s != 0; i < s; i++) {
-                if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && location.mode in modeSpecificSwitches) {
+                if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && location.mode in modeSpecificSwitches_stay_Off) {
                     switchesWithDimCap[i].setLevel(keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes) // dimming value kept when in specific stay off mode
                 }
                 else {
@@ -1222,7 +1240,7 @@ def dim(){
             if (!contactModeOk()) // ignore that location is not in the contact mode and dim to dimValClosed
             {
                 for (s != 0; i < s; i++) {
-                    if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && location.mode in modeSpecificSwitches) {
+                    if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && location.mode in modeSpecificSwitches_stay_Off) {
                         switchesWithDimCap[i].setLevel(keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes) // dimming value kept when in specific stay off mode
                     }
                     else {

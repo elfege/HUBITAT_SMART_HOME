@@ -21,6 +21,8 @@
  *  2021-04-16: Initial release
  */
 
+// https://community.hubitat.com/t/release-zooz-q-sensor-zse11-community-driver/70889
+
 import groovy.transform.Field
 
 @Field static final Map commandClassVersions = [
@@ -43,6 +45,7 @@ import groovy.transform.Field
    0x98: 1,    // Security
     0x9F: 1     // Security 2
 ]
+
 
 @Field static final Integer defaultWakeUpInterval = 43200
 
@@ -226,6 +229,7 @@ void zwaveEvent(hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
 }
 
 void zwaveEvent(hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport cmd) {
+   log.debug "************************************************ MOTION EVENT ******************************************************"
    if (logEnable) log.debug "SensorBinaryReport: $cmd"
    if (cmd.sensorType == hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport.SENSOR_TYPE_MOTION) {
       if (cmd.sensorValue) {

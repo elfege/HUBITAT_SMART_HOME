@@ -104,10 +104,31 @@ def MainPage() {
             input "poll", "button", title: "REFRESH DEVICES"
             input "polldevices", "bool", title: "Poll devices"
 
-            input "enabledebug", "bool", title: "Debug logs", submitOnChange: true
+            input "enabledebug", "bool", title: "Debug logs (verbose)", submitOnChange: true
             input "enabletrace", "bool", title: "Trace logs", submitOnChange: true
             input "enablewarning", "bool", title: "Warning logs", submitOnChange: true
             input "enableinfo", "bool", title: "Info logs", submitOnChange: true
+            input "dev_mode", "bool", title: "Dev Mode", submitOnChange: true
+
+            if (dev_mode) {
+                atomicState.dev_mode_time = now
+
+                atomicState.dev_mode_just_activated = true
+
+                app.updateSetting("enabletrace", [type: "bool", value: true])
+                app.updateSetting("enablewarning", [type: "bool", value: true])
+                app.updateSetting("enableinfo", [type: "bool", value: true])
+
+                input "dev_mode_only", "bool", title: "Dev Mode Only", submitOnChange: true
+                if (dev_mode_only) {
+                    app.updateSetting("enabletrace", [type: "bool", value: false])
+                    app.updateSetting("enablewarning", [type: "bool", value: false])
+                    app.updateSetting("enableinfo", [type: "bool", value: false])
+                }
+            }
+            else if (dev_mode_only) {
+                app.updateSetting("dev_mode_only", [type: "bool", value: false])
+            }
 
 
             atomicState.EnableDebugTime = atomicState.EnableDebugTime == null ? now : atomicState.EnableDebugTime
@@ -149,7 +170,7 @@ def thermostats(){
             }
             else if (doNotSendAnyCoolHeatOffComm) {
                 // not compatible, disable if enabled
-                app.updateSetting("doNotSendAnyCoolHeatOffComm", [type: "bool", value: "false"])
+                app.updateSetting("doNotSendAnyCoolHeatOffComm", [type: "bool", value: false])
             }
             if (ignoreTarget) {
                 app.updateSetting("offrequiredbyuser", [type: "bool", value: true]) // needs to be true when ignoreTarget is enabled  
@@ -170,7 +191,6 @@ def thermostats(){
             }
             if (doNotSendAnyCoolHeatOffComm) {
                 app.updateSetting("ignoreTarget", [type: "bool", value: false])// can't have both
-
             } 
 
             input "differentiateThermostatsHeatCool", "bool", title: "Use 2 different thermostats: 1 for cooling, 1 for heating", submitOnChange: true, defaultValue: false
@@ -1197,6 +1217,11 @@ def updated() {
 }
 def initialize(){
     log.info "initializing"
+
+    atomicState.lastButtonEvent = atomicState.lastButtonEvent != null ? atomicState.lastButtonEvent : now()
+    atomicState.lastResultWasTrue = atomicState.lastResultWasTrue != null ? atomicState.lastResultWasTrue : true
+    atomicState.buttonPushed = atomicState.buttonPushed != null ? atomicState.buttonPushed : false
+
     atomicState.EnableDebugTime = now()
     atomicState.enableDescriptionTime = now()
     atomicState.EnableWarningTime = now()
@@ -1211,7 +1236,6 @@ def initialize(){
     atomicState.restricted = false
     atomicState.lastNeed = "cool"
     atomicState.antifreeze = false
-    atomicState.buttonPushed = false
     atomicState.setpointSentByApp = false
     atomicState.openByApp = true
     atomicState.closedByApp = true
@@ -1408,7 +1432,7 @@ def appButtonHandler(btn) {
         case "run":
             if (enabledebug) log.debug "Running mainloop('btn')"
             resetBusy()
-            pauseExecution(100)
+            pauseExecution(500)
             if (!atomicState.paused) mainloop("btn")
             break
         case "poll":
@@ -1810,19 +1834,21 @@ def windowsHandler(evt){
 /* ################################# MASTER LOOP ################################# */
 
 def mainloop(source){
-    // prevent mainloop() stacking
+    // prevent stacking
     if (atomicState.busy) {
         if (enablewarning) log.warn "$app.label is busy..."
-        // runIn(80, resetBusy, [overwrite: false]) // far too ressource hungry
-        if (atomicState.startMainLoop && now() - atomicState.startMainLoop > 30000) {
-            log.error "Problem with main thread not terminating within 30 seconds! Resetting atomicState.busy to FALSE"
-            atomicState.busy = false
-        }
         return
     }
     runIn(1, master, [data: ["source": "${source}"], overwrite: true])
 }
+def forceReset() {
+    log.error format_text("Force resetting app state due to timeout", "black", "red")
+    atomicState.busy = false
+}
+
+
 def master(source){
+    runIn(30, forceReset)
 
     if (atomicState.paused) {
         log.debug "App paused ${atomicState.pausedByApp ? 'due to defective temperature sensors' : '--'}"
@@ -1830,7 +1856,10 @@ def master(source){
     }
     atomicState.busy = atomicState.busy == null ? false : atomicState.busy
 
-    atomicState.startMainLoop = now()
+    atomicState.stop = false
+
+    long start = now()
+    atomicState.startMainLoop = start
 
 
     if (atomicState.buttonPushed != null && UseSimpleMode) {
@@ -1873,12 +1902,18 @@ def master(source){
 
         /********************** VARIABLES' DATA COLLECTION *************************/
 
+        if (!time_is_up(start))
 
-
-        if (enabledebug) s = now()
+            if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking contactsAreOpen"
         try {
-            contactsClosed = !contactsAreOpen()
+            if (!time_is_up(start)) {
+                contactsClosed = !contactsAreOpen()
+            }
+            else {
+                log.error format_text("contactsClosed check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             contactsClosed = false // default safety
             log.error "contactsClosed => $e"
@@ -1888,7 +1923,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking simpleModeIsActive"
         try {
-            simpleModeActive = simpleModeIsActive()
+            if (!time_is_up(start)) {
+                simpleModeActive = simpleModeIsActive()
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             simpleModeActive = false // default safety
             log.error "simpleModeActive => $e"
@@ -1898,7 +1939,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking Active"
         try {
-            motionActive = Active()
+            if (!time_is_up(start)) {
+                motionActive = Active()
+            }
+            else {
+                log.error format_text("motionActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             motionActive = false // default safety
             log.error "motionActive => $e"
@@ -1908,7 +1955,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking doorsContactsAreOpen"
         try {
-            doorsContactsAreOpen = doorsOpen()
+            if (!time_is_up(start)) {
+                doorsContactsAreOpen = doorsOpen()
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             doorsContactsAreOpen = false // default safety
             log.error "doorsContactsAreOpen => $e"
@@ -1918,7 +1971,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Getting inside temperature from get_inside_temperature"
         try {
-            inside = get_inside_temperature()
+            if (!time_is_up(start)) {
+                inside = get_inside_temperature()
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "get_inside_temperature => $e"
         }
@@ -1926,7 +1985,13 @@ def master(source){
 
         if (enabledebug) s = now()
         try {
-            humThres = get_humidity_threshold(inside)
+            if (!time_is_up(start)) {
+                humThres = get_humidity_threshold(inside)
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "get_humidity_threshold() => $e"
         }
@@ -1935,7 +2000,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Getting outside temperature from outsideTemp"
         try {
-            outside = outsideTemp.currentValue("temperature").toDouble()
+            if (!time_is_up(start)) {
+                outside = outsideTemp.currentValue("temperature").toDouble()
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "outsideTemp => $e"
         }
@@ -1944,7 +2015,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Getting target from get_target"
         try {
-            target = get_target(simpleModeActive, inside, outside)
+            if (!time_is_up(start)) {
+                target = get_target(simpleModeActive, inside, outside)
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "get_target => $e"
             def m = [
@@ -1967,7 +2044,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Getting needed thermostats from get_needed_thermosats"
         try {
-            neededThermostats = get_needed_thermosats(need)
+            if (!time_is_up(start)) {
+                neededThermostats = get_needed_thermosats(need)
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
             if (enablewarning) log.warn "neededThermostats ----------------------> $neededThermostats"
         } catch (Exception e) {
             log.error "neededThermostats => $e"
@@ -1977,7 +2060,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking thermostats' current modes"
         try {
-            thermModes = get_thermostats_modes()
+            if (!time_is_up(start)) {
+                thermModes = get_thermostats_modes()
+            }
+            else {
+                log.error format_text("simpleModeActive check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "thermModes => $e"
         }
@@ -1986,7 +2075,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Calculating need data from get_need"
         try {
-            needData = get_need(target, simpleModeActive, inside, outside, motionActive, doorsContactsAreOpen, neededThermostats, thermModes, humThres, "mainloop")
+            if (!time_is_up(start)) {
+                needData = get_need(target, simpleModeActive, inside, outside, motionActive, doorsContactsAreOpen, neededThermostats, thermModes, humThres, "master")
+            }
+            else {
+                log.error format_text("needData check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "get_need => $e"
             def m = [
@@ -2009,7 +2104,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Getting need"
         try {
-            need = needData[1]
+            if (!time_is_up(start)) {
+                need = needData[1]
+            }
+            else {
+                log.error format_text("needData check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "needData => $e"
             log.error "need: $need"
@@ -2019,7 +2120,12 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Creating cmd string"
         try {
-            cmd = "set" + "${needData[0]}" + "ingSetpoint" // "Cool" or "Heat" with a capital letter
+            if (!time_is_up(start)) {
+                cmd = "set" + "${needData[0]}" + "ingSetpoint" // "Cool" or "Heat" with a capital letter
+            }
+            else {
+                log.error format_text("cmd set skipped due to time_is_up() = true", "white", "black")
+            }
         } catch (Exception e) {
             log.error "cmd => $e"
         }
@@ -2028,7 +2134,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking doNotUseMain condition"
         try {
-            doNotUseMain = doNotUseMainThermostatInCertainModes && location.mode in altThermostatORheaterOnlyModes
+            if (!time_is_up(start)) {
+                doNotUseMain = doNotUseMainThermostatInCertainModes && location.mode in altThermostatORheaterOnlyModes
+            }
+            else {
+                log.error format_text("doNotUseMain check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "doNotUseMain => $e"
         }
@@ -2037,8 +2149,15 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking heatpumpConditions"
         try {
-            heatpumpConditionsTrue = heatpump && outside < lowtemp && !useAllHeatSources ? true : useAllHeatSources && outside < evenLowertemp ? true : false
-            heatpumpConditionsTrue = doNotUseMain ? true : useAllHeatSourcesWithMode && location.mode in allHeatModes ? false : heatpumpConditionsTrue
+            if (!time_is_up(start)) {
+                heatpumpConditionsTrue = heatpump && outside < lowtemp && !useAllHeatSources ? true : useAllHeatSources && outside < evenLowertemp ? true : false
+                heatpumpConditionsTrue = doNotUseMain ? true : useAllHeatSourcesWithMode && location.mode in allHeatModes ? false : heatpumpConditionsTrue
+            }
+            else {
+                log.error format_text("heatpump check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
+
         } catch (Exception e) {
             log.error "heatpumpConditionsTrue => $e"
         }
@@ -2047,7 +2166,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking dontSendThermostatModeCmd condition"
         try {
-            dontSendThermostatModeCmd = (dontSetThermModesInSimpleMode && simpleModeActive) || doNotSendAnyCoolHeatOffComm
+            if (!time_is_up(start)) {
+                dontSendThermostatModeCmd = (dontSetThermModesInSimpleMode && simpleModeActive) || doNotSendAnyCoolHeatOffComm
+            }
+            else {
+                log.error format_text("dontSendThermostatModeCmd check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "dontSendThermostatModeCmd => $e"
         }
@@ -2056,7 +2181,13 @@ def master(source){
         if (enabledebug) s = now()
         if (enabledebug) log.trace "Getting current setpoint"
         try {
-            currSP = [thermostat?.currentValue("thermostatSetpoint").toInteger()]
+            if (!time_is_up(start)) {
+                currSP = [thermostat?.currentValue("thermostatSetpoint").toInteger()]
+            }
+            else {
+                log.error format_text("currSP check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "currSP => $e"
         }
@@ -2064,22 +2195,43 @@ def master(source){
 
         if (enabledebug) s = now()
         try {
-            if (neededThermostats[0]) {
-                if (enabledebug) log.trace "Adding needed thermostats' setpoints"
-                if (enablewarning) if (enabledebug) log.warn "neededThermostats => $neededThermostats"
-                currSP += neededThermostats?.collect{ it?.currentValue("thermostatSetpoint").toInteger() }
+            if (!time_is_up(start)) {
+                if (neededThermostats[0]) {
+                    if (enabledebug) log.trace "Adding needed thermostats' setpoints"
+                    if (enablewarning) if (enabledebug) log.warn "neededThermostats => $neededThermostats"
+                    currSP += neededThermostats?.collect{ it?.currentValue("thermostatSetpoint").toInteger() }
+                }
+            }
+            else {
+                log.error format_text("neededThermostats currSP check skipped due to time_is_up() = true", "white", "black")
+                return
             }
         } catch (Exception e) {
             log.error "currSP += neededThermostats() => $e"
         }
         if (enabledebug) log.trace "Updated setpoints: $currSP execution time: ${now() -s} ms"
 
-
+        /*********************** ANTI FREEZE SAFETY TEST *************************/
+        try {
+            inside = inside ? inside : get_inside_temperature()
+            if (antifreeze(inside, simpleModeActive)) {
+                atomicState.busy = false
+                return
+            }
+        } catch (Exception e) {
+            log.error "antifreeze => $e"
+        }
 
 
         /********************** UPDATE thermModes values *************************/
         if (differentiateThermostatsHeatCool) {
-            thermModes = get_thermostats_modes()
+            if (!time_is_up(start)) {
+                thermModes = get_thermostats_modes()
+            }
+            else {
+                log.error format_text("thermModes check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         }
 
         /********************** AUTO OVERRIDE BUSY FALSE *************************/
@@ -2093,21 +2245,15 @@ def master(source){
         }
 
 
-
-        /*********************** ANTI FREEZE SAFETY TEST *************************/
-        try {
-            if (antifreeze(inside, simpleModeActive)) {
-                atomicState.busy = false
-                return
-            }
-        } catch (Exception e) {
-            log.error "antifreeze => $e"
-        }
-
-
         /***************************** FAN CIRCULATE *****************************/
         try {
-            fanCirculateManagement(need, target, inside, contactsClosed, motionActive, thermModes)
+            if (!time_is_up(start)) {
+                fanCirculateManagement(need, target, inside, contactsClosed, motionActive, thermModes)
+            }
+            else {
+                log.error format_text("fanCirculateManagement currSP check skipped due to time_is_up() = true", "white", "black")
+                return
+            }
         } catch (Exception e) {
             log.error "fanCirculateManagement() => $e"
         }
@@ -2122,12 +2268,14 @@ def master(source){
     boolean skip = false
     // CONTACTS OPEN
     try {
-        if (!contactsClosed && need == "off") {
-            log.debug "****************************NOT contactsClosed**************************************"
-            turn_off_thermostats(need, inside, thermModes) // manages user define delay
-        }
-        else if (motionActive) {
-            set_multiple_thermostats_mode(need, "first send", null)
+        if (!time_is_up(start)) {
+            if (!contactsClosed && need == "off") {
+                log.debug "****************************NOT contactsClosed**************************************"
+                turn_off_thermostats(need, inside, thermModes) // manages user define delay
+            }
+            else if (motionActive) {
+                set_multiple_thermostats_mode(need, "first send", null)
+            }
         }
     }
     catch (Exception e) {
@@ -2137,7 +2285,7 @@ def master(source){
     if (enablewarning) log.warn"LOG TIMER CHECK"
     blocktime = now()
     try {
-        check_logs_timer()
+        if (!time_is_up(start)) check_logs_timer()
         if (enablewarning) log.warn "CHECK LOG TIMER OFF"
     } catch (Exception e) {
         log.error "check_logs_timer ==> $e"
@@ -2146,46 +2294,154 @@ def master(source){
 
     /********************** VERIFY HEATPUMP AND POWER USAGE CONDITIONS (HEATER OR COOLER)*************************/
 
-    if (enablewarning) log.warn "powerManagement block"
-    blocktime = now()
-    try {
-        if (enablewarning) log.warn "neededThermostats ================ $neededThermostats";
+    if (!time_is_up(start)) {
+        if (enablewarning) log.warn "powerManagement block"
+        blocktime = now()
+        try {
+            if (enablewarning) log.warn "neededThermostats ================ $neededThermostats";
 
-        currentOperatingNeed = need == "cool" ? "cooling" : need == "heat" ? "heating" : need == "off" ? "idle" : "ERROR"
-        if (currentOperatingNeed == "ERROR") {
-            log.error "currentOperatingNeed = $currentOperatingNeed"
-            return false
+            currentOperatingNeed = need == "cool" ? "cooling" : need == "heat" ? "heating" : need == "off" ? "idle" : "ERROR"
+            if (currentOperatingNeed == "ERROR") {
+                log.error "currentOperatingNeed = $currentOperatingNeed"
+                return false
+            }
+
+            opStateOk = operatingStateOk(contactsClosed, doorsContactsAreOpen, currentOperatingState, currentOperatingNeed)
+
+            powerManagement(inside, outside, need, target, cmd, contactsClosed, doorsContactsAreOpen, motionActive, heatpumpConditionsTrue, dontSendThermostatModeCmd, currSP, neededThermostats, thermModes, opStateOk, humThres)
+
+        } catch (Exception e) {
+            log.error "powerManagement() => $e"
         }
-
-        opStateOk = operatingStateOk(contactsClosed, doorsContactsAreOpen, currentOperatingState, currentOperatingNeed)
-
-        powerManagement(inside, outside, need, target, cmd, contactsClosed, doorsContactsAreOpen, motionActive, heatpumpConditionsTrue, dontSendThermostatModeCmd, currSP, neededThermostats, thermModes, opStateOk, humThres)
-
-    } catch (Exception e) {
-        log.error "powerManagement() => $e"
+        if (enablewarning) log.warn "powerManagement block took: ${(now() - blocktime)/1000} seconds"
     }
-    if (enablewarning) log.warn "powerManagement block took: ${(now() - blocktime)/1000} seconds"
-
 
     // VIRTUAL THERMOSTAT
-    if (enablewarning) log.warn "VIRTUAL THERMOSTAT block"
-    blocktime = now()
-    try {
-        virtualThermostat(need, target) // redundancy due to return statement above
-    } catch (Exception e) {
-        log.error "virtualThermostat => $e"
+
+    if (!time_is_up(start)) {
+        if (enablewarning) log.warn "VIRTUAL THERMOSTAT block"
+        blocktime = now()
+        try {
+            virtualThermostat(need, target) // redundancy due to return statement above
+        } catch (Exception e) {
+            log.error "virtualThermostat => $e"
+        }
+        if (enablewarning) log.warn "VIRTUAL THERMOSTAT block took: ${(now() - blocktime)/1000} seconds"
     }
-    if (enablewarning) log.warn "VIRTUAL THERMOSTAT block took: ${(now() - blocktime)/1000} seconds"
+    else {
+        log.error format_text("VIRTUAL THERMOSTAT skipped due to time_is_up() = true", "white", "black")
+    }
+
+    checkRebootConditions()
 
     atomicState.busy = false
+
+    unschedule(forceReset) // Cancel if finished normally
+
+
+}
+
+
+def checkRebootConditions(){
     float duration = (now() - atomicState.startMainLoop) / 1000
-    if (enablewarning || duration > 6.0) log.warn "Main Loop took ${duration} seconds to execute... ${duration > 20.0 ? format_text('<a>CODE FIX NEEDED</a>', 'black', 'red') : ''}"
+    if (enablewarning || duration > 6.0 || is_dev_app()) {
+        log.warn "Main Loop took ${duration} seconds to execute... ${duration > 20.0 ? format_text('<a>CODE FIX NEEDED</a>', 'black', 'red') : ''}"
+    }
+    // Check if app needs to be reinitialized or hub needs to be rebooted
+    try {
+        def initialize_threshold = 25.0
+        def max_reboots = 5
+        def reboot_threshold = 50.0
+        def reinit_limit = 3
+        def delay_between_reboots = 6 * 60 * 60 * 1000 // delay between reboots in hours
+
+        // Reset reboot counter if it's been more than delay_between_reboots (in hours) duration since last reboot
+        atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
+        if (now() - atomicState.lastRebootTime < delay_between_reboots) {
+            atomicState.numberOfReinit = 0
+        }
+
+        // Reinitialize if duration is between thresholds
+        if (duration > initialize_threshold && duration < reboot_threshold) {
+            atomicState.numberOfReinit = atomicState.numberOfReinit == null ? 0 : atomicState.numberOfReinit
+            atomicState.numberOfReinit += 1
+            def now = new Date()
+            def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+            def formattedDate = dateFormat.format(now)
+            atomicState.problemLogs += "App re-initialized $atomicState.numberOfReinit times. Last time was @ ${formattedDate}"
+            if (atomicState.numberOfReinit < reinit_limit) {
+                initialize()
+                return
+            }
+        }
+
+        // Reboot if duration exceeds threshold or too many reinitializations
+        if (duration >= reboot_threshold || atomicState.numberOfReinit >= reinit_limit) {
+            atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 1 : atomicState.numberOfReboots
+            atomicState.lastRebootTime = now()
+            if (atomicState.numberOfReboots > max_reboots) {
+                reboot()
+            }
+            else {
+                log.error format_text("Max Reboots attempts reached for $app.label...", "white", "red")
+            }
+        }
+    } catch (Exception error) {
+        log.error "Initialize and reboot threshold management error => $error"
+    }
+}
+
+def reboot(){
+    try {
+        def hub = location.hub
+        def ip = hub.localIP
+        log.debug "Hub IP Address: ${ip}"
+
+        atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
+        atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 0 : atomicState.numberOfReboots
+
+        if (now() - atomicState.lastRebootTime < 60 * 60 * 1000) {
+            log.warn "-----------------${app.label} is REBOOTING ${location} ---------------------- "
+            def text = atomicState.severeLoad >= 1 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
+            log.warn format_text(text, "white", "red")
+            atomicState.lastRebootTime = now()
+            atomicState.numberOfReboots += 1
+            def now = new Date()
+            def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+            def formattedDate = dateFormat.format(now)
+            atomicState.problemLogs += "hub rebooted $atomicState.numberOfReboots times. Last time was @ ${formattedDate}"
+            runCmd("${ip}", "8080", "/hub/reboot")// reboot
+        }
+    }
+    catch (Exception error) {
+        log.error "reboot => $error"
+    }
+
+}
+
+def runCmd(String ip, String port, String path) {
+
+    def uri = "http://${ip}${": "}${port}${path}"
+    log.debug "POST: $uri"
+
+    def reqParams = [
+        uri: uri
+    ]
+
+    try {
+        httpPost(reqParams){
+            response ->
+        }
+    } catch (Exception e) {
+        log.error "${e}"
+    }
 }
 
 /* ############################### MAIN OPERATIONS ############################### */
 def resetBusy(){
     if (atomicState.busy) {
         atomicState.busy = false
+        atomicState.stop = true
         log.debug "atomicState.busy reset to false"
     }
 }
@@ -2364,7 +2620,7 @@ def powerManagement(inside,
                 checkEfficiency(coolerNotEfficientEnough, boost, thermModes, need, inside)
             }
             else {
-                if (enablewarning) log.warn format_text("contactsClosed = $contactsClosed", "white", "red")
+                if (enablewarning && !contactsClosed) log.warn format_text("contactsClosed = $contactsClosed", "white", "red")
 
                 if (manageThermDiscrepancy && thermTempDiscrepancy && contactsClosed) {
                     atomicState.setPointOverride = true // avoids modifying target values (in setDimmer) and prevents the app from running other normal operations
@@ -3310,7 +3566,7 @@ def set_dimmer(val, calledby){
         else {
             if (enabledebug) log.trace "SETPOINT OVERRIDE DUE TO THERMOSTAT DISCREPANCY NOT CHANGING DIMMER VALUE"
         }
-        
+
     }
     catch (Exception e) {
         log.error "set_dimmer() ==> error: $e"
@@ -3971,9 +4227,9 @@ def get_inside_temperature(){
     if (sensor) {
 
         def sensors = sensor
-        if (!sensors.find{ it -> it.id == thermostat.id }) {
-            sensors += thermostat
-        }
+        // if (sensors.size() == 0 && !sensors.find{ it -> it.id == thermostat.id }) {
+        //     sensors += thermostat
+        // }
 
         def sum = 0
         int i = 0
@@ -4066,7 +4322,16 @@ def get_inside_temperature(){
 }
 
 boolean is_dev_app(){
-    return app.label.contains("Elfege")
+    atomicState.dev_mode_time = atomicState.dev_mode_time == null ? now() : atomicState.dev_mode_time
+    if (dev_mode && (now() - atomicState.dev_mode_time) > 10 * 60 * 1000) {
+        log.warn "RESETING DEV_MODE TO FALSE"
+        app.updateSetting("dev_mode", [type: "bool", value: false])
+        app.updateSetting("dev_mode_only", [type: "bool", value: false])
+        pp.updateSetting("enabletrace", [type: "bool", value: false])
+        app.updateSetting("enablewarning", [type: "bool", value: false])
+        app.updateSetting("enableinfo", [type: "bool", value: false])
+    }
+    return dev_mode
 }
 
 boolean hasRecentlyReportedEvents(device, period, eventName) {
@@ -4089,10 +4354,10 @@ boolean hasRecentlyReportedEvents(device, period, eventName) {
 
     // Filter events to find any matching the eventName
     def matchingEvents = events.findAll { it.name == eventName }
-    if(enableinfo || is_dev_app()) log.info "Found ${matchingEvents.size()} recent matching '${eventName}' events."
+    if (enableinfo || is_dev_app()) log.info "Found ${matchingEvents.size()} recent matching '${eventName}' events."
 
     if (!matchingEvents.isEmpty()) {
-        if(enableinfo || is_dev_app()) log.info format_text("$device is healthy (id: ${device.id})", "white", "green")
+        if (enableinfo || is_dev_app()) log.info format_text("$device is healthy (id: ${device.id})", "white", "green")
         if (atomicState.pausedByApp && atomicState.paused) {
             atomicState.paused = false // cancel the pause since at least one temp sensor is now healthy again
         }
@@ -4532,10 +4797,10 @@ def get_need(target, simpleModeActive, inside, outside, motionActive, doorsConta
 
     try {
 
-        boolean tooCold = inside.toDouble() <= target.toDouble() - swing.toDouble()
+        boolean tooCold = inside.toDouble() <= target.toDouble() - swing.toDouble()  
         boolean tooHot = inside.toDouble() >= target.toDouble() + swing.toDouble()
 
-        if (enalbetrace || is_dev_app()) log.trace format_text("Inside: $inside | swing = $swing | target = $target | tooHot = $tooHot | tooCold = $tooCold", "black", "yellow")
+        if (enalbetrace || is_dev_app()) log.trace format_text("Inside: $inside | swing = $swing | target = $target | tooHot = $tooHot | tooCold = $tooCold | origin: $origin", "black", "yellow")
 
         if (tooHot) {
             need = ["Cool", "cool"]
@@ -5176,11 +5441,12 @@ def set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen,
 
         for (int i = 0; i < neededThermostats.size(); i++)
         {
-            set_thermostat_target(neededThermostats[i], cmd, target, origin)
+            boolean override = neededThermostats[i].displayName == exceptForThermostatCool.displayName || neededThermostats[i].displayName == exceptForThermostatHeat.displayName
+            set_thermostat_target(neededThermostats[i], cmd, target, override, origin)
         }
     }
     else {
-        set_thermostat_target(thermostat, cmd, target, origin)
+        set_thermostat_target(thermostat, cmd, target, false, origin)
     }
 }
 def set_thermostat_mode(t, mode, origin){
@@ -5204,10 +5470,39 @@ def set_thermostat_mode(t, mode, origin){
     }
 }
 def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, thermModes, humThres, origin){
-
+    /**
+     * Manages setpoint changes for dual thermostat setups (separate cooling and heating thermostats).
+     * 
+     * This function serves as a control layer for systems using separate thermostats for cooling and heating.
+     * It determines which thermostat should receive setpoint commands based on:
+     * 1. The current need (cooling or heating)
+     * 2. User preferences for ignoring setpoints
+     * 3. Exceptions for specific thermostats in certain modes
+     * 4. Power saving modes
+     * 
+     * Key features:
+     * - Respects the 'ignoreTarget' setting, but allows exceptions
+     * - Handles special cases for cooling and heating thermostats separately
+     * - Considers power saving modes which may override other settings
+     * - Ensures safety conditions are met before applying or ignoring setpoints
+     * 
+     * If conditions are met for changing the setpoint, it calls set_target() to apply the change
+     * to the appropriate thermostat.
+     * 
+     * @param cmd The command to be sent (e.g., "setCoolingSetpoint" or "setHeatingSetpoint")
+     * @param target The target temperature to be set
+     * @param inside Current inside temperature
+     * @param outside Current outside temperature
+     * @param motionActive Whether motion is currently detected
+     * @param doorsContactsAreOpen Whether doors/contacts are currently open
+     * @param thermModes Current thermostat modes
+     * @param humThres Humidity threshold
+     * @param origin A string indicating where this function call originated from
+     */
+    
     boolean inpowerSavingMode = location.mode in powersavingmode
     try {
-    boolean ignore = checkIgnoreTarget()
+        boolean ignore = checkIgnoreTarget()
     } catch (Exception e) {
         log.error "checkIgnoreTarget (called from set_thermostat_target_ignore_setpoint): $e"
     }
@@ -5224,14 +5519,15 @@ def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionAc
 
     try {
         if (ignore && !inpowerSavingMode && !exceptForThermostatCool && !exceptForThermostatHeat) {
-            if (enabledebug) log.trace  "Target ($target) temp not sent to $thermostat at user's request"
+            /*if (enabledebug)*/ log.trace  "Target ($target) temp not sent to $thermostat at user's request"
+            return
         }
-        else if ((exceptForThermostatCool || exceptForThermostatHeat) && !inpowerSavingMode) {
-
+        else if (differentiateThermostatsHeatCool && (exceptForThermostatCool || exceptForThermostatHeat) && !inpowerSavingMode) {
 
             if (exceptForThermostatHeat) {
                 try {
-                    set_thermostat_target(thermostatHeat, cmd, target, origin) //
+                    if (dev_mode) log.debug "set_thermostat_target called for exceptForThermostatHeat"
+                    set_thermostat_target(thermostatHeat, cmd, exceptForThermostatHeat, target, "set_thermostat_target_ignore_setpoint/exceptForThermostatHeat") //
                 } catch (Exception e) {
                     log.error "set_thermostat_target thermostatHeat:$thermostatHeat (called from set_thermostat_target_ignore_setpoint): $e"
                 }
@@ -5239,7 +5535,8 @@ def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionAc
 
             else if (exceptForThermostatCool) {
                 try {
-                    set_thermostat_target(thermostatCool, cmd, target, origin)
+                    if (dev_mode) log.debug "set_thermostat_target called for exceptForThermostatCool"
+                    set_thermostat_target(thermostatCool, cmd, target, exceptForThermostatCool, origin)
                 } catch (Exception e) {
                     log.error "set_thermostat_target thermostatCool:$thermostatCool (called from set_thermostat_target_ignore_setpoint): $e"
                 }
@@ -5258,7 +5555,13 @@ def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionAc
         log.error "set_thermostat_target_ignore_setpoint: $e"
     }
 }
-def set_thermostat_target(t, cmd, target, origin){
+def set_thermostat_target(t, cmd, target, override, origin){
+    if(dev_mode) log.debug "set_thermostat_target called from $origin | ignoreTarget: $ignoreTarget"
+
+    if (ignoreTarget && !override) {
+        if (dev_mode) log.debug "set_thermostat_target exiting due to ignoreTarget setting"
+        return
+    }
     try {
         def query = cmd == "setCoolingSetpoint" ? "coolingSetpoint" : cmd == "setHeatingSetpoint" ? "heatingSetpoint" : "thermostatSetpoint"
         if (t.currentValue(query) != target || origin == "checkthermstate force command") {
@@ -5573,6 +5876,14 @@ def convert_db_to_fahrenheit() {
 }
 
 /* ############################### BOOLEANS ###############################****** */
+boolean time_is_up(long start_time, override=false){
+    def threshold = is_dev_app() ? 30.0 : 30.0
+    float duration = (now() - start_time) / 1000
+    atomicState.stop = atomicState.stop == null ? false : atomicState.stop
+    result = duration >= threshold || atomicState.stop
+    if (enabledebug || dev_mode) log.debug "time_is_up() returns: $result"
+    return result 
+}
 boolean operatingStateOk(contactsClosed, doorsContactsAreOpen, currentOperatingState, currentOperatingNeed){
 
     def state = true
@@ -6061,19 +6372,19 @@ def poll_power_meters(){
 }
 def disable_logging(){
     if (enablewarning) log.warn "log.debug disabled..."
-    app.updateSetting("enabledebug", [type: "bool", value: "false"])
+    app.updateSetting("enabledebug", [type: "bool", value: false])
 }
 def disable_description(){
     if (enablewarning) log.warn "description text disabled..."
-    app.updateSetting("enableinfo", [type: "bool", value: "false"])
+    app.updateSetting("enableinfo", [type: "bool", value: false])
 }
 def disable_warnings(){
     if (enablewarning) log.warn "warnings disabled..."
-    app.updateSetting("enablewarning", [type: "bool", value: "false"])
+    app.updateSetting("enablewarning", [type: "bool", value: false])
 }
 def disable_trace(){
     if (enablewarning) log.warn "trace disabled..."
-    app.updateSetting("enabletrace", [type: "bool", value: "false"])
+    app.updateSetting("enabletrace", [type: "bool", value: false])
 }
 def format_text(title, textColor, bckgColor){
     return [

@@ -1,0 +1,63 @@
+{
+    "bridge": {
+        "name": "Homebridge",
+        "username": "7A:54:A6:3A:68:40",
+        "port": 51936,
+        "pin": "553-95-552"
+    },
+    "mdns": {
+        "interface": "192.168.10.15"
+    },
+    "platforms": [
+        {
+            "platform": "Hubitat-MakerAPI",
+            "name": "Hubitat MakerAPI",
+            "app_url": "http://192.168.10.72/apps/api/226",
+            "access_token": "3dbf439a-10cf-40a3-8e29-80680e4de251",
+            "local_ip": "192.168.10.15",
+            "local_port": 20011,
+            "mode_switches": true,
+            "hsm": true,
+            "consider_light_by_name": false,
+            "excluded_attributes": {},
+            "excluded_capabilities": {
+                "130": [
+                    "DoorControl"
+                ],
+                "131": [
+                    "DoorControl"
+                ],
+                "132": [
+                    "DoorControl"
+                ],
+                "133": [
+                    "DoorControl"
+                ],
+                "134": [
+                    "DoorControl"
+                ],
+                "*": [
+                    "holdableButton",
+                    "DoubleTapableButton",
+                    "HoldableButton"
+                ]
+            },
+            "debug": true,
+            "logFile": {
+                "enabled": true,
+                "path": "",
+                "file": "",
+                "compress": true,
+                "keep": 5,
+                "size": "10m"
+            }
+        },
+        {
+            "name": "Config",
+            "port": 8581,
+            "platform": "config"
+        }
+    ],
+    "accessories": [],
+    "addCustomCharacteristics": false
+}

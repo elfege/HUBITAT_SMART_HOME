@@ -21,6 +21,8 @@
  *  2021-04-16: Initial release
  */
 
+// https://community.hubitat.com/t/release-zooz-q-sensor-zse11-community-driver/70889
+
 import groovy.transform.Field
 
 @Field static final Map commandClassVersions = [
@@ -43,6 +45,7 @@ import groovy.transform.Field
    0x98: 1,    // Security
     0x9F: 1     // Security 2
 ]
+
 
 @Field static final Integer defaultWakeUpInterval = 43200
 
@@ -226,6 +229,7 @@ void zwaveEvent(hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
 }
 
 void zwaveEvent(hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport cmd) {
+   log.debug "************************************************ MOTION EVENT ******************************************************"
    if (logEnable) log.debug "SensorBinaryReport: $cmd"
    if (cmd.sensorType == hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport.SENSOR_TYPE_MOTION) {
       if (cmd.sensorValue) {
@@ -268,7 +272,7 @@ void zwaveEvent(hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelReport
             String strTemp = convertTemperatureIfNeeded(cmd.scaledSensorValue, unit, cmd.precision)
             BigDecimal temp = new BigDecimal(strTemp)
 
-            temp += -3  // elfege added built-in minus N°F due to bad original sensor calibration (I know, it's not linear... I'll have to look into this further)
+            temp += -3  // elfege added built-in minus 2°F due to bad original sensor calibration. 
             log.debug "temp ===========> $temp"
 
             if (settings["tempAdjust"]) temp += (settings["tempAdjust"] as BigDecimal)
@@ -327,9 +331,6 @@ void installed(){
 
 void refresh() {
 
-   log.debug "------------------no refresh"
-   return 
-
    if (logEnable) log.debug "refresh()"
    state.pendingRefresh = true
    // if (device.currentValue("powerSource") == "dc") {
@@ -338,10 +339,6 @@ void refresh() {
    state.pendingRefresh = false
    state.initialized = true
    sendToDevice(cmds, 500)
-   // }
-   // else {
-   //    if (logEnable) log.debug "Device will fetch new data when the device wakes up. ${wakeUpInstructions}"
-   // }
 }
 
 void configure() {

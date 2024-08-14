@@ -1837,9 +1837,8 @@ def mainloop(source){
     // prevent stacking
     if (atomicState.busy) {
         if (enablewarning) log.warn "$app.label is busy..."
-        return
+        runIn(1, master, [data: ["source": "mainloop runin(master) called from ${source}"], overwrite: true])
     }
-    runIn(1, master, [data: ["source": "${source}"], overwrite: true])
 }
 def forceReset() {
     log.error format_text("Force resetting app state due to timeout", "black", "red")

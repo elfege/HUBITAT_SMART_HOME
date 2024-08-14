@@ -777,9 +777,11 @@ def master(){
             atomicState.paused = true
         }
         else if (absenceRestriction) {
-            def listOfPresence = absenceRestricted.join(", ")
+            def list = absenceRestricted.findAll{ it.currentValue("presence") == "present" }
+            def listOfAbsence = absenceRestricted.join(", ")
 
-            log.info "App is paused because $listOfPresence ${list.size() > 1 ? "are" : "is"} NOT present"
+
+            log.info "App is paused because $listOfAbsence ${list.size() > 1 ? "are" : "is"} NOT present"
             atomicState.pausedByPresenceSensor = true
             atomicState.paused = true
         }

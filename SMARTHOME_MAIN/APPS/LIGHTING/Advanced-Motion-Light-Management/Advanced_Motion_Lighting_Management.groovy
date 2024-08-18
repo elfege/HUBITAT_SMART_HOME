@@ -300,7 +300,7 @@ def pageSetup() {
                 }
             }
         }
-        section("if(enabledebug) log.debug"){
+        section("debug"){
             input "enabledebug", "bool", title: "Enable debug logs", submitOnChange: true
             input "tracedebug", "bool", title: "Enable trace logs", submitOnChange: true
             input "logwarndebug", "bool", title: "Enable warning logs", submitOnChange: true

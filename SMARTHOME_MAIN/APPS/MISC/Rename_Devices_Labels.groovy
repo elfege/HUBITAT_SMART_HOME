@@ -1,143 +1,124 @@
-// Hub_Mesh_Migrate_Swap_UUIDs.groovy
-
-/**
- * Hubitat app to migrate and swap UUIDs in Hub Mesh network devices.
- * This app identifies all devices linked to a specific UUID in their Device Network ID (DNI)
- * and replaces it with a new UUID input by the user, ensuring continuity in device settings and operations.
- */
-
 definition(
-    name: "Hub Mesh Migrate Swap UUIDs",
+    name: "Rename devices labels",
     namespace: "elfege",
-    author: "elfege",
-    description: "Swaps UUIDs for devices in a Hub Mesh network, aiding in migration and device reconfiguration.",
-    category: "ConvenUtilityience",
-    iconUrl: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
-    iconX2Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
-    iconX3Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
+    author: "ELFEGE",
+
+    description: "Change devices labels and names at once",
+
+    category: "maintenance",
+    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Meta/light_outlet.png",
+    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Meta/light_outlet@2x.png"
 )
 
 preferences {
-    page(name: "mainPage")
+    page name: "pageSetup"
 }
 
-def mainPage() {
-
+def pageSetup()
+{
     def pageProperties = [
-        name: "mainPage",
+        name: "pageSetup",
         title: "${app.label}",
-        nextPage: null,
         install: true,
-        uninstall: true
+        uninstall: true,
+
     ]
 
     return dynamicPage(pageProperties) {
-        section("UUID Replacement Settings") {
-            input "uuidToReplace", "text", title: "Old UUID:", required: true
-            input "newUUID", "text", title: "New UUID:", required: true
-            input "deviceList", "capability.*", title: "Devices to use:", multiple: true, required: true, submitOnChange: true
 
-            // for (device in deviceList){
-            //     log.info device.displayName + ": " + device.deviceNetworkId
-            // }
 
+        section("devices")
+        {
+            input "allDevices", "capability.*", title: "Select the devices you want to rename", multiple: true, submitOnChange: true
+            input "toRemove", "text", title: "Text to remove", description: "separate different texts with commas"
+            atomicState.toRemove = toRemove?.split(",")
+            log.debug "atomicState.toRemove = $atomicState.toRemove"
+
+            input "setName", "bool", title: "also change the device's name (not just its label)"
+            input "setLabelFromName", "bool", title: "The device label must be the device's name"
+
+            input "execute", "button", title: "execute"
         }
 
-        section(){
-            input "run", "button", title: "RUN"
-        }
+
     }
 }
 
-def appButtonHandler(btn) {
+def installed()
+{
+}
 
+def updated()
+{
+}
+
+def appButtonHandler(btn) {
+    // def alert = com.eviware.soapui.support.UISupport;
     switch (btn) {
-        case "run":
-            updateDeviceUUIDs()
+        case "execute":
+            if (!atomicState.toRemove) {
+                log.warn "empty string!"
+            }
+            else {
+                execute()
+            }
             break
     }
 }
 
+def execute()
+{
+    if (allDevices) {
+        for (int i = 0; i < allDevices.size(); i++)
+        {
+            def device = allDevices[i]
+            //log.debug "renaming $device ($device.displayName)"
+            def str = device.displayName
+            def strRem = atomicState.toRemove
 
-def installed() {
-    log.debug "App installed with settings: ${settings}"
-}
+            /******************************************************************************************
+                        THIS SECTION DOES NOT WORK. 
+                        
+                        TEST BEFORE ATTEMPTING TO USE. NEEDS FURTHER RESEARCH ON device.name. 
+                        
+                        Example of problem encountered: 
+                        
+                        logs from (log.warn "${str} == ${device.name} | ${str == device.name}") 
+                        oupput this:
+                        
+                        'Light cat feeder == Light cat feeder on Home 2 | false'
+                        
+                        While in U.I. Device Name* = Light cat feeder... !!!!!!!!
+            
+                        log.warn "${str} == ${device.name} | ${str == device.name}"
+                        if (setLabelFromName && str != "${device.name}") {
+                            try {
+                                log.debug "Renaming ${str} as ${device.name}"
+                            } catch (Exception e) {
+                                log.error "setLabelFromName ==> ${e}"
+                            }
+                        }
+            ******************************************************************************************/
 
-def updated() {
-    log.debug "App updated with new settings: ${settings}"
-}
+            for (int a = 0; a < strRem.size(); a++)
+            {
+                if (str.contains(strRem[a])) {
+                    log.debug "contains $toRemove"
+                    str = str - strRem[a]
+                    //log.debug "new device name is '$str'"
+                    device.setLabel(str)
 
-def updateDeviceUUIDs() {
-    def devicesWithOldUUID = getDevicesByUUID(uuidToReplace)
-    if (devicesWithOldUUID.isEmpty()) {
-        log.warn "No devices found with UUID: $uuidToReplace"
-        return
-    }
-    devicesWithOldUUID.each {
-        device ->
-        if(device != null){
-            if(device.name.contains("OFFLINE")){
-            // def matcher = device.deviceNetworkId = ~ /.*-(\d+)$/
-            // if (matcher.find()) {
-            def DNI = device.deviceNetworkId
-            log.trace DNI
-            def matcher = DNI =~ /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(\d+)$/
-            if (matcher.find()) {
-                String oldUUID = matcher.group(1) // This captures the old UUID.
-                String deviceId = matcher.group(2) // This captures the device number.
-                log.debug "            oldUUID  : $oldUUID"
-                log.debug "            newUUID  : $newUUID"
-                log.debug "destination device id: $deviceId"
-                String updatedDNI = "${newUUID}-${deviceId}"
-                try {
-                    updateDeviceNetworkID(device, updatedDNI)
                 }
-                catch (error) {
-                    log.error "===> $error"
+                // log.debug "device.name = $device.name"
+                if (setName && device.name.contains(strRem[a])) {
+                    // log.debug "also setting the updating device's name"
+                    device.setName(str)
+
                 }
-            } else {
-                log.warn "Could not extract device identifier from DNI: ${device.deviceNetworkId}"
-            }
+
             }
         }
     }
+
 }
 
-def updateDeviceNetworkID(device, updatedDNI) {
-    log.debug "Executing 'updateDeviceNetworkID' for ${device.displayName}"
-    try{
-        if (device.deviceNetworkId == updatedDNI) {
-        log.info "${device.displayName} already updated"
-        } else {
-            device.setDeviceNetworkId(updatedDNI)
-            log.info "Updated device ${device.displayName} with new DNI: $updatedDNI"
-        }
-    }
-    catch (error){
-        log.error "deviceNetworkId ${error}"
-    }
-    log.warn "${device.name} new DNI is: ${device.deviceNetworkId}"
-}
-
-def getDevicesByUUID(String uuid) {
-    // log.info "All devices: ${deviceList}"
-    // deviceList.each {
-    //     device ->
-    //     log.debug "deviceNetworkId: ${device.deviceNetworkId}"
-    // }
-    def matchedDevices = deviceList.findAll { it.deviceNetworkId.contains(uuid) }
-    log.info matchedDevices
-
-    log.debug "Found ${matchedDevices.size()} devices with the specified UUID."
-    return matchedDevices
-}
-
-
-def getOfflineDevices() {
-    def offlineDevices = deviceList.findAll { device ->
-        if(device != null) {
-            device.label.toUpperCase().contains("OFFLINE")
-        }
-    }
-    return offlineDevices.collect { it.id }
-}

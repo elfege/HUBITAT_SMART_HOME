@@ -102,8 +102,10 @@ def MainPage() {
             input "run", "button", title: "RUN"
             input "update", "button", title: "UPDATE"
             input "poll", "button", title: "REFRESH DEVICES"
-            input "polldevices", "bool", title: "Poll devices"
+            input "reboot", "button", title: "Reboot Hub"
+            input "no_reboot", "bool", title: "No Automatic Reboot", defaultValue: true, submitOnChange: true
 
+            input "polldevices", "bool", title: "Poll devices", submitOnChange: true
             input "enabledebug", "bool", title: "Debug logs (verbose)", submitOnChange: true
             input "enabletrace", "bool", title: "Trace logs", submitOnChange: true
             input "enablewarning", "bool", title: "Warning logs", submitOnChange: true
@@ -1284,6 +1286,11 @@ def initialize(){
     if (enableinfo) log.info "subscribed ${thermostat}'s heatingSetpoint to setPointHandler"
     if (enableinfo) log.info "subscribed ${thermostat}'s thermostatMode to thermostatModeHandler"
 
+    subscribe(location, "zwaveStatus", hubEventHandler)
+    subscribe(location, "zigbeeStatus", hubEventHandler)
+    subscribe(location, "systemStart", hubEventHandler) // manage bugs and hub crashes
+    subscribe(location, "severeLoad", locationEventHandler)
+
     if (sync && thermostatB) {
         int i = 0
         int s = thermostatB.size()
@@ -1450,6 +1457,8 @@ def appButtonHandler(btn) {
         case "no_reset":
             atomicState.confirmed = "na"
             break
+        case "reboot":
+            reboot(true)
     }
 }
 def contactHandler(evt){
@@ -1830,43 +1839,77 @@ def windowsHandler(evt){
         }
     }
 }
+def locationEventHandler(evt){
+    atomicState.severeLoad = atomicState.severeLoad ? atomicState.severeLoad : 0
 
+    log.debug "$evt.description $evt.name evt.date event number:${atomicState.severeLoad} (reboot after 5 events within 30 minutes)"
+    if (evt.name == "severeLoad") {
+        atomicState.severeLoadTime = now()
+        atomicState.severeLoad += 1
+
+        if (atomicState.severeLoad > 5) {
+            atomicState.problemLogs += 'Hub had to reboot due to <b>$atomicState.severeLoad severe load events</a>'
+            atomicState.severeLoad = 0
+            reboot(true)
+        }
+    }
+
+}
+def hubEventHandler(evt){
+
+    log.debug "$evt.device $evt.name $evt.value"
+
+    if (evt.name == "systemStart") {
+        initialize()
+    }
+
+    if (evt.name.contains("is offline")) {
+        reboot(false) // reboot without delay when that happens. 
+        return
+    }
+
+
+}
 /* ################################# MASTER LOOP ################################# */
 
 def mainloop(source){
+    atomicState.busy = atomicState.busy == null ? true : atomicState.busy
     // prevent stacking
     if (atomicState.busy) {
-        if (enablewarning) log.warn "$app.label is busy..."
-        runIn(1, master, [data: ["source": "mainloop runin(master) called from ${source}"], overwrite: true])
+        if (enablewarning || dev_mode) log.warn "$app.label is busy..."
+        if (time_is_up(atomicState.startMainLoop)) {
+            atomicState.stop = true
+            checkRebootConditions()
+        }
+    } else {
+        atomicState.busy = true
+        runIn(1, master, [data: ["source": "mainloop runin(master) called from ${source}", "start": "${start}"], overwrite: true])
+        runIn(30, forceReset)
     }
 }
 def forceReset() {
     log.error format_text("Force resetting app state due to timeout", "black", "red")
     atomicState.busy = false
+    atomicState.stop = true
 }
 
-
 def master(source){
-    runIn(30, forceReset)
+
+    long start = now()
+    atomicState.startMainLoop = start
+    atomicState.stop = false
 
     if (atomicState.paused) {
         log.debug "App paused ${atomicState.pausedByApp ? 'due to defective temperature sensors' : '--'}"
         return
     }
-    atomicState.busy = atomicState.busy == null ? false : atomicState.busy
-
-    atomicState.stop = false
-
-    long start = now()
-    atomicState.startMainLoop = start
-
 
     if (atomicState.buttonPushed != null && UseSimpleMode) {
         def status = atomicState.buttonPushed ? "ACTIVE" : "INACTIVE"
         log.info format_text("$simpleModeName Mode $status", "white", "grey")
     }
 
-    atomicState.busy = true
+    
     boolean contactsClosed = true
     boolean simpleModeActive = false
     boolean motionActive = true
@@ -1901,9 +1944,8 @@ def master(source){
 
         /********************** VARIABLES' DATA COLLECTION *************************/
 
-        if (!time_is_up(start))
 
-            if (enabledebug) s = now()
+        if (enabledebug) s = now()
         if (enabledebug) log.trace "Checking contactsAreOpen"
         try {
             if (!time_is_up(start)) {
@@ -2269,7 +2311,8 @@ def master(source){
     try {
         if (!time_is_up(start)) {
             if (!contactsClosed && need == "off") {
-                log.debug "****************************NOT contactsClosed**************************************"
+                are_open = WindowsContact?.findAll{ it -> it.currentValue('contact') == 'open' }
+                log.debug "****************************SOME CONTACTS ARE OPEN : ${are_open.join(', ')}**************************************"
                 turn_off_thermostats(need, inside, thermModes) // manages user define delay
             }
             else if (motionActive) {
@@ -2344,13 +2387,17 @@ def master(source){
 def checkRebootConditions(){
     float duration = (now() - atomicState.startMainLoop) / 1000
     if (enablewarning || duration > 6.0 || is_dev_app()) {
-        log.warn "Main Loop took ${duration} seconds to execute... ${duration > 20.0 ? format_text('<a>CODE FIX NEEDED</a>', 'black', 'red') : ''}"
+        log.warn "Main Loop took ${duration} seconds to execute..."
+
+        if (duration > 20.0) {
+            log.error format_text("CODE NEEDS FIXING...", "black", "red")
+        }
     }
     // Check if app needs to be reinitialized or hub needs to be rebooted
     try {
         def initialize_threshold = 25.0
         def max_reboots = 5
-        def reboot_threshold = 50.0
+        def reboot_threshold = 150.0
         def reinit_limit = 3
         def delay_between_reboots = 6 * 60 * 60 * 1000 // delay between reboots in hours
 
@@ -2378,8 +2425,8 @@ def checkRebootConditions(){
         if (duration >= reboot_threshold || atomicState.numberOfReinit >= reinit_limit) {
             atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 1 : atomicState.numberOfReboots
             atomicState.lastRebootTime = now()
-            if (atomicState.numberOfReboots > max_reboots) {
-                reboot()
+            if (atomicState.numberOfReboots <= max_reboots) {
+                reboot(false)
             }
             else {
                 log.error format_text("Max Reboots attempts reached for $app.label...", "white", "red")
@@ -2390,7 +2437,8 @@ def checkRebootConditions(){
     }
 }
 
-def reboot(){
+def reboot(override){
+    atomicState.severeLoad = 0
     try {
         def hub = location.hub
         def ip = hub.localIP
@@ -2399,17 +2447,27 @@ def reboot(){
         atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
         atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 0 : atomicState.numberOfReboots
 
-        if (now() - atomicState.lastRebootTime < 60 * 60 * 1000) {
+        if (now() - atomicState.lastRebootTime < 60 * 60 * 1000 || override) {
+            unschedule()
+            unsubscribe() // temporarily stop all instances
+            subscribe(location, "systemStart", hubEventHandler)
+
             log.warn "-----------------${app.label} is REBOOTING ${location} ---------------------- "
+            atomicState.severeLoad = atomicState.severeLoad ? atomicState.severeLoad : 0
             def text = atomicState.severeLoad >= 1 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
-            log.warn format_text(text, "white", "red")
+
             atomicState.lastRebootTime = now()
             atomicState.numberOfReboots += 1
             def now = new Date()
             def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
             def formattedDate = dateFormat.format(now)
             atomicState.problemLogs += "hub rebooted $atomicState.numberOfReboots times. Last time was @ ${formattedDate}"
-            runCmd("${ip}", "8080", "/hub/reboot")// reboot
+            log.warn format_text(text, "white", "red")
+            try {
+                runCmd("${ip}", "8080", "/hub/reboot")// reboot
+            } catch (error) {
+                log.error "runCmd => $error"
+            }
         }
     }
     catch (Exception error) {
@@ -2420,19 +2478,31 @@ def reboot(){
 
 def runCmd(String ip, String port, String path) {
 
-    def uri = "http://${ip}${": "}${port}${path}"
-    log.debug "POST: $uri"
 
-    def reqParams = [
-        uri: uri
-    ]
+    if (no_reboot) {
+        log.debug "Automatic reboots are disabled in this instance. Not sending httpGet command..."
+        return
+    }
+
+    atomicState.numberOfReinit = 0
 
     try {
-        httpPost(reqParams){
-            response ->
+    def uri = "http://${ip}${':'}${port}${path}"
+        log.debug "POST: $uri"
+
+    def reqParams = [
+            uri: uri
+        ]
+
+        try {
+            httpPost(reqParams){
+                response ->
+        }
+        } catch (Exception e) {
+            log.error "${e}"
         }
     } catch (Exception e) {
-        log.error "${e}"
+        log.error "runCmd => ${e}"
     }
 }
 
@@ -4097,13 +4167,17 @@ def get_target(simpleModeActive, inside, outside){
 
     atomicState.problemLogs = atomicState.problemLogs == null ? atomicState.problemLogs = [] : atomicState.problemLogs
 
-    if (atomicState.problemLogs.size() != 0 && (problem || is_dev_app())) log.error "Problem = $atomicState.problemLogs"
 
-    if (atomicState.problemLogs.size() >= 50) {
-        while (atomicState.problemLogs.size() > 49) {
+    max_pb_size = 10
+    // atomicState.problemLogs = []
+    if (atomicState.problemLogs.size() >= max_pb_size) {
+        while (atomicState.problemLogs.size() > max_pb_size - 1) {
+            if (dev_mode) log.debug "Removing ${atomicState.problemLogs[0]} entry from atomicState.problemLogs"
             atomicState.problemLogs.remove(0)  // Removes the oldest entry
         }
     }
+    if ((atomicState.problemLogs.size() != 0 || dev_mode) && (problem || dev_mode)) log.error "Problem = $atomicState.problemLogs"
+
 
     if (problem) {
         if (enablewarning) log.warn "There's a problem with current target temperature ($target). Readjusting with default safe value of $safeValue"
@@ -5555,7 +5629,7 @@ def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionAc
     }
 }
 def set_thermostat_target(t, cmd, target, override, origin){
-    if(dev_mode) log.debug "set_thermostat_target called from $origin | ignoreTarget: $ignoreTarget"
+    if (dev_mode) log.debug "set_thermostat_target called from $origin | ignoreTarget: $ignoreTarget"
 
     if (ignoreTarget && !override) {
         if (dev_mode) log.debug "set_thermostat_target exiting due to ignoreTarget setting"
@@ -5875,13 +5949,13 @@ def convert_db_to_fahrenheit() {
 }
 
 /* ############################### BOOLEANS ###############################****** */
-boolean time_is_up(long start_time, override=false){
+boolean time_is_up(long start_time, override = false){
     def threshold = is_dev_app() ? 30.0 : 30.0
     float duration = (now() - start_time) / 1000
     atomicState.stop = atomicState.stop == null ? false : atomicState.stop
     result = duration >= threshold || atomicState.stop
     if (enabledebug || dev_mode) log.debug "time_is_up() returns: $result"
-    return result 
+    return result
 }
 boolean operatingStateOk(contactsClosed, doorsContactsAreOpen, currentOperatingState, currentOperatingNeed){
 

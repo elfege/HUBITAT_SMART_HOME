@@ -149,14 +149,12 @@ def installed() {
     initialize()
 }
 
-
 def updated() {
     log.debug "Updated with settings: ${settings}"
     unsubscribe()
     unschedule()
     initialize()
 }
-
 
 def initialize() {
     log.debug "Initializing"

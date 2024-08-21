@@ -102,8 +102,23 @@ def MainPage() {
             input "run", "button", title: "RUN"
             input "update", "button", title: "UPDATE"
             input "poll", "button", title: "REFRESH DEVICES"
-            input "reboot", "button", title: "Reboot Hub"
-            input "no_reboot", "bool", title: "No Automatic Reboot", defaultValue: true, submitOnChange: true
+            
+            def toggle_msg = !no_reboot ? '(toggle back to reset reboot count)' : ''
+
+            input "no_reboot", "bool", title: "No Automatic Reboot $toggle_msg", defaultValue: true, submitOnChange: true
+            if (!no_reboot) {
+                def H = other_hubs ? "all hubs" : "hub"
+                input "reboot", "button", title: "Reboot ${H}"
+                input "other_hubs", "text", title: "Also reboot other hubs (enter IP addresses separated by commas)", submitOnChange: true
+                if (other_hubs) {
+                    def validatedIPs = validateAndFormatIPs(other_hubs)
+                    if (validatedIPs.size() > 0) {
+                        paragraph "Validated IP addresses: ${validatedIPs.join(', ')}"
+                    } else {
+                        paragraph "No valid IP addresses entered. Please check your input."
+                    }
+                }
+            }
 
             input "polldevices", "bool", title: "Poll devices", submitOnChange: true
             input "enabledebug", "bool", title: "Debug logs (verbose)", submitOnChange: true
@@ -148,6 +163,36 @@ def MainPage() {
         }
     }
 }
+
+def validateAndFormatIPs(input) {
+    def ipList = input.split(',').collect { it.trim() }
+    def validIPs = []
+
+    ipList.each { ip ->
+        // Remove any http:// or https:// prefix
+        def cleanIP = ip.replaceAll('^(https?://)?', '')
+
+        // Simple validation: check if it has 4 parts, each between 0 and 255
+        def parts = cleanIP.split('\\.')
+        if (parts.size() == 4 && parts.every { part ->
+            try {
+                def num = part.toInteger()
+                return num >= 0 && num <= 255
+            } catch (Exception e) {
+                return false
+            }
+        }) {
+            validIPs.add(cleanIP)
+            log.debug "Valid IP address: $cleanIP"
+        } else {
+            log.warn "Invalid IP address format: $cleanIP"
+        }
+    }
+
+    log.debug "Valid hub IPs: $validIPs"
+    return validIPs
+}
+
 def thermostats(){
 
     def title = format_text("Thermostats, sensors, heaters and coolers", "white", "grey")
@@ -1361,7 +1406,6 @@ def initialize(){
         if (enablewarning) log.warn "Hash table file was empty. Database has been reset and populated."
     }
 
-
     schedule("0 0/1 * * * ?", mainloop, [data: ["source": "schedule"]])
 
     resetBusy()
@@ -1458,7 +1502,7 @@ def appButtonHandler(btn) {
             atomicState.confirmed = "na"
             break
         case "reboot":
-            reboot(true)
+            reboot(true, max_reboots = 100, duration = 0, reboot_threshold_in_secs = 1)
     }
 }
 def contactHandler(evt){
@@ -1488,7 +1532,8 @@ def motionHandler(evt){
             atomicState.activeMotionCount += 1 // eventsSince() can be messy 
             atomicState.lastMotionEvent = now() // initialized upon install or update
         }
-        mainloop("motionHandler")
+        atomicState.lastMotionEvent = atomicState.lastMotionEvent == null ? now() : atomicState.lastMotionEvent
+        if(now() - atomicState.lastMotionEvent > 30 * 1000) mainloop("motionHandler")
     }
     if (enabledebug) log.debug "motionHandler execution time: ${now() - start} ms"
 }
@@ -1507,8 +1552,8 @@ def temperatureHandler(evt){
             }
             return
         }
-
-        mainloop("temperatureHandler")
+        atomicState.lastTempEvent = atomicState.lastTempEvent == null ? now() : atomicState.lastTempEvent
+        if(now() - atomicState.lastTempEvent > 30 * 1000) mainloop("temperatureHandler")
     }
     if (enabledebug) log.debug "temperatureHandler execution time: ${now() - start} ms"
 }
@@ -1850,7 +1895,8 @@ def locationEventHandler(evt){
         if (atomicState.severeLoad > 5) {
             atomicState.problemLogs += 'Hub had to reboot due to <b>$atomicState.severeLoad severe load events</a>'
             atomicState.severeLoad = 0
-            reboot(true)
+            reboot(true, max_reboots = 100, duration = 0, reboot_threshold_in_secs = 1)
+
         }
     }
 
@@ -1860,7 +1906,7 @@ def hubEventHandler(evt){
     log.debug "$evt.device $evt.name $evt.value"
 
     if (evt.name == "systemStart") {
-        initialize()
+        runIn(20, initialize)
     }
 
     if (evt.name.contains("is offline")) {
@@ -1874,6 +1920,16 @@ def hubEventHandler(evt){
 
 def mainloop(source){
     atomicState.busy = atomicState.busy == null ? true : atomicState.busy
+
+    // prevent overflow
+    def interval = 30
+    if (now() - atomicState.startMainLoop < interval * 1000) {
+        log.warn "master thread ran less than $interval seconds ago. Skipping..."
+        log.warn "source: $source"
+        unschedule(master)
+        return
+    }
+
     // prevent stacking
     if (atomicState.busy) {
         if (enablewarning || dev_mode) log.warn "$app.label is busy..."
@@ -1887,15 +1943,11 @@ def mainloop(source){
         runIn(30, forceReset)
     }
 }
-def forceReset() {
-    log.error format_text("Force resetting app state due to timeout", "black", "red")
-    atomicState.busy = false
-    atomicState.stop = true
-}
 
 def master(source){
 
     long start = now()
+
     atomicState.startMainLoop = start
     atomicState.stop = false
 
@@ -2383,37 +2435,51 @@ def master(source){
 
 }
 
+/* ################################# OPERATIONS ################################# */
+
+def forceReset() {
+    log.error format_text("Force resetting app state due to timeout", "black", "red")
+    atomicState.busy = false
+    atomicState.stop = true
+}
 
 def checkRebootConditions(){
+
     float duration = (now() - atomicState.startMainLoop) / 1000
+
     if (enablewarning || duration > 6.0 || is_dev_app()) {
         log.warn "Main Loop took ${duration} seconds to execute..."
 
         if (duration > 20.0) {
             log.error format_text("CODE NEEDS FIXING...", "black", "red")
+            unschedule(master)
+            reboot(true, max_reboots = 100, duration = 0, reboot_threshold_in_secs = 1)
+
         }
+
     }
     // Check if app needs to be reinitialized or hub needs to be rebooted
     try {
-        def initialize_threshold = 25.0
-        def max_reboots = 5
-        def reboot_threshold = 150.0
-        def reinit_limit = 3
-        def delay_between_reboots = 6 * 60 * 60 * 1000 // delay between reboots in hours
+            def initialize_threshold = 25.0
+            def max_reboots = 1
+            def reboot_threshold_in_secs = 150.0
+            def reinit_limit = 3
+            def delay_between_reboots = 6 * 60 * 60 * 1000 // delay between reboots in hours
 
         // Reset reboot counter if it's been more than delay_between_reboots (in hours) duration since last reboot
         atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
+
         if (now() - atomicState.lastRebootTime < delay_between_reboots) {
             atomicState.numberOfReinit = 0
         }
 
         // Reinitialize if duration is between thresholds
-        if (duration > initialize_threshold && duration < reboot_threshold) {
+        if (duration > initialize_threshold && duration < reboot_threshold_in_secs) {
             atomicState.numberOfReinit = atomicState.numberOfReinit == null ? 0 : atomicState.numberOfReinit
             atomicState.numberOfReinit += 1
-            def now = new Date()
-            def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-            def formattedDate = dateFormat.format(now)
+                def now = new Date()
+                def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                def formattedDate = dateFormat.format(now)
             atomicState.problemLogs += "App re-initialized $atomicState.numberOfReinit times. Last time was @ ${formattedDate}"
             if (atomicState.numberOfReinit < reinit_limit) {
                 initialize()
@@ -2421,98 +2487,136 @@ def checkRebootConditions(){
             }
         }
 
-        // Reboot if duration exceeds threshold or too many reinitializations
-        if (duration >= reboot_threshold || atomicState.numberOfReinit >= reinit_limit) {
-            atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 1 : atomicState.numberOfReboots
-            atomicState.lastRebootTime = now()
-            if (atomicState.numberOfReboots <= max_reboots) {
-                reboot(false)
-            }
-            else {
-                log.error format_text("Max Reboots attempts reached for $app.label...", "white", "red")
-            }
+
+        if (duration >= reboot_threshold_in_secs || atomicState.numberOfReinit >= reinit_limit) {
+            reboot(false, max_reboots, duration, reboot_threshold_in_secs)
         }
+
+
     } catch (Exception error) {
         log.error "Initialize and reboot threshold management error => $error"
     }
 }
 
-def reboot(override){
-    atomicState.severeLoad = 0
-    try {
-        def hub = location.hub
-        def ip = hub.localIP
-        log.debug "Hub IP Address: ${ip}"
 
-        atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
-        atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 0 : atomicState.numberOfReboots
+def reboot(override, max_reboots, duration, reboot_threshold_in_secs) {
 
-        if (now() - atomicState.lastRebootTime < 60 * 60 * 1000 || override) {
-            unschedule()
-            unsubscribe() // temporarily stop all instances
-            subscribe(location, "systemStart", hubEventHandler)
+    if (no_reboot && !override) {
+        log.warn format_text("Automatic reboots are disabled in this instance. Not sending reboot command...", "blue", "white")
+        return "Reboot skipped: Automatic reboots are disabled"
+    }
 
-            log.warn "-----------------${app.label} is REBOOTING ${location} ---------------------- "
-            atomicState.severeLoad = atomicState.severeLoad ? atomicState.severeLoad : 0
-            def text = atomicState.severeLoad >= 1 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
+    return format_text("NO REBOOT - FEATURE STILL IN TEST DEVELOPMENT", "teal", "darkblue")
 
-            atomicState.lastRebootTime = now()
-            atomicState.numberOfReboots += 1
-            def now = new Date()
-            def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-            def formattedDate = dateFormat.format(now)
-            atomicState.problemLogs += "hub rebooted $atomicState.numberOfReboots times. Last time was @ ${formattedDate}"
-            log.warn format_text(text, "white", "red")
-            try {
-                runCmd("${ip}", "8080", "/hub/reboot")// reboot
-            } catch (error) {
-                log.error "runCmd => $error"
+    atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 1 : atomicState.numberOfReboots
+
+    if (atomicState.numberOfReboots <= max_reboots) {
+        atomicState.lastRebootTime = now()
+
+        try {
+                def mainHub = location.hub
+                def mainIp = mainHub.localIP
+            log.debug "Main Hub IP Address: ${mainIp}"
+
+            // Get the list of all hub IPs (main hub + other hubs)
+            def allHubIps = [mainIp] + (other_hubs ? validateAndFormatIPs(other_hubs) : [])
+            log.debug "All Hub IPs to reboot: ${allHubIps}"
+
+            atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
+            atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 0 : atomicState.numberOfReboots
+
+            if (now() - atomicState.lastRebootTime < 60 * 60 * 1000 || override) {
+                unschedule()
+                unsubscribe() // temporarily stop all instances
+                subscribe(location, "systemStart", hubEventHandler)
+
+                log.warn "-----------------${app.label} is REBOOTING ${location} and ${allHubIps.size() - 1} other hub(s) ---------------------- "
+                atomicState.severeLoad = atomicState.severeLoad ?: 0
+                    def text = atomicState.severeLoad >= 5 ? "REBOOTING THE HUBS DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUBS"
+                log.warn "atomicState.severeLoad = $atomicState.severeLoad"
+                if (atomicState.severeLoad >= 5) {
+                    atomicState.severeLoad = 0
+                }
+
+                atomicState.numberOfReboots += 1
+                    def now = new Date()
+                    def dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                    def formattedDate = dateFormat.format(now)
+                atomicState.problemLogs += "hubs rebooted $atomicState.numberOfReboots times. Last time was @ ${formattedDate}"
+                log.warn format_text(text, "white", "red")
+
+                if (atomicState.numberOfReboots >= 5) {
+                    // Reboot all hubs
+                    allHubIps.each {
+                        ip ->
+                            try {
+                            log.info "Attempting to reboot hub at IP: ${ip}"
+                                    def result = runCmd(ip, "8080", "/hub/reboot", override)
+                            log.info "Reboot attempt result for ${ip}: ${result}"
+                        } catch (error) {
+                            log.error "Failed to reboot hub at IP ${ip}: $error"
+                        }
+                    }
+                } else {
+                    runIn(3600, reset_nb_reboots)
+                }
             }
         }
+        catch (Exception error) {
+            log.error "reboot => $error"
+        }
     }
-    catch (Exception error) {
-        log.error "reboot => $error"
-    }
-
 }
 
-def runCmd(String ip, String port, String path) {
 
-
-    if (no_reboot) {
-        log.debug "Automatic reboots are disabled in this instance. Not sending httpGet command..."
-        return
+def runCmd(String ip, String port, String path, override) {
+    if (no_reboot && !override) {
+        log.warn format_text("Automatic reboots are disabled in this instance. Not sending reboot command...", "blue", "white")
+        return "Reboot skipped: Automatic reboots are disabled"
     }
 
     atomicState.numberOfReinit = 0
+    log.warn format_text("SENDING REBOOT CMD NOW!", "white", "red")
+
+    return
+
+    atomicState.lastRebootTime = now()
 
     try {
-    def uri = "http://${ip}${':'}${port}${path}"
+        def uri = "http://${ip}:${port}${path}"
         log.debug "POST: $uri"
 
-    def reqParams = [
-            uri: uri
+        def reqParams = [
+            uri: uri,
+            timeout: 30
         ]
 
         try {
-            httpPost(reqParams){
+            httpPost(reqParams) {
                 response ->
-        }
+                    log.debug "HTTP Response: ${response.status}"
+                return "Reboot command sent. HTTP Response: ${response.status}"
+            }
         } catch (Exception e) {
-            log.error "${e}"
+            log.error "HTTP POST failed: ${e}"
+            return "Failed to send reboot command: ${e.message}"
         }
     } catch (Exception e) {
         log.error "runCmd => ${e}"
+        return "Error in runCmd: ${e.message}"
     }
 }
 
-/* ############################### MAIN OPERATIONS ############################### */
+
 def resetBusy(){
     if (atomicState.busy) {
         atomicState.busy = false
         atomicState.stop = true
         log.debug "atomicState.busy reset to false"
     }
+}
+def reset_nb_reboots(){
+    atomicState.numberOfReboots = 0
 }
 def foolproof(){
     if (offrequiredbyuser && fanCirculateAlways) // fool proof, these two options must never be true together, fancirculate takes precedence
@@ -3038,6 +3142,7 @@ def powerManagement(inside,
         if (enableinfo) log.info "OVERRIDE MODE--------------"
     }
 }
+
 def powerConsistency(need, target, inside, cmd, contactsClosed, doorsContactsAreOpen, motionActive, thermModes, operatingStateOk, currentOperatingNeed, humThres){
     boolean pwLow
     boolean timeToRefreshMeters
@@ -5737,6 +5842,7 @@ def call_create_file(){
         }
     }
 }
+
 def readFromFile(fileName) {
     def host = "localhost"  // or "127.0.0.1"
     def port = "8080"  

@@ -102,10 +102,7 @@ def MainPage() {
             input "run", "button", title: "RUN"
             input "update", "button", title: "UPDATE"
             input "poll", "button", title: "REFRESH DEVICES"
-            
-            def toggle_msg = !no_reboot ? '(toggle back to reset reboot count)' : ''
-
-            input "no_reboot", "bool", title: "No Automatic Reboot $toggle_msg", defaultValue: true, submitOnChange: true
+            input "no_reboot", "bool", title: "No Automatic Reboot", defaultValue: true, submitOnChange: true
             if (!no_reboot) {
                 def H = other_hubs ? "all hubs" : "hub"
                 input "reboot", "button", title: "Reboot ${H}"
@@ -1926,7 +1923,7 @@ def mainloop(source){
     if (now() - atomicState.startMainLoop < interval * 1000) {
         log.warn "master thread ran less than $interval seconds ago. Skipping..."
         log.warn "source: $source"
-        unschedule(master)
+        // unschedule(master)
         return
     }
 
@@ -2452,7 +2449,8 @@ def checkRebootConditions(){
 
         if (duration > 20.0) {
             log.error format_text("CODE NEEDS FIXING...", "black", "red")
-            unschedule(master)
+            // unschedule(master)
+            forceReset()
             reboot(true, max_reboots = 100, duration = 0, reboot_threshold_in_secs = 1)
 
         }
@@ -2508,7 +2506,8 @@ def reboot(override, max_reboots, duration, reboot_threshold_in_secs) {
 
     return format_text("NO REBOOT - FEATURE STILL IN TEST DEVELOPMENT", "teal", "darkblue")
 
-    atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 1 : atomicState.numberOfReboots
+    atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 0 : atomicState.numberOfReboots    
+    atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
 
     if (atomicState.numberOfReboots <= max_reboots) {
         atomicState.lastRebootTime = now()
@@ -2522,8 +2521,6 @@ def reboot(override, max_reboots, duration, reboot_threshold_in_secs) {
             def allHubIps = [mainIp] + (other_hubs ? validateAndFormatIPs(other_hubs) : [])
             log.debug "All Hub IPs to reboot: ${allHubIps}"
 
-            atomicState.lastRebootTime = atomicState.lastRebootTime == null ? now() : atomicState.lastRebootTime
-            atomicState.numberOfReboots = atomicState.numberOfReboots == null ? 0 : atomicState.numberOfReboots
 
             if (now() - atomicState.lastRebootTime < 60 * 60 * 1000 || override) {
                 unschedule()
@@ -4977,7 +4974,8 @@ def get_need(target, simpleModeActive, inside, outside, motionActive, doorsConta
 
         boolean tooCold = inside.toDouble() <= target.toDouble() - swing.toDouble()  
         boolean tooHot = inside.toDouble() >= target.toDouble() + swing.toDouble()
-
+        
+        if (enabletrace || is_dev_app()) log.trace format_text("thermModes: $thermModes", "black", "orange")
         if (enalbetrace || is_dev_app()) log.trace format_text("Inside: $inside | swing = $swing | target = $target | tooHot = $tooHot | tooCold = $tooCold | origin: $origin", "black", "yellow")
 
         if (tooHot) {
@@ -5083,7 +5081,7 @@ def get_need(target, simpleModeActive, inside, outside, motionActive, doorsConta
             contactsAreOpen(),
         )
 
-        if (enableinfo) log.info "<b>get_need() returning need: ${need} with cause:  ${cause}</b>"
+        if (enableinfo || is_dev_app()) log.info "<b>get_need() returning need: ${need} with cause:  ${cause}</b>"
 
     } catch (Exception e) {
         log.error "get_need error: ${e}"
@@ -5378,7 +5376,6 @@ def handle_differentiate_thermostats(thermostat, neededThermostats, need, inside
         }
     }
 }
-
 def handle_delayed_mode_switch(need, inside, humidity, target) {
     atomicState.waitAfterCoolConditionMet = atomicState.waitAfterCoolConditionMet == null ? false : atomicState.waitAfterCoolConditionMet
     atomicState.waitAfterHeatConditionMet = atomicState.waitAfterHeatConditionMet == null ? false : atomicState.waitAfterHeatConditionMet
@@ -5421,7 +5418,6 @@ def handle_delayed_mode_switch(need, inside, humidity, target) {
 
     return [need == "off" ? "off" : need.capitalize(), need]
 }
-
 def log_need_debug(
     need,
     target,
@@ -6153,6 +6149,8 @@ boolean contactsAreOpen(){
     listOfOpenContacts = WindowsContact?.findAll{ it.currentValue("contact") == "open" }
     boolean someAreOpen = listOfOpenContacts.size() > 0
 
+    if (listOfOpenContacts.size() != 0 || is_dev_app()) log.info "------------------ windows open ?: ${listOfOpenContacts.join(', ')}"
+
     if (someAreOpen && override_contacts_in_simple_mode && simpleModeIsActive()) {
         log.warn format_text("------ IGNORING CONTACTS due to $simpleModeName mode ------", "black", "yellow")
         return false
@@ -6183,7 +6181,7 @@ boolean doorsOpen(){
         return false
     }
 
-    if (enableinfo) log.info "------------------ doors: $doorsContacts open ?: ${listOpen.join(', ')}"
+    if (enableinfo || is_dev_app()) log.info "------------------ doors: $doorsContacts open ?: ${listOpen.join(', ')}"
     return Open
 }
 boolean Active(){

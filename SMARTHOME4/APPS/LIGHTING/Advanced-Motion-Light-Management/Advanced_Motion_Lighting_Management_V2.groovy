@@ -76,8 +76,7 @@ preferences {
                         }
                     }
                 }
-            }
-            
+            }            
             input "keepSomeSwitchesOffInModes", "bool", title: "Keep some switches off in certain modes?", defaultValue: false, submitOnChange: true
             if (keepSomeSwitchesOffInModes) {
                 input "modesForSwitchesOff", "mode", title: "Select modes", multiple: true, required: true
@@ -261,7 +260,7 @@ def pauseApp() {
     log.debug "App paused for ${formattedDuration}"
 
     if (controlLightsOnPause) {
-        controlLights(pauseLightAction, switches, pauseActionSwitches)
+        controlLights(pauseLightAction, switches, additionalPauseSwitches)
     }
 }
 
@@ -271,21 +270,21 @@ def resumeNormalOperation() {
     log.debug "Resuming normal operation"
 
     if (controlLightsOnResume) {
-        controlLights(resumeLightAction, switches, resumeActionSwitches)
+        def allSwitches = (switches + additionalResumeSwitches).unique { it.id }
+        controlLights(resumeLightAction, allSwitches)
     }
 
     runIn(1, master)  // Schedule master to run shortly after resuming
 }
 
-def controlLights(action, mainSwitches, additionalSwitches) {
+def controlLights(action, mainSwitches, additionalSwitches = []) {
     def allSwitches = (mainSwitches + additionalSwitches).unique { it.id }
 
     log.debug "Controlling lights: action=${action}, switches=${allSwitches.collect { it.displayName }}"
 
     switch (action) {
         case "toggle":
-            allSwitches.each {
-                sw ->
+            allSwitches.each { sw ->
                 if (!shouldKeepSwitchOff(sw)) {
                     if (sw.currentValue("switch") == "on") {
                         sw.off()
@@ -300,8 +299,7 @@ def controlLights(action, mainSwitches, additionalSwitches) {
             }
             break
         case "turn on":
-            allSwitches.each {
-                sw ->
+            allSwitches.each { sw ->
                 if (!shouldKeepSwitchOff(sw)) {
                     sw.on()
                     log.debug "Turned on: ${sw.displayName}"
@@ -311,8 +309,10 @@ def controlLights(action, mainSwitches, additionalSwitches) {
             }
             break
         case "turn off":
-            allSwitches.off()
-            log.debug "Turned off all switches"
+            allSwitches.each { sw ->
+                sw.off()
+                log.debug "Turned off: ${sw.displayName}"
+            }
             break
         default:
             log.warn "Unknown light control action: ${action}"
@@ -525,22 +525,25 @@ def off() {
 }
 
 def appLabel() {
-    def currentLabel = app.label ?: "Advanced Motion Lighting Management V2"
-    def newLabel = currentLabel
-
+    def baseName = settings?.appName ?: "Advanced Motion Lighting Management V2"
+    def pausedSuffix = "(Paused)"
+    
+    log.debug "Current app label: ${app.label}"
+    log.debug "Base name: ${baseName}"
+    log.debug "state.paused: ${state.paused}"
+    
+    def newLabel = baseName
+    
     if (state.paused) {
-        if (!currentLabel.endsWith("(Paused)")) {
-            newLabel = currentLabel + " <font color='red'>(Paused)</font>"
-        }
-    } else {
-        newLabel = currentLabel.replace(" <font color='red'>(Paused)</font>", "")
+        newLabel += " ${pausedSuffix}"
     }
-
-    if (newLabel != currentLabel) {
+    
+    if (app.label != newLabel) {
         app.updateLabel(newLabel)
+        log.debug "Updated app label to: ${newLabel}"
+    } else {
+        log.debug "App label unchanged"
     }
-
-    if (enableDebug) log.debug "App label updated to: $newLabel"
 }
 
 def restoreLabel() {

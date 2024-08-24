@@ -4972,8 +4972,10 @@ def get_need(target, simpleModeActive, inside, outside, motionActive, doorsConta
 
     try {
 
-        boolean tooCold = inside.toDouble() <= target.toDouble() - swing.toDouble()  
-        boolean tooHot = inside.toDouble() >= target.toDouble() + swing.toDouble()
+        boolean tooCold = inside.toDouble() < target.toDouble() - swing.toDouble()  
+        boolean tooHot = inside.toDouble() > target.toDouble() + swing.toDouble()
+
+        // log.warn format_text("tooHot=$tooHot | ${inside.toDouble()} >= ${target.toDouble()} + ${swing.toDouble()} (${target.toDouble() + swing.toDouble()})",  "black", "yellow")
         
         if (enabletrace || is_dev_app()) log.trace format_text("thermModes: $thermModes", "black", "orange")
         if (enalbetrace || is_dev_app()) log.trace format_text("Inside: $inside | swing = $swing | target = $target | tooHot = $tooHot | tooCold = $tooCold | origin: $origin", "black", "yellow")
@@ -5506,7 +5508,7 @@ def log_need_debug(
     }
 }
 
-/* ############################### DECISIONS ############################### */
+/* ############################### SETTERS ############################### */
 
 def set_multiple_thermostats_mode(mode, origin, safeValue){
 
@@ -5779,7 +5781,7 @@ def turn_off_thermostats(need, inside, thermModes) {
     }
 }
 
-/* ############################### A.I. LEARNING (beta 2 October 2023) ############################### */
+/* ############################### DECISIONS & A.I. LEARNING (beta 2 October 2023) ############################### */
 
 Boolean createFile(String fName, String fData) {
     try {
@@ -6359,8 +6361,8 @@ Boolean writeToFile(String fileName, String data) {
         return false
     }
 }
-/* ################################# POLLING AND LOGGING ################################# */
 
+/* ################################# POLLING AND LOGGING ################################# */
 
 def stop(data){
     if (enablewarning) log.warn "STOP customCommand = $customCommand"
@@ -6386,7 +6388,6 @@ def stop(data){
     }
 
 }
-
 def Poll(){
 
     if (location.mode in restricted) {

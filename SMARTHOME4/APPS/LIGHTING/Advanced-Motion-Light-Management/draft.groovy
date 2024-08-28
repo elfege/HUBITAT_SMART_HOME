@@ -1,37 +1,36 @@
-def controlLights(action, switchesToControl) {
-    log.debug "Controlling lights: action=${action}, switches=${switchesToControl.collect { it.displayName }}"
-
-    switch (action) {
-        case "toggle":
-            switchesToControl.each { sw ->
-                if (!shouldKeepSwitchOff(sw)) {
-                    if (sw.currentValue("switch") == "on") {
-                        sw.off()
-                        log.debug "Turned off: ${sw.displayName}"
-                    } else {
-                        sw.on()
-                        log.debug "Turned on: ${sw.displayName}"
-                    }
-                } else {
-                    log.debug "Skipped toggling ${sw.displayName} due to keep-off rule"
-                }
-            }
-            break
-        case "turn on":
-            switchesToControl.each { sw ->
-                if (!shouldKeepSwitchOff(sw)) {
-                    sw.on()
-                    log.debug "Turned on: ${sw.displayName}"
-                } else {
-                    log.debug "Skipped turning on ${sw.displayName} due to keep-off rule"
-                }
-            }
-            break
-        case "turn off":
-            switchesToControl.off()
-            log.debug "Turned off all switches"
-            break
-        default:
-            log.warn "Unknown light control action: ${action}"
+def initialize() {
+    log.debug "Initializing CSP Watchdog"
+    state.failedTests = 0
+    state.lastSwitchCmd = now()
+    state.lastPing = now()
+    state.criticalEventCount = 0
+    
+    unsubscribe()
+    unschedule()
+    
+    // Subscribe to hub events
+    subscribe(location, "hubInfo", hubInfoHandler)
+    subscribe(location, "systemStart", systemStartHandler)
+    subscribe(location, "zigbeeStatus", zigbeeStatusHandler)
+    subscribe(location, "zwaveStatus", zwaveStatusHandler)
+    
+    if (motionSensors) {
+        subscribe(motionSensors, "motion.active", motionHandler)
+    }
+    if (testSwitch) {
+        subscribe(testSwitch, "switch", switchHandler)
+    }
+    if (trueSwitches) {
+        trueSwitches.each { subscribe(it, "switch", trueSwitchHandler) }
+        runEvery1Minute(checkTrueSwitches)
+    }
+    if (enableRemote) {
+        parseRemoteConnectionString()
+        def interval = pingInterval as int ?: 5  // Default to 5 minutes if not set
+        schedule("0 */${interval} * * * ?", checkRemoteHub)
+    }
+    
+    if (enableLogging) {
+        runIn(1800, disableLogging)
     }
 }

@@ -12,12 +12,12 @@ definition(
     author: "ELFEGE",
 
     description: """Check that cron service is running properly and or that a switch is responding in a timely fashion
-and/or a remote hub is responsive, if not, then reboot the hub (or the remote hub)""",
+and / or a remote hub is responsive, if not, then reboot the hub(or the remote hub)""",
 
-    category: "maintenance",
+category: "maintenance",
     iconUrl: "https://www.philonyc.com/assets/penrose.jpg",
-    iconX2Url: "https://www.philonyc.com/assets/penrose.jpg", 
-    image: "https://www.philonyc.com/assets/penrose.jpg"
+        iconX2Url: "https://www.philonyc.com/assets/penrose.jpg",
+            image: "https://www.philonyc.com/assets/penrose.jpg"
 )
 
 preferences {
@@ -45,12 +45,12 @@ def pageConfig() {
     appLabel("pageconfig")
 
     def pageProperties = [
-        name:       "pageConfig",
-        title:      "$app.label",
-        nextPage:   null,
+        name: "pageConfig",
+        title: "$app.label",
+        nextPage: null,
         install: true,
         uninstall: true,
-        submitOnChange:true
+        submitOnChange: true
     ]
 
     dynamicPage(pageProperties) {
@@ -61,13 +61,13 @@ def pageConfig() {
         }
         section("restricted modes")
         {
-            input "restricted", "mode", title: "Do not run this app when in these modes:", description:"select modes", multiple:true, required:false
+            input "restricted", "mode", title: "Do not run this app when in these modes:", description: "select modes", multiple: true, required: false
         }
 
         section(menuHeader("Method 1: Motion Sensors Trigger - this is the basic method"))
         { 
-            input "motionSensors", "capability.motionSensor", title: "Choose your motion sensors", despcription: "pick a motion sensor", required:true,
-                multiple:true, submitOnChange: true
+            input "motionSensors", "capability.motionSensor", title: "Choose your motion sensors", despcription: "pick a motion sensor", required: true,
+                multiple: true, submitOnChange: true
             def hub = location.hubs[0]
             /*log.debug "id: ${hub.id}"
 log.debug "zigbeeId: ${hub.zigbeeId}"
@@ -78,73 +78,68 @@ log.debug "name: ${hub.name}"*/
             //log.debug "localIP: ${hub.getDataValue("localIP")}"
             //log.debug "localSrvPortTCP: ${hub.getDataValue("localSrvPortTCP")}"
             def hubIp = hub.getDataValue("localIP")
-            app.updateSetting("ip", [value:hubIp, type:"test"])
-            input "ip", "text", title: "IP ADDRESS OF YOUR HUB", despcription: "enter your ip address without 'http://'", required:true, defaultValue:hubIp
+            app.updateSetting("ip", [value: hubIp, type: "test"])
+            input "ip", "text", title: "IP ADDRESS OF YOUR HUB", despcription: "enter your ip address without 'http://'", required: true, defaultValue: hubIp
         }
         section(menuHeader("Method 2: Virtual Switch trigger - this method provides better reactivity"))
         {
-            input "swt", "capability.switch", title: "(optional) Select a control virtual switch",description:"Select a VIRTUAL switch", required:false, submitOnChange:true
+            input "swt", "capability.switch", title: "(optional) Select a control virtual switch", description: "Select a VIRTUAL switch", required: false, submitOnChange: true
             
-            input "trueSwitches", "capability.switch", title: "<a style='color:red; font-weight:900;'>Highly recommended but make sure to not select ANY hub mesh device!</a> Select a reasonnable number (2 or 3) of real physical Z-wave switches to prevent full queue errors and grid locks", required: false, multiple:true
-            if(swt || trueSwitches)
-            {
-                if(swt){
+            input "trueSwitches", "capability.switch", title: "<a style='color:red; font-weight:900;'>Highly recommended but make sure to not select ANY hub mesh device!</a> Select a reasonnable number (2 or 3) of real physical Z-wave switches to prevent full queue errors and grid locks", required: false, multiple: true
+            if (swt || trueSwitches) {
+                if (swt) {
                     paragraph "This app will monitor the reaction time between the cmd and the event declaration to check your hub's reactivity."
-                    input "repeatswitch", "number", title: "Set reboot sensitivity (number of failed tests before reboot)", required: true, range: "3.. 100", submitOnChange:true
+                    input "repeatswitch", "number", title: "Set reboot sensitivity (number of failed tests before reboot)", required: true, range: "3.. 100", submitOnChange: true
                 }
 
-                if(trueSwitches){
+                if (trueSwitches) {
                     paragraph """You have selected ${trueSwitches.join(", ")} as a physical switches. It will be polled on a regular interval and then the app will reboot if an error is returned."""
-                    input "notification", "capability.notification", title: "Select notification devices", multiple:true, required:false, submitOnChange: true 
-                    
+                    input "notification", "capability.notification", title: "Select notification devices", multiple: true, required: false, submitOnChange: true
+
                 }
             }
         }
         section(menuHeader("Method 3: Local Remote Hub Trigger - this method is great for those whom use a second hub"))
         {
             input "workWithRemoteHub", "bool", title: "watch a remote hub on your network", defaultValue: false, submitOnChange: true
-            if(workWithRemoteHub)
-            {
-                input "repeatremote", "number", title: "After how many failed attempts should this app reboot the remote server?", description: "Set a value between 3 and 30", range: "3..30",defaultValue: "5"
+            if (workWithRemoteHub) {
+                input "repeatremote", "number", title: "After how many failed attempts should this app reboot the remote server?", description: "Set a value between 3 and 30", range: "3..30", defaultValue: "5"
                 href "connectPage", title: "Configure IP and Token Key", description: "", state: atomicState.clientURI ? "complete" : null
             }
         }
 
         section("logging")
         {
-            input "enablelogging", "bool", title:"Enable logging", defaultValue:false, submitOnChange:true
-            input "enabledescriptiontext", "bool", title:"Enable description text", defaultValue:true, submitOnChange:true
+            input "enablelogging", "bool", title: "Enable logging", defaultValue: false, submitOnChange: true
+            input "enabledescriptiontext", "bool", title: "Enable description text", defaultValue: true, submitOnChange: true
         }
         section()
         {
             input "userLabel", "text", title: "Rename this app", submitOnChange: true, required: false
 
-            if(atomicState.installed)
-            {  
+            if (atomicState.installed) {
 
-                if(atomicState.noReboot == null || atomicState.noReboot == "null"){atomicState.noReboot = false}
+                if (atomicState.noReboot == null || atomicState.noReboot == "null") { atomicState.noReboot = false }
                 input "update", "button", title: "UPDATE"
                 input "noreboot", "button", title: "${atomicState.noReboot ? "Enable Reboot" : "Disable Reboot"}"
-                if(atomicState.noReboot){
+                if (atomicState.noReboot) {
                     paragraph "<div style=\"width:102%;background-color:#1C2BB7;color:red;padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${atomicState.messageReboot}</div>"
                 }
-                else 
-                { 
+                else { 
                     paragraph ""
                 }
                 input "reboot", "button", title: "REBOOT $location"
-                if(swt) {
+                if (swt) {
                     input "test", "button", title: "toggle $swt"
                 }
                 input "run", "button", title: "RUN"
-                if(workWithRemoteHub) {
+                if (workWithRemoteHub) {
                     input "pingtest", "button", title: "PING TEST"
                     input "RemoteHubreboot", "button", title: "Reboot ${clientName} (remote hub)"
-                    if(atomicState.noReboot){
+                    if (atomicState.noReboot) {
                         paragraph "<div style=\"width:102%;background-color:#1C2BB7;color:red;padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${atomicState.messageReboot}</div>"
                     }
-                    else 
-                    {
+                    else {
                         paragraph ""
                     }
                 }
@@ -153,8 +148,7 @@ log.debug "name: ${hub.name}"*/
     }
 }
 def connectPage(){
-    if (!state?.accessToken)
-    {
+    if (!state?.accessToken) {
         createAccessToken()
     }
 
@@ -173,8 +167,7 @@ def connectPage(){
             input "clientName", "string", title: "Friendly Name of Remote Client:", required: false, defaultValue: null, submitOnChange: true
             if (clientName) input "clientIP", "string", title: "Private LAN IP Address of Remote Client:", required: false, defaultValue: null, submitOnChange: true
         }
-        if (clientIP)
-        {
+        if (clientIP) {
             section("Connection Key")
             {
 
@@ -193,78 +186,70 @@ def connectPage(){
 }
 def appButtonHandler(btn) {
     log.warn "btn evt = $btn ***********************************"
-    switch(btn) {
-        case "pause":atomicState.paused = !atomicState.paused
-        log.debug "atomicState.paused = $atomicState.paused"
-        if(atomicState.paused)
-        {
-            log.debug "unscheduling all tasks..."
-            unschedule()
-            log.debug "unsuscribing from events..."
-            unsubscribe()         
-        }
-        else
-        {
-            updated()            
-        }
-        // ; window.location.href = 'http://192.168.10.70/installedapp/list'
-        break
+    switch (btn) {
+        case "pause": atomicState.paused = !atomicState.paused
+            log.debug "atomicState.paused = $atomicState.paused"
+            if (atomicState.paused) {
+                log.debug "unscheduling all tasks..."
+                unschedule()
+                log.debug "unsuscribing from events..."
+                unsubscribe()
+            }
+            else {
+                updated()
+            }
+            // ; window.location.href = 'http://192.168.10.70/installedapp/list'
+            break
         case "update":
-        atomicState.paused = false
-        updated()
-        break
+            atomicState.paused = false
+            updated()
+            break
         case "test":
-        atomicState.swtCmd = now()
-        testSwitch() // leave time to atomicState.swtCmd value to be written 
-        break
+            atomicState.swtCmd = now()
+            testSwitch() // leave time to atomicState.swtCmd value to be written 
+            break
         case "reboot":
-        if(atomicState.noReboot)
-        {
-            log.warn "REBOOT WAS DISABLED BY USER"
-            atomicState.messageReboot = "REBOOT DISABLED BY USER, COMMAND NOT SENT!"
-        }
-        else 
-        {
-            atomicState.messageReboot = ""
-            reboot()
-        }
-        break
+            if (atomicState.noReboot) {
+                log.warn "REBOOT WAS DISABLED BY USER"
+                atomicState.messageReboot = "REBOOT DISABLED BY USER, COMMAND NOT SENT!"
+            }
+            else {
+                atomicState.messageReboot = ""
+                reboot()
+            }
+            break
         case "RemoteHubReboot":
-        if(atomicState.noReboot)
-        {
-            log.warn "REBOOT WAS DISABLED BY USER"
-            atomicState.messageReboot = "REBOOT DISABLED BY USER, COMMAND NOT SENT!"
-        }
-        else 
-        {
-            atomicState.messageReboot = ""
-            rebootRemoteHub()
-        }
-        atomicState.confirm = false
-        break
+            if (atomicState.noReboot) {
+                log.warn "REBOOT WAS DISABLED BY USER"
+                atomicState.messageReboot = "REBOOT DISABLED BY USER, COMMAND NOT SENT!"
+            }
+            else {
+                atomicState.messageReboot = ""
+                rebootRemoteHub()
+            }
+            atomicState.confirm = false
+            break
         case "CANCEL":
-        atomicState.confirm = false
-        break
+            atomicState.confirm = false
+            break
         case "pingtest":
-        remoteServerHealth()
-        break
+            remoteServerHealth()
+            break
         case "run":
-        master("testrun")
-        break
+            master("testrun")
+            break
         case "noreboot":
 
-        atomicState.noReboot = !atomicState.noReboot
-        if(atomicState.noReboot)
-        {
-            log.warn "REBOOT DISABLED BY USER"
-            atomicState.messageReboot = "REBOOT DISABLED BY USER"
-        }
-        else 
-        {
-            atomicState.messageReboot = ""
-        }
+            atomicState.noReboot = !atomicState.noReboot
+            if (atomicState.noReboot) {
+                log.warn "REBOOT DISABLED BY USER"
+                atomicState.messageReboot = "REBOOT DISABLED BY USER"
+            }
+            else {
+                atomicState.messageReboot = ""
+            }
 
-        break
+            break
 
     }
 
@@ -274,17 +259,16 @@ def appLabel(calledBy){
     atomicState.lastLabelTime = now()
     
     def appLa = appLa != null && appLa != "" ? appLa : "CSP Watchdog"
-    appLa = userLabel != null  && userLabel != "" ? userLabel + appLa : appLa
+    appLa = userLabel != null && userLabel != "" ? userLabel + appLa : appLa
 
     atomicState.button_name = atomicState.paused ? "resume" : "pause"
     logging "button name is: $atomicState.button_name"
-    logging "atomicState.paused = $atomicState.paused called by $calledBy"    
+    logging "atomicState.paused = $atomicState.paused called by $calledBy"
 
-    appLa = atomicState.paused ? appLa + ("<font color = 'red'> paused </font>")  : appLa 
-    
-    if(workWithRemoteHub)
-    {
-        appLa = remoteResponded ? appLa + ("<font color = 'red'> online </font>"): appLa + ("<font color = 'red'> offline </font>")  
+    appLa = atomicState.paused ? appLa + ("<font color = 'red'> paused </font>") : appLa
+
+    if (workWithRemoteHub) {
+        appLa = remoteResponded ? appLa + ("<font color = 'red'> online </font>") : appLa + ("<font color = 'red'> offline </font>")
         appLa = atomicState.pausedRemoteReboot ? appLa + ("<font color = 'red'> $clientName rebooting </font>") : appLa
     }
     logging "****appLa = $appLa"
@@ -323,13 +307,12 @@ def init() {
     atomicState.lastRunStamp = new Date().format("h:mm:ss a", location.timeZone) // formated time stamp for debug purpose
 
 
-    if(enablelogging == true){
+    if (enablelogging == true) {
         atomicState.EnableDebugTime = now()
         runIn(1800, disablelogging)
         log.info "disablelogging scheduled to run in ${1800/60} minutes"
     }
-    else 
-    {
+    else {
         log.warn "debug logging disabled!"
     }
 
@@ -338,22 +321,20 @@ def init() {
 
     i = 0
     s = motionSensors.size()
-    for(s!=0;i<s;i++)
-    {
+    for (s != 0; i < s; i++) {
         subscribe(motionSensors[i], "motion", mainHandler)
         log.trace "${motionSensors[i]} subscribed to events"
     }
 
-    if(swt)
-    {
+    if (swt) {
         subscribe(swt, "switch", switchHandler)
-        atomicState.lastSwtEvent = now() 
+        atomicState.lastSwtEvent = now()
         atomicState.swtCmd = now()
     }
 
-    if(trueSwitches){
+    if (trueSwitches) {
         subscribe(trueSwitches, "switch", trueSwitchHandler)
-        atomicState.lastTrueSwtEvent = now() 
+        atomicState.lastTrueSwtEvent = now()
         atomicState.trueSwtPoll = now()
 
         // Schedule polling every minute
@@ -367,12 +348,12 @@ def init() {
     subscribe(location, "severeLoad", locationEventHandler)
 
     atomicState.timer = 5
-    schedule("0 0/${atomicState.timer} * * * ?", cronMaster) 
+    schedule("0 0/${atomicState.timer} * * * ?", cronMaster)
 
     logging("initialization done")
 }
 def locationModeChangeHandler(evt){
-    logging("$evt.name is now in $evt.value mode")   
+    logging("$evt.name is now in $evt.value mode")
 }
 
 def switchHandler(evt){
@@ -387,56 +368,50 @@ def switchHandler(evt){
     def previousFAThr = falseAlarmThreshold
     def absoluteLimit = 10 // (in seconds) too much of a delay is not acceptable so if this limit is passed...
     //... then bring false alarm threshold down 
-    if(elapsed >= absoluteLimit) {
+    if (elapsed >= absoluteLimit) {
         // if it happens a second time that it took too long for the hub to parse a switch event, then reboot the hub
         falseAlarmThreshold = 2 // this value will be kept if and only if absolute limit has been passed more than twice
         atomicState.swtAttempt += 1
-        log.warn "delay is $elapsed seconds --> HUB IS GETTING TOO SLOW bringing falseAlarmThreshold from $previousFAThr to $falseAlarmThreshold; current attemps: $atomicState.swtAttempt" 
-    } 
-    else
-    {
+        log.warn "delay is $elapsed seconds --> HUB IS GETTING TOO SLOW bringing falseAlarmThreshold from $previousFAThr to $falseAlarmThreshold; current attemps: $atomicState.swtAttempt"
+    }
+    else {
         def message = ""
-        if(falseAlarmThreshold != previousFAThr)
-        {
+        if (falseAlarmThreshold != previousFAThr) {
             falseAlarmThreshold = repeatswitch ? repeatswitch : 3
             log.warn "FALSE POSITIVE SWITCH TEST, elapsed time is now back to within acceptable value; restoring orignal false alarm threshold of $falseAlarmThreshold attemps"
         }
-        else
-        {
+        else {
             descriptiontext "Switch event elapsed time is below critical"
         }
     }
     atomicState.lastSwtEvent = now() // remember when last event was registered
 
     logging """
-timeTolerance = ${timeTolerance/1000} seconds
+    timeTolerance = ${ timeTolerance / 1000 } seconds
 elapsed time between cmd and evt = $elapsed seconds
-absoluteLimit = $absoluteLimit
-falseAlarmThreshold = $falseAlarmThreshold (from settings: $repeatswitch)
-"""
+    absoluteLimit = $absoluteLimit
+    falseAlarmThreshold = $falseAlarmThreshold(from settings: $repeatswitch)
+    """
 
-    if(elapsed > timeTolerance && elapsed < absoluteLimit)
-    {
+    if (elapsed > timeTolerance && elapsed < absoluteLimit) {
         log.warn "HUB TOOK ${(now() - atomicState.swtCmd)/1000} seconds TO RESPOND TO CMD attempt #${atomicState.swtAttempt}"
         atomicState.swtAttempt += 1
         // run a new test
         atomicState.swtCmd = now()
         testSwitch()
     }
-    else  if(elapsed < timeTolerance)
-    {
+    else if (elapsed < timeTolerance) {
         logging "$elapsed < $timeTolerance -- ${elapsed < timeTolerance}"
         descriptiontext("Local Hub Response time to a Switch Command is within acceptable parameter (${elapsed} seconds)")
         atomicState.swtAttempt = 0
     }
 
-    if(atomicState.swtAttempt >= falseAlarmThreshold) 
-    {
+    if (atomicState.swtAttempt >= falseAlarmThreshold) {
         log.warn """
 REBOOTING this hub because it took too long to respond to switch cmds on too many occasions...
-atomicState.swtAttempt = $atomicState.swtAttempt
-elapsed = $elapsed (absoluteLimit is $absoluteLimit)
-"""
+        atomicState.swtAttempt = $atomicState.swtAttempt
+        elapsed = $elapsed(absoluteLimit is $absoluteLimit)
+        """
         atomicState.swtAttempt = 0
         reboot()
         return
@@ -446,16 +421,14 @@ def trueSwitchHandler(){
     logging "$evt.device was turned $evt.value"
     master("trueSwitch")
 }
-def mainHandler(evt){    
+def mainHandler(evt){
     //log.info "${evt.name}: $evt.device is $evt.value --------------------"
 
-    if(location.mode in restrictedModes)
-    {
+    if (location.mode in restrictedModes) {
         logging("location in restricted mode, doing nothing")
         return
     }
-    else 
-    {
+    else {
         master("mainHandler")
     }
 }
@@ -464,13 +437,11 @@ def locationEventHandler(evt){
 
 
     log.debug "$evt.description $evt.name evt.date event number:${atomicState.severeLoad} (reboot after 5 events within 30 minutes)"
-    if(evt.name == "severeLoad")
-    {    
+    if (evt.name == "severeLoad") {
         atomicState.severeLoadTime = now()
         atomicState.severeLoad += 1
 
-        if(atomicState.severeLoad > 5)
-        {
+        if (atomicState.severeLoad > 5) {
             reboot()
         }
     }
@@ -483,11 +454,10 @@ def hubEventHandler(evt){
     unsubscribe() // temporarily stop all instances to prevent loop reboots
     atomicState.pausedRemoteReboot = true
 
-    if(evt.name.contains("is offline"))
-    {
+    if (evt.name.contains("is offline")) {
         reboot() // reboot without delay when that happens. 
-        return 
-    }   
+        return
+    }
 
     log.warn "Hub has just restarted! ${app.label} will resume in 2 minutes..."
     atomicState.lastReboot = now()
@@ -503,60 +473,49 @@ def cronMaster(){
 
 def master(String data){
 
-    atomicState.severeLoadTime =  atomicState.severeLoadTime ?  atomicState.severeLoadTime : now()
-    if(now() - atomicState.severeLoadTime > 30*60*1000)
-    {
+    atomicState.severeLoadTime = atomicState.severeLoadTime ? atomicState.severeLoadTime : now()
+    if (now() - atomicState.severeLoadTime > 30 * 60 * 1000) {
         descriptiontext "- no overload within the past 30 minutes, resetting atomicState.severeLoad counter -"
     }
 
-    if(atomicState.paused)
-    {
-        if(atomicState.pausedRemoteReboot)
-        {
+    if (atomicState.paused) {
+        if (atomicState.pausedRemoteReboot) {
             log.warn "app paused due to remote reboot procedure. It will resume in a couple minutes, be patient"
         }
-        else
-        {
+        else {
             log.info "app paused"
             runIn(1800, updated)
         }
     }
-    else 
-    {
+    else {
 
-        if(data == "cronMaster" && atomicState.cronPositive != 0)
-        {
+        if (data == "cronMaster" && atomicState.cronPositive != 0) {
             log.warn("FALSE POSITIVE CRON TEST, reboot canceled!")
             atomicState.cronPositive = 0
         }
 
-        if(workWithRemoteHub)
-        {
+        if (workWithRemoteHub) {
             logging "atomicState.pingInterval = $atomicState.pingInterval"
-            if(now() - atomicState.lastCheckIn > atomicState.pingInterval)
-            {
+            if (now() - atomicState.lastCheckIn > atomicState.pingInterval) {
                 atomicState.lastCheckIn = now()
                 remoteServerHealth()
                 //descriptiontext("checking if remote hub responded")
                 runIn(2, checkResult)
 
-                if(now() - atomicState.lastLabelTime > 120000 || remoteResponded == false) 
-                {
+                if (now() - atomicState.lastLabelTime > 120000 || remoteResponded == false) {
                     appLabel("master")
                 }
             }
         }
 
-        if(swt) {
+        if (swt) {
             def elapsed = now() - atomicState.swtCmd
             logging("elapsed time between swt cmd and execution = ${elapsed}")
 
 
-            if(elapsed > 30000)
-            {
+            if (elapsed > 30000) {
 
-                if(atomicState.swtEvt > 5 && now() - atomicState.lastSwtEvent > 60000)
-                {
+                if (atomicState.swtEvt > 5 && now() - atomicState.lastSwtEvent > 60000) {
                     log.warn "Hub is no longer responding to switch events! REBOOTING"
                     reboot()
                 }
@@ -570,61 +529,53 @@ def master(String data){
             }
         }
 
-        if(trueSwitches) {
-            atomicState.lastTrueSwtEvent = atomicState.lastTrueSwtEvent == null ? now() : atomicState.lastTrueSwtEvent 
+        if (trueSwitches) {
+            atomicState.lastTrueSwtEvent = atomicState.lastTrueSwtEvent == null ? now() : atomicState.lastTrueSwtEvent
             atomicState.trueSwtPoll = atomicState.trueSwtPoll == null ? now() : atomicState.trueSwtPoll
             
             def elapsed = now() - atomicState.trueSwtPoll
             logging("elapsed time between swt cmd and execution = ${elapsed}")
 
 
-            if(elapsed > 3000)
-            {
+            if (elapsed > 3000) {
                 atomicState.trueSwtPoll = now()
                 testTrueSwitches()
-                
+
             }
         }
 
 
 
-        
 
-        logging("***${new Date().format("h:mm:ss a", location.timeZone)}**** Origin: $data")
 
-        if(location.mode in restrictedModes)
-        {
+        logging("***${new Date().format("h: mm: ss a", location.timeZone)}**** Origin: $data")
+
+        if (location.mode in restrictedModes) {
             log.info("location in restricted mode, doing nothing")
         }
-        else 
-        {
+        else {
             long t = atomicState.timer
             long d = t * 60000 + 30000 // allow up to n millis delay for cron to execute
-            if(now() - atomicState.lastRun > d) // if this loop hasn't run for more than the timer's value, then it's probably that CRON is broken
+            if (now() - atomicState.lastRun > d) // if this loop hasn't run for more than the timer's value, then it's probably that CRON is broken
             {
-                log.warn "CRON SERVICE IS NOT WORKING! #$atomicState.cronPositive Current time: ${new Date().format("h:mm:ss a", location.timeZone)} last sched run: ${atomicState.lastRunStamp}" 
+                log.warn "CRON SERVICE IS NOT WORKING! #$atomicState.cronPositive Current time: ${new Date().format("h: mm:ss a", location.timeZone)} last sched run: ${atomicState.lastRunStamp}"
                 atomicState.cronPositive += 1
 
-                if(now() - atomicState.lastReboot > 15 * 60 * 1000)
-                {
-                    if(atomicState.cronPositive > 3)
-                    {
+                if (now() - atomicState.lastReboot > 15 * 60 * 1000) {
+                    if (atomicState.cronPositive > 3) {
                         log.warn "*******************REBOOT **************"
 
                         reboot()
                     }
                 }
-                else 
-                {
+                else {
                     log.warn "LAST REBOOT WAS NOT SO LONG AGO, SKIPPING"
                     atomicState.cronPositive = 0
                 }
 
             }
-            else 
-            {
-                if(atomicState.cronPositive != 0)
-                {
+            else {
+                if (atomicState.cronPositive != 0) {
                     log.warn "FALSE CRON FAILLURE ALARM"
                     atomicState.cronPositive = 0
                 }
@@ -649,12 +600,13 @@ def testTrueSwitches(){
     
 
     def lastActivityCount = 0 // must equal the size of trueSwitches to trigger the alarm threshold count
-    
-    trueSwitches.each { device ->   
 
-        def cmd =  device.hasCommand("poll") ? "poll()" : device.hasCommand("refresh") ? "refresh()" : null
+    trueSwitches.each {
+        device ->
 
-        if(cmd == null) {
+            def cmd = device.hasCommand("poll") ? "poll()" : device.hasCommand("refresh") ? "refresh()" : null
+
+        if (cmd == null) {
             log.warn "$device has neither 'poll()' nor 'refresh()' command"
             return // cancel operation because this might induce fals positives. 
         }
@@ -666,22 +618,22 @@ def testTrueSwitches(){
         logging "deviceNetworkId for $device ======> ${device.deviceNetworkId}"
         //since it most cases it'll respond to refresh/poll commands even when zwave is down, try the getDateLastActivity() method
         try {
-            
+
             // Check if there's been reported activity in the last X minutes
             def X = 4 * 60 * 60 * 1000
             def lastActivity = device.eventsSince(new Date(now() - X)).size() 
             logging "${device}'s lastActivity => $lastActivity"
 
-// lastActivity = 0 // TEST
-            
+            // lastActivity = 0 // TEST
+
             if (lastActivity == 0) {
                 log.warn formatText("${device.displayName} has not reported any activity for more than ${X / 60 / 1000} minutes and might be unresponsive.", "blue", "yellow")
                 lastActivityCount += 1
                 log.debug "lastActivityCount => $lastActivityCount"
 
-// lastActivityCount = 10 // TEST
+                // lastActivityCount = 10 // TEST
 
-                if(lastActivityCount >= repeatswitch) {
+                if (lastActivityCount >= repeatswitch) {
                     def hub = location.hubs[0]
                     def unformatedMessage = "Z-wave mesh down. Rebooting $hub.name"
                     notification?.deviceNotification(unformatedMessage)
@@ -689,9 +641,9 @@ def testTrueSwitches(){
                     def message = formatText(unformatedMessage, "black", "red")
                     log.warn message
 
-                    
+
                     reboot()
-                } 
+                }
             } else {
                 logging "${device.displayName} has been reporting activity within the last ${X / 60 / 1000} minutes."
             }
@@ -699,13 +651,13 @@ def testTrueSwitches(){
             // If an exception was thrown, the device is unresponsive
             log.error "(error from $app.label's inner code). error message => $e."
         }
-        
+
     }
 }
 
 def testSwitch(){
     descriptiontext("Testing Hub's Responsiveness by toggling $swt")
-    (swt.currentValue("switch") == "off") ? swt.on() : swt.off()
+        (swt.currentValue("switch") == "off") ? swt.on() : swt.off()
 
 }
 
@@ -715,18 +667,17 @@ def disableZwave(){
     def cmd = ""
     def port = 8080
     def path = "/hub/zwave/update"
-    def uri = "http://${ip}${":"}${port}${path}/?id=1&version=1&locationId=1&zwaveSecure=0&zwaveStatus=enable&_action_update=Update"
+    def uri = "http://${ip}${": "}${port}${path}/?id=1&version=1&locationId=1&zwaveSecure=0&zwaveStatus=enable&_action_update=Update"
     log.debug "GET: $uri"
 
     def requestParams =
         [
-            uri:  uri,
+            uri: uri,
             requestContentType: "application/json",
             timeout: 5
         ]
 
-    try
-    {
+    try {
         asynchttpGet((enableDebug ? "asyncHTTPHandler" : null), requestParams)
     }
     catch (Exception e)
@@ -740,27 +691,23 @@ def reboot(){
     def text = atomicState.severeLoad >= 1 ? "REBOOTING THE HUB DUE TO SEVERE CPU LOAD" : "NOW REBOOTING THE HUB"
     log.warn formatText(text, "white", "red")
     atomicState.lastReboot = now()
-    
-    if(workWithRemoteHub){sendGetCommand("/rebooting")}
-    if(!atomicState.noReboot)
-    {
+
+    if (workWithRemoteHub) { sendGetCommand("/rebooting") }
+    if (!atomicState.noReboot) {
         atomicState.severeLoad = 0
         runCmd("${ip}", "8080", "/hub/reboot")// reboot
-    }   
-    else
-    {
+    }
+    else {
         log.warn "REBOOT CMD DISABLED!"
     }
 
 }
 def rebootRemoteHub(){
     log.warn "----------------- REBOOTING ${clientName} ---------------------- "
-    if(!atomicState.noReboot)
-    {
+    if (!atomicState.noReboot) {
         runCmd("${clientIP}", "8080", "/hub/reboot")// reboot
     }
-    else
-    {
+    else {
         log.warn "REBOOT CMD DISABLED!"
     }
 
@@ -771,9 +718,9 @@ def rebootRemoteHub(){
     atomicState.paused = true
     runIn(300, updated) // resume this app in a couple minutes to leave time for the other hub to reboot 
 }
-def runCmd(String ip,String port,String path) {
+def runCmd(String ip, String port, String path) {
 
-    def uri = "http://${ip}${":"}${port}${path}"
+    def uri = "http://${ip}${": "}${port}${path}"
     log.debug "POST: $uri"
 
     def reqParams = [
@@ -781,10 +728,21 @@ def runCmd(String ip,String port,String path) {
     ]
 
     try {
-        httpPost(reqParams){response ->
+        httpPost(reqParams){
+            response ->
         }
     } catch (Exception e) {
         log.error "${e}"
+        // http://192.168.10.70:8081/api/rebootHub
+        uri = "http://${ip}${": "}8081/api/rebootHub
+        try {
+            httpPost(reqParams){
+                response ->
+        } catch (Exception e) {
+                log.error "api uri $uri failed as well... ${e}"
+            }
+
+        }
     }
 }
 def remoteServerHealth(){
@@ -793,19 +751,17 @@ def remoteServerHealth(){
 
     logging "atomicState.pausedRemoteReboot = $atomicState.pausedRemoteReboot"
     def message = atomicState.pausedRemoteReboot ? ("ping activity suspended because  ${clientName} is rebooting") : ("") //{sendGetCommand("/ping")}
-    if(message){log.warn (message)}
-    if(!atomicState.pausedRemoteReboot){sendGetCommand("/ping")}
+    if (message) { log.warn(message) }
+    if (!atomicState.pausedRemoteReboot) { sendGetCommand("/ping") }
 
 }
 def parsePing(){ // receive ping from remote server
-    if(atomicState.paused && !atomicState.pausedRemoteReboot)
-    {
+    if (atomicState.paused && !atomicState.pausedRemoteReboot) {
         log.info "ping activity paused"
     }
-    else 
-    {
+    else {
         descriptiontext("Received ping from ${clientName}.")
-        if(atomicState.pausedRemoteReboot){
+        if (atomicState.pausedRemoteReboot) {
             // receiving ping from other hub so it is done rebooting, resuming this app
             updated()
         }
@@ -817,32 +773,28 @@ def parsePing(){ // receive ping from remote server
 def checkResult(){
 
     logging """
-remoteResponded = $remoteResponded 
-atomicState.attempts = $atomicState.attempts
-repeatremote = $repeatremote
-"""
-    if(remoteResponded == false && atomicState.attempts < repeatremote)// prevent false alarm 
+    remoteResponded = $remoteResponded
+    atomicState.attempts = $atomicState.attempts
+    repeatremote = $repeatremote
+    """
+    if (remoteResponded == false && atomicState.attempts < repeatremote)// prevent false alarm 
     {
-        if(atomicState.attempts != 0) {log.warn "${clientName} failed to respond! attempt #$atomicState.attempts"} //by delcaring faillure only as of 2 failed attempts
+        if (atomicState.attempts != 0) { log.warn "${clientName} failed to respond! attempt #$atomicState.attempts" } //by delcaring faillure only as of 2 failed attempts
         atomicState.attempts += 1
         atomicState.pingInterval = 3000 // set shorter ping interval 
-        runIn(30, remoteServerHealth) 
+        runIn(30, remoteServerHealth)
     }
-    else if(remoteResponded == false && atomicState.attempts >= repeatremote)
-    {
+    else if (remoteResponded == false && atomicState.attempts >= repeatremote) {
         rebootRemoteHub()
     }
-    else if(remoteResponded == true)
-    {
-        if(atomicState.attempts != 0){log.warn "FALSE ALARM, resuming normal operations"}
+    else if (remoteResponded == true) {
+        if (atomicState.attempts != 0) { log.warn "FALSE ALARM, resuming normal operations" }
         atomicState.attempts = 0
-        if(atomicState.pingInterval != 60000)
-        {
+        if (atomicState.pingInterval != 60000) {
             atomicState.pingInterval = 60000 // reset ping interval
         }
     }
-    else 
-    {
+    else {
         log.error "Something went wrong, could not resolve reboot conditions..."
     }
 }
@@ -862,7 +814,7 @@ def sendGetCommand(command){
 
     def requestParams =
         [
-            uri:  serverURI,
+            uri: serverURI,
             requestContentType: "application/json",
             headers:
             [
@@ -871,8 +823,7 @@ def sendGetCommand(command){
             timeout: 5
         ]
 
-    try
-    {
+    try {
         asynchttpGet((enableDebug ? "asyncHTTPHandler" : null), requestParams)
     }
     catch (Exception e)
@@ -883,7 +834,7 @@ def sendGetCommand(command){
 def confirmationReceived(){
 
     remoteResponded = true
-    if(atomicState.attempts != 0){
+    if (atomicState.attempts != 0) {
         log.warn "FALSE ALARM ${clientName} is online"
     } else {
         descriptiontext"CONNECTION TO ${clientName} IS HEALTHY"
@@ -892,12 +843,11 @@ def confirmationReceived(){
     // declare false alarm only if 2 attempts were already made 
 
     atomicState.attempts = 0
-    runIn(1, appLabel, [data:"confirmation"])
+    runIn(1, appLabel, [data: "confirmation"])
 }
 
 def asyncHTTPHandler(response, data){
-    if (response?.status != 200)
-    {
+    if (response?.status != 200) {
         log.error "asynchttpGet() request failed with error ${response?.status}"
     }
 }
@@ -907,22 +857,19 @@ def jsonResponse(respMap){
 }
 def configureRemote(){
     def connectString = serverKey
-    if (connectString == null) {return}
+    if (connectString == null) { return }
 
     def accessData
-    try
-    {
+    try {
         accessData = parseJson(new String(connectString.decodeBase64()))
     }
-    catch (errorException)
-    {
+    catch (errorException) {
         log.error "Error reading connection key: ${errorException}."
         responseText = "Error: Corrupt or invalid connection key"
         atomicState.connected = false
         accessData = null
     }
-    if (accessData)
-    {
+    if (accessData) {
         // Set the coordinator hub details
         atomicState.clientURI = accessData.uri
         atomicState.clientToken = accessData.token
@@ -930,31 +877,31 @@ def configureRemote(){
         atomicState.connectionType = accessData.connectionType
 
         log.info """
-atomicState.clientURI = $atomicState.clientURI
-atomicState.clientToken = $atomicState.clientToken
-atomicState.clientType = $atomicState.clientType
-atomicState.connectionType = $atomicState.connectionType
-"""
+        atomicState.clientURI = $atomicState.clientURI
+        atomicState.clientToken = $atomicState.clientToken
+        atomicState.clientType = $atomicState.clientType
+        atomicState.connectionType = $atomicState.connectionType
+        """
     }
 }
 
 def logging(msg){
-    def debug = settings.find{it.key == "enablelogging"}?.value
+    def debug = settings.find{ it.key == "enablelogging" }?.value
     if (debug) log.debug msg
-    if(debug && atomicState.EnableDebugTime == null) atomicState.EnableDebugTime = now()
+    if (debug && atomicState.EnableDebugTime == null) atomicState.EnableDebugTime = now()
 
 }
 def descriptiontext(msg){
-    def debug = settings.find{it.key == "enabledescriptiontext"}?.value
+    def debug = settings.find{ it.key == "enabledescriptiontext" }?.value
     if (debug) log.info msg
 
 }
 def disablelogging(){
-    app.updateSetting("enablelogging",[value:"false",type:"bool"])
+    app.updateSetting("enablelogging", [value: "false", type: "bool"])
     log.warn "logging disabled!"
 }
-def getConnectString() {new groovy.json.JsonBuilder([uri: getFullLocalApiServerUrl(), type: atomicState.remoteType, token: atomicState.accessToken, connectionType: atomicState.localConnectionType]).toString().bytes.encodeBase64()}
-def menuHeader(titleText){"<div style=\"width:102%;background-color:#1C2BB7;color:white;padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${titleText}</div>"}
+def getConnectString() { new groovy.json.JsonBuilder([uri: getFullLocalApiServerUrl(), type: atomicState.remoteType, token: atomicState.accessToken, connectionType: atomicState.localConnectionType]).toString().bytes.encodeBase64() }
+def menuHeader(titleText){ "<div style=\"width:102%;background-color:#1C2BB7;color:white;padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${titleText}</div>" }
 def formatText(title, textColor, bckgColor){
-    return  "<div style=\"width:102%;background-color:${bckgColor};color:${textColor};padding:10px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: 3px\">${title}</div>"
+    return "<div style=\"width:102%;background-color:${bckgColor};color:${textColor};padding:10px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: 3px\">${title}</div>"
 }

@@ -1949,7 +1949,8 @@ def master(source){
     atomicState.stop = false
 
     if (atomicState.paused) {
-        log.debug "App paused ${atomicState.pausedByApp ? 'due to defective temperature sensors' : '--'}"
+        log.debug "App paused ${atomicState.pausedByApp ? 'due to defective temperature sensors' : ''}"
+        if(atomicState.pausedByApp) check_inside_temp()
         return
     }
 
@@ -4553,7 +4554,9 @@ def check_inside_temp(){
     if (sensor) {
         for (s in sensor) {
             device_health_ok = hasRecentlyReportedEvents(s, 3, eventName)
-            if (device_health_ok) {
+            if (device_health_ok) {                
+                atomicState.paused = false
+                initialize()
                 break
             }
         }

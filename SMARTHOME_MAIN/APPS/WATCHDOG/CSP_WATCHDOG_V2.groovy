@@ -57,7 +57,6 @@ def mainPage() {
                     input "rebootAdditionalHub_${ip.replaceAll('\\.', '_')}", "button", title: "Reboot ${ip}", submitOnChange: true
                 }
             }
-            
         }
         section("Actions") {
             input "testNow", "button", title: "Run Health Check Now"
@@ -70,14 +69,20 @@ def mainPage() {
     
             // Local hub reboot controls
             if (!no_reboot) {
-                input "rebootLocalHub", "button", title: "Reboot Local Hub", width: 3, submitOnChange: true
+                input "rebootLocalHub", "button", title: "Reboot Local Hub", width: 1, submitOnChange: true
+            }
+            else {
+                input "forceReboot", "button", title: "Force Reboot", width: 1, submitOnChange:true
             }
             input "no_reboot", "bool", title: "Disable local hub reboot?", defaultValue: true, submitOnChange: true, width: 3
     
             // Remote hub reboot controls (if enabled)
             if (enableRemote) {
                 if (!no_remote_reboot) {
-                    input "rebootRemoteHub", "button", title: "Reboot Remote Hub", width: 3, submitOnChange: true
+                    input "rebootRemoteHub", "button", title: "Reboot Remote Hub", width: 2, submitOnChange: true
+                }
+                else {
+                    input "forceRebootRemoteHub", "button", title: "Force Reboot Remote Hub", width: 1, submitOnChange:true
                 }
                 input "no_remote_reboot", "bool", title: "Disable remote hub reboot?", defaultValue: true, submitOnChange: true, width: 3
             }
@@ -169,12 +174,14 @@ def initialize() {
 
     if (enableRemote) {
         parseRemoteConnectionString()
+        resumeRemoteHubChecks()
     }
 
     if (enableLogging) {
         runIn(1800, disableLogging)
     }
 
+    
     state.installed = true
 }
 
@@ -213,6 +220,16 @@ def scheduleJobs() {
 
 def appButtonHandler(btn) {
     switch (btn) {
+        case "forceReboot":
+            state.confirmReboot = true
+            state.hubToReboot = "local"
+            state.forceReboot = true
+            break
+        case "forceRebootRemoteHub":
+            state.confirmReboot = true
+            state.hubToReboot = "remote"
+            state.forceReboot = true
+            break
         case "clearRebootHistoryBtn":
             clearRebootHistory()
             break
@@ -226,14 +243,16 @@ def appButtonHandler(btn) {
             break
         case "confirmReboot":
             if (state.hubToReboot == "local") {
-                rebootHub()
+                rebootHub(override=state.forceReboot)
             } else if (state.hubToReboot == "remote") {
-                rebootRemoteHub()
+                rebootRemoteHub(override=state.forceReboot)
             }
             state.confirmReboot = false
+            state.forceReboot = false
             break
         case "cancelReboot":
             state.confirmReboot = false
+            state.forceReboot = false
             break
         case "testNow":
             runHealthCheck()
@@ -261,21 +280,21 @@ def appButtonHandler(btn) {
 
 def hubInfoHandler(evt) {
     log.debug "Hub info event: ${evt.descriptionText}"
-    if (evt.name == "hubInfo" && evt.value == "overload") {
-        handleCriticalEvent("Hub overload detected")
+    if (evt.name == "hubInfo" && evt.value == "elevated") {
+        handleCriticalEvent("Hub elevated load detected")
     }
 }
 
 def severeLoadHandler(evt) {
     log.debug "event: ${evt.descriptionText}"
-    handleCriticalEvent("Hub severe load detected")
+    rebootHub(override=true)
 }
 
 def systemStartHandler(evt) {
     log.warn "Hub restarted: ${evt.descriptionText}"
-    state.pausedRemoteReboot = true
-    state.paused = true
-    runIn(120, updated)
+    state.pausedRemoteReboot = false
+    state.paused = false
+    updated()
 }
 
 def zigbeeStatusHandler(evt) {
@@ -302,10 +321,12 @@ def motionHandler(evt) {
 def switchHandler(evt) {
     def responseTime = now() - state.lastSwitchCmd
     logDebug "Switch ${evt.device} changed to ${evt.value}. Response time: ${responseTime}ms"
+    
     if (responseTime > 10000) {  // 10 seconds threshold
         handleFailedTest("Switch response time too long: ${responseTime}ms")
     } else {
         state.failedTests = 0
+        logDebug "Switch response time within acceptable range"
     }
 }
 
@@ -354,9 +375,17 @@ def checkTrueSwitches() {
 
 def handleFailedTest(reason) {
     log.warn "Failed test: $reason"
-    state.failedTests++
+    state.failedTests = (state.failedTests ?: 0) + 1
+    
     if (state.failedTests >= rebootThreshold) {
+        log.error "Failed test threshold reached. Initiating hub reboot."
         rebootHub()
+    } else {
+        log.warn "Failed test count: ${state.failedTests}/${rebootThreshold}"
+        // a notification here to warn about approaching the threshold
+        if (state.failedTests == rebootThreshold - 1) {
+            sendNotification("Hub health check: ${state.failedTests} failed tests. One more will trigger a reboot.")
+        }
     }
 }
 
@@ -378,47 +407,55 @@ def handleCriticalEvent(String reason) {
 
 def remoteServerHealth() {
     if (state.remoteHubChecksPaused) {
-        log.debug "Remote hub health check paused because it's rebooting"
+        log.debug "Remote hub health check paused because local hub rebooting"
         return
     }
 
     logDebug("Remote Server Health Check")
-    remoteResponded = false
+    state.remoteResponded = false
 
     if (state.pausedRemoteReboot) {
         log.warn "Ping activity suspended because ${clientName} is rebooting"
     } else {
-        sendGetCommand("/ping")
+        try {
+            sendGetCommand("/ping")
+        } catch (Exception e) {
+            log.error "Failed to send ping: ${e.message}"
+        }
     }
 
-    runIn(10, checkResult)
+    runIn(15, checkResult)  // Increased timeout to 15 seconds
 }
 
 def checkResult() {
     logDebug """
-    remoteResponded = $remoteResponded
+    remoteResponded = ${state.remoteResponded}
     state.attempts = ${state.attempts}
     remoteRebootThreshold = $remoteRebootThreshold
     """
-    if (!remoteResponded) {
-        if (state.attempts < remoteRebootThreshold) {
-            state.attempts++
-            log.warn "${clientName} failed to respond! attempt #${state.attempts}"
-            state.pingInterval = 3000 // set shorter ping interval 
-            runIn(30, remoteServerHealth)
-        } else {
+    if (!state.remoteResponded) {
+        state.attempts++
+        log.warn "${clientName} failed to respond! attempt #${state.attempts}"
+        
+        if (state.attempts >= remoteRebootThreshold) {
             log.warn "Reboot threshold reached. Initiating reboot of ${clientName}."
             rebootRemoteHub()
+        } else {
+            // Exponential backoff for retry
+            def delay = Math.min(2 ** state.attempts, 30)  // Max delay of 30 minutes
+            runIn(delay * 60, remoteServerHealth)
         }
     } else {
         if (state.attempts > 0) { 
-            log.warn "FALSE ALARM, ${clientName} is now responding after ${state.attempts} failed attempts. Resuming normal operations." 
-            resumeNormalOperations()
+            log.warn "Connection restored to ${clientName} after ${state.attempts} failed attempts. Resuming normal operations." 
         } else {
             logDebug "${clientName} responded normally."
         }
+        state.attempts = 0
+        resumeNormalOperations()
     }
 }
+
 
 def checkRemoteHubrebootHub() {
     log.info "Checking if ${clientName} has successfully rebooted..."
@@ -469,18 +506,18 @@ def sendConfirmation() {
     sendGetCommand("/confirmPing")
 }
 
-def rebootRemoteHub() {
+def rebootRemoteHub(override=false) {
     if (no_remote_reboot) {
-        log.warn "Remote hub reboot is disabled. Skipping reboot."
+        log.warn "Remote hub reboot is disabled. Skipping reboot despite connection issues."
+        sendNotification("Connection to ${clientName} lost, but reboot is disabled. Please check manually.")
         return
     }
-
     if (devmode) {
-        log.warn "Remote Reboot command test successful - the WILL NOT REBOOT"
+        log.warn "Remote Reboot command test successful for monitored remote hub - the hub WILL NOT REBOOT"
         return 
     }
 
-    log.warn "----------------- INITIATING REBOOT OF ${clientName} ----------------------"
+    log.warn formatText("----------------- INITIATING REBOOT OF ${clientName} ----------------------", "white", "red")
     
     state.pausedRemoteReboot = true
     state.paused = true
@@ -500,10 +537,12 @@ def rebootRemoteHub() {
         try {
             sendPostRebootCommand("/api/rebootHub", "8081")
             log.info "Reboot command sent to ${clientName} using fallback maintenance API"
+            handleRemoteHubRebooting()
         } catch (Exception e2) {
             log.error "Failed to send reboot command to ${clientName} using fallback API: ${e2.message}"
-            log.warn "Manual intervention may be required to reboot ${clientName}"
-            runIn(1, resumeNormalOperations)
+            log.warn "All reboot attempts failed. Manual intervention may be required to reboot ${clientName}"
+            sendNotification("Failed to reboot ${clientName}. Manual intervention required.")
+            resumeNormalOperations()
             return
         }
     }
@@ -535,31 +574,36 @@ def sendGetCommand(String command, String overrideUri = null) {
     httpGet(requestParams) { response ->
         if (response.status == 200) {
             logDebug "GET request successful"
+            state.remoteResponded = true
         } else {
             log.warn "GET request returned status ${response.status}"
+            state.remoteResponded = false
         }
     }
 }
 
 def sendPostRebootCommand(String command, String port = "8080") {
     // Extract the IP address part from state.remoteUri
-    def serverURI = state.remoteUri.split('/')[0..2].join('/')
-    def fullUri = "${serverURI}:${port}/${command}"
+    def serverURI = state.remoteUri.split('/')[2]
+    def fullUri = "http://${serverURI}:${port}${command}"
 
     logDebug("command: $command")
     logDebug("serverURI: $serverURI")
-    logDebug("Sending GET request to: $fullUri")
+    logDebug("Sending POST request to: $fullUri")
 
     def requestParams = [
-        uri: fullUri
+        uri: fullUri,
+        requestContentType: "application/json",
+        headers: [:],
+        body: [:],
+        timeout: 15
     ]
 
-    try {
-        httpPost(reqParams) {
-            response -> log.debug response
+    httpPost(requestParams) { response ->
+        logDebug "POST response: ${response.status}"
+        if (response.status != 200) {
+            throw new Exception("Received non-200 status code: ${response.status}")
         }
-    } catch (Exception e) {
-        log.error "${e}"
     }
 }
 
@@ -588,13 +632,17 @@ def rebootAdditionalRemoteHub(String ip) {
     }
 }
 
-def rebootAdditionalHub(String ip, String port = "8080") {
-    def fullUri = "http://${ip}:${port}/hub/reboot"
+def rebootAdditionalHub(String endpoint='/hub/reboot', String ip, String port = "8080") {
+    def fullUri = "http://${ip}:${port}${endpoint}"
 
     logDebug("Sending POST request to: $fullUri")
 
     def requestParams = [
-        uri: fullUri
+        uri: fullUri,
+        requestContentType: "application/json",
+        headers: [:],
+        body: [:],
+        timeout: 15
     ]
 
     try {
@@ -629,14 +677,14 @@ def notifyRemoteHubOfrebootHub() {
 }
 
 def handleRemoteHubRebooting() {
-    log.info "Remote hub is rebooting. Starting ping attempts."
+    log.info "Remote hub is rebooting. Pausing health checks for 5 minutes."
     state.remoteRebooting = true
     state.rebootStartTime = now()
-    runIn(60, "pingRemoteHub")
+    runIn(300, "resumeRemoteHubChecks")
     
-    // Send notification
-    sendNotification("Remote hub ${clientName} is rebooting. Monitoring for its return.")
+    sendNotification("Remote hub ${clientName} is rebooting due to connection issues. Will resume monitoring in 5 minutes.")
 }
+
 
 def pingRemoteHub() {
     if (now() - state.rebootStartTime > 600000) { // 10 minutes timeout
@@ -678,78 +726,72 @@ def handleExternalRebootDetected() {
     return [status: "received"]
 }
 
-
 //###############################################################################
 //#                           LOCAL HUB REBOOT METHODS                                    
 //###############################################################################
 
-def rebootHub() {
-    if (no_reboot) {
-        log.warn "Local hub reboot is disabled. Skipping reboot."
-        return
+def rebootHub(override=false) {
+    if(!override){
+        if (no_reboot) {
+            log.warn "Local hub reboot is disabled. Skipping reboot despite failed tests."
+            sendNotification("Hub health check: Reboot threshold reached, but reboot is disabled. Please check manually.")
+            return
+        }
+        if (devmode) {
+            log.warn "Remote Reboot command test successful for $ip - the hub WILL NOT REBOOT"
+            return 
+        }
+        if (!isRebootAllowed()) {
+            log.warn "Reboot prevented due to excessive reboot frequency"
+            sendNotification("Hub health check: Reboot needed but prevented due to recent reboots. Please check manually.")
+            return
+        }
     }
 
-    if (devmode) {
-        log.warn "Local Reboot command test successful - the WILL NOT REBOOT"
-        return 
-    }
-
-    log.warn "Initiating hub reboot due to critical events or failed tests"
-    state.failedTests = 0
-    state.criticalEventCount = 0
-
-    if (!isRebootAllowed()) {
-        log.warn "Reboot prevented due to excessive reboot frequency"
-        return
-    }
-
-    log.warn "Initiating hub reboot due to critical events or failed tests"
-    state.failedTests = 0
-    state.criticalEventCount = 0
+    log.warn "Initiating hub reboot due to failed tests"
     
     // Add this reboot to the history
     addRebootToHistory()
     
-    // Pause remote hub pinging
-    pauseRemoteHubChecks()
-    
+    // Notify about the reboot
+    sendNotification("Initiating hub reboot due to failed tests")
+
+    // Pause remote hub pinging if applicable
+    if (enableRemote) {
+        pauseRemoteHubChecks()
+    }
+
     try {
-        // First attempt: Using HubAction
-        sendHubCommand(new hubitat.device.HubAction("reboot", hubitat.device.Protocol.INTERNAL))
-        log.info "Reboot command sent successfully using HubAction"
+        httpPost([
+            uri: "http://${location.hub.localIP}:8080",
+            path: "/hub/reboot",
+            timeout: 10
+        ]) { response ->
+            log.info "Reboot command sent successfully"
+        }
     } catch (Exception e) {
-        log.error "Failed to reboot using HubAction: ${e.message}"
-        
+        log.error "Failed to send reboot command: ${e.message}"
         try {
-            // Second attempt: Using httpPost on port 8080
+            // Fallback to maintenance API
             httpPost([
-                uri: "http://${location.hub.localIP}:8080",
-                path: "/hub/reboot",
+                uri: "http://${location.hub.localIP}:8081",
+                path: "/api/rebootHub",
                 timeout: 10
             ]) { response ->
-                log.info "Reboot command sent successfully using httpPost on port 8080"
+                log.info "Reboot command sent successfully using maintenance API"
             }
         } catch (Exception e2) {
-            log.error "Failed to send reboot command over port 8080: ${e2.message}"
-            
-            try {
-                // Third attempt: Using Hub's maintenance API on port 8081
-                httpPost([
-                    uri: "http://${location.hub.localIP}:8081",
-                    path: "/api/rebootHub",
-                    timeout: 10
-                ]) { response ->
-                    log.info "Reboot command sent successfully using maintenance API on port 8081"
-                }
-            } catch (Exception e3) {
-                log.error "All reboot attempts failed. Final error: ${e3.message}"
-                log.warn "Manual intervention may be required to reboot the hub."
-                // Resume remote hub pinging if all reboot attempts failed
+            log.error "All reboot attempts failed. Final error: ${e2.message}"
+            sendNotification("Failed to reboot hub. Manual intervention may be required.")
+            if (enableRemote) {
                 resumeRemoteHubChecks()
-                return
             }
+            return
         }
     }
+    
+    // Reset failed tests counter
+    state.failedTests = 0
     
     // Schedule a check to verify if reboot occurred
     runIn(300, "checkIfRebooted")
@@ -759,15 +801,21 @@ def checkIfRebooted() {
     log.info "Checking if hub successfully rebooted..."
     
     def currentTime = now()
-    def rebootTime = state.rebootInitiatedTime ?: 0
+    def rebootTime = state.lastRebootTime ?: 0
     def uptime = location.hub.uptime
     
     if (currentTime - rebootTime > 240000 && uptime < 240) {  // 4 minutes
         log.info "Hub has successfully rebooted. Uptime: ${uptime} seconds"
-        resumeRemoteHubChecks()
+        sendNotification("Hub has successfully rebooted")
+        if (enableRemote) {
+            resumeRemoteHubChecks()
+        }
     } else if (currentTime - rebootTime > 600000) {  // 10 minutes
         log.warn "Hub may not have rebooted successfully. Please check manually."
-        resumeRemoteHubChecks()
+        sendNotification("Hub may not have rebooted successfully. Please check manually.")
+        if (enableRemote) {
+            resumeRemoteHubChecks()
+        }
     } else {
         log.debug "Reboot not confirmed yet. Scheduling another check."
         runIn(60, "checkIfRebooted")
@@ -804,10 +852,16 @@ def isRebootAllowed() {
 //###############################################################################
 
 def resumeRemoteHubChecks() {
-    log.info "Resuming remote hub checks"
+    log.info "Resuming remote hub checks after reboot attempt"
     state.remoteHubChecksPaused = false
+    state.pausedRemoteReboot = false
+    state.paused = false
+    state.attempts = 0
     
-    // Reschedule remote hub health checks
+    // Immediately run a health check
+    remoteServerHealth()
+    
+    // Reschedule regular health checks
     if (enableRemote) {
         def interval = (settings.pingInterval as String)?.toInteger() ?: 5
         def cronExpression = interval < 60 ? "0 */${interval} * ? * *" : "0 0 */${interval/60} ? * *"

@@ -31,7 +31,6 @@ metadata {
 def parse(String description) {
     def msg = parseLanMessage(description)
     def bodyString = msg.body
-    def result = null
 
     if (bodyString) {
         if (logEnable) log.debug "BodyString: $bodyString"

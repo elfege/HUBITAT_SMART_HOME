@@ -1698,7 +1698,7 @@ def setPointHandler(evt){
             def needData = get_need(target, simpleModeActive, inside, outside, Active(), doorsOpen(), atomicState.neededThermostats, thermModes, get_humidity_threshold(), "setPointHandler")
                   
             def need = needData[1]
-            def cmd = "set" + "${needData[0]}" + "ingSetpoint" // "Cool" or "Heat" with a capital letter
+            def cmd = need == "auto" ? "setThermostatSetpoint" : "set" + "${needData[0]}" + "ingSetpoint" // "Cool" or "Heat" with a capital letter
 
             // make sure the therm event is same as current need
             // as to not apply a value from a differentiated thermostat mode (heat set to 75 will modify coolingSP and then trigger an event)
@@ -1949,7 +1949,7 @@ def master(source){
     atomicState.stop = false
 
     if (atomicState.paused) {
-        log.debug "App paused ${atomicState.pausedByApp ? 'due to defective temperature sensors' : ''}"
+        log.debug "App paused ${atomicState.pausedByApp ? 'due to internal error, check for defective sensors' : ''}"
         if(atomicState.pausedByApp) check_inside_temp()
         return
     }
@@ -4487,8 +4487,8 @@ def get_inside_temperature(){
         problem = is_dev_app() && (inside == 0 || inside == null)
         if (problem) {
 
-            atomicState.pausedByApp = true
-            atomicState.paused = true // pause the app due to inconsistencies
+            // atomicState.pausedByApp = true
+            // atomicState.paused = true // pause the app due to inconsistencies
             log.warn format_text("PAUSING APP DUE TO FAILURE TO READ INSIDE TEMPERATURE - INTERVENTION REQUIRED", "white", "red")
             runIn(10, check_inside_temp)
         }
@@ -5090,8 +5090,8 @@ def get_need(target, simpleModeActive, inside, outside, motionActive, doorsConta
 
     } catch (Exception e) {
         log.error "get_need error: ${e}"
-        atomicState.paused = true
-        atomicState.pausedByApp = true
+        // atomicState.paused = true
+        // atomicState.pausedByApp = true
         check_inside_temp()
         if (altThermostat && altThermostat.currentValue("thermostatMode") != "off") {
             altThermostat?.off()
@@ -5111,7 +5111,7 @@ def get_need(target, simpleModeActive, inside, outside, motionActive, doorsConta
         if (thermostat && thermostat.currentValue("thermostatMode") != "auto") {
             thermostat?.setThermostatMode("auto")
         }
-        return ["off", "off"]
+        return ["auto", "auto"]
     }
 
     if (atomicState.pausedByApp && atomicState.paused) {

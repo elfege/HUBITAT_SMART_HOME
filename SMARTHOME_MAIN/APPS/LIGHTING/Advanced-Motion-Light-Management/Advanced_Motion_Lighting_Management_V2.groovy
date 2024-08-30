@@ -1,3 +1,4 @@
+/* groovylint-disable UnnecessaryGString */
 /*
 *  Copyright 2024 elfege
 *
@@ -12,133 +13,133 @@
 
 
 definition(
-    name: "Advanced Motion Lighting Management V2",
-    namespace: "elfege",
-    author: "elfege",
-    description: "Switch lights with motion events V2",
-    category: "Convenience",
-    iconUrl: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
-    iconX2Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
-    iconX3Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
+    name: 'Advanced Motion Lighting Management V2',
+    namespace: 'elfege',
+    author: 'elfege',
+    description: 'Switch lights with motion events V2',
+    category: 'Convenience',
+    iconUrl: 'http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w',
+    iconX2Url: 'http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w',
+    iconX3Url: 'http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w',
 )
 
 preferences {
-    page(name: "mainPage", title: "Advanced Motion Lighting Management V2", install: true, uninstall: true) {
+    page(name: 'mainPage', title: 'Advanced Motion Lighting Management V2', install: true, uninstall: true) {
 
-        section("General Settings") {
-            input "appName", "text", title: "Name this app instance", required: false, submitOnChange: true
+        section('General Settings') {
+            input 'appName', 'text', title: 'Name this app instance', required: false, submitOnChange: true
             appLabel()
         }
-        section("Motion Sensors") {
-            input "motionSensors", "capability.motionSensor", title: "Select motion sensors", multiple: true, required: true
+        section('Motion Sensors') {
+            input 'motionSensors', 'capability.motionSensor', title: 'Select motion sensors', multiple: true, required: true
         }
-        section("Switches") {
-            input "switches", "capability.switch", title: "Control these switches", multiple: true, required: true, submitOnChange: true
+        section('Switches') {
+            input 'switches', 'capability.switch', title: 'Control these switches', multiple: true, required: true, submitOnChange: true
         
             if (switches) {
-                def hasDimmers = switches.any { it.hasCapability("SwitchLevel") }
-                def hasColorControls = switches.any { it.hasCapability("ColorControl") || it.hasCapability("ColorTemperature") }
+                def hasDimmers = switches.any { it.hasCapability('SwitchLevel') }
+                def hasColorControls = switches.any { it.hasCapability('ColorControl') || it.hasCapability('ColorTemperature') }
         
                 if (hasDimmers) {
-                    input "useDim", "bool", title: "Use dimming capabilities", defaultValue: false, submitOnChange: true
+                    input 'useDim', 'bool', title: 'Use dimming capabilities', defaultValue: false, submitOnChange: true
                     
                     if (useDim) {
-                        input "defaultDimLevel", "number", title: "Default dim level (0-100)", range: "0..100", defaultValue: 50, required: true
-                        input "useModeSpecificDimming", "bool", title: "Use mode-specific dimming levels", defaultValue: false, submitOnChange: true
+                        input 'defaultDimLevel', 'number', title: 'Default dim level (0-100)', range: '0..100', defaultValue: 50, required: true
+                        input 'useModeSpecificDimming', 'bool', title: 'Use mode-specific dimming levels', defaultValue: false, submitOnChange: true
                         
                         if (useModeSpecificDimming) {
                             location.modes.each { mode ->
-                                input "dimLevel_${mode.id}", "number", title: "Dim level for ${mode.name} (0-100)", range: "0..100", defaultValue: defaultDimLevel, required: true
+                                input "dimLevel_${mode.id}", 'number', title: "Dim level for ${mode.name} (0-100)", range: '0..100', defaultValue: defaultDimLevel, required: true
                             }
                         }
                         
                         if (hasColorControls) {
-                            input "useColor", "bool", title: "Set color for RGB-capable dimmers", defaultValue: false, submitOnChange: true
+                            input 'useColor', 'bool', title: 'Set color for RGB-capable dimmers', defaultValue: false, submitOnChange: true
                             if (useColor) {
-                                input "colorPreset", "enum", title: "Choose color preset", options: [
-                                    "Daylight": "Daylight",
-                                    "Soft White": "Soft White",
-                                    "Warm White": "Warm White",
-                                    "Cool White": "Cool White",
-                                    "Red": "Red",
-                                    "Green": "Green",
-                                    "Blue": "Blue",
-                                    "Yellow": "Yellow",
-                                    "Purple": "Purple",
-                                    "Pink": "Pink",
-                                    "Custom": "Custom"
-                                ], defaultValue: "Daylight", required: true, submitOnChange: true
+                                input 'colorPreset', 'enum', title: 'Choose color preset', options: [
+                                    'Daylight': 'Daylight',
+                                    'Soft White': 'Soft White',
+                                    'Warm White': 'Warm White',
+                                    'Cool White': 'Cool White',
+                                    'Red': 'Red',
+                                    'Green': 'Green',
+                                    'Blue': 'Blue',
+                                    'Yellow': 'Yellow',
+                                    'Purple': 'Purple',
+                                    'Pink': 'Pink',
+                                    'Custom': 'Custom'
+                                ], defaultValue: 'Daylight', required: true, submitOnChange: true
         
-                                if (colorPreset == "Custom") {
-                                    input "customColorTemperature", "number", title: "Custom Color Temperature (2000-6500K)", range: "2000..6500", required: true
+                                if (colorPreset == 'Custom') {
+                                    input 'customColorTemperature', 'number', title: 'Custom Color Temperature (2000-6500K)', range: '2000..6500', required: true
                                 }
                             }
                         }
                     }
                 }
             }            
-            input "keepSomeSwitchesOffInModes", "bool", title: "Keep some switches off in certain modes?", defaultValue: false, submitOnChange: true
+            input 'keepSomeSwitchesOffInModes', 'bool', title: 'Keep some switches off in certain modes?', defaultValue: false, submitOnChange: true
             if (keepSomeSwitchesOffInModes) {
-                input "modesForSwitchesOff", "mode", title: "Select modes", multiple: true, required: true
-                input "switchesToKeepOff", "capability.switch", title: "Switches to keep off in selected modes", multiple: true, required: true
+                input 'modesForSwitchesOff', 'mode', title: 'Select modes', multiple: true, required: true
+                input 'switchesToKeepOff', 'capability.switch', title: 'Switches to keep off in selected modes', multiple: true, required: true
             }
         }
-        section("Timing") {
-            input "timeUnit", "enum", title: "Time unit", options: ["seconds", "minutes"], defaultValue: "minutes"
-            input "noMotionTime", "number", title: "Default turn off after inactivity (in ${timeUnit})", required: true, defaultValue: 5
-            input "timeWithMode", "bool", title: "Use different timeouts for modes", defaultValue: false, submitOnChange: true
+        section('Timing') {
+            input 'timeUnit', 'enum', title: 'Time unit', options: ['seconds', 'minutes'], defaultValue: 'minutes'
+            input 'noMotionTime', 'number', title: "Default turn off after inactivity (in ${timeUnit})", required: true, defaultValue: 5
+            input 'timeWithMode', 'bool', title: 'Use different timeouts for modes', defaultValue: false, submitOnChange: true
             if (timeWithMode) {
-                input "timeModes", "mode", title: "Select modes", multiple: true, submitOnChange: true
+                input 'timeModes', 'mode', title: 'Select modes', multiple: true, submitOnChange: true
                 if (timeModes) {
                     timeModes.each {
                         mode ->
-                            input "noMotionTime_${mode}", "number", title: "Timeout for ${mode} (in ${timeUnit})", required: true, defaultValue: noMotionTime
+                            input "noMotionTime_${mode}", 'number', title: "Timeout for ${mode} (in ${timeUnit})", required: true, defaultValue: noMotionTime
                     }
                 }
             }
         }
-        section("Button Control") {
-            input "pauseButtons", "capability.pushableButton", title: "Buttons to pause/resume app", multiple: true, required: false, submitOnChange: true
+        section('Button Control') {
+            input 'pauseButtons', 'capability.pushableButton', title: 'Buttons to pause/resume app', multiple: true, required: false, submitOnChange: true
             if (pauseButtons) {
-                input "pauseButtonAction", "enum", title: "Action to pause/resume", options: ["pushed", "held", "doubleTapped"], required: true
-                input "pauseDurationUnit", "enum", title: "Pause duration unit", options: ["Minutes", "Hours"], defaultValue: "Minutes", submitOnChange: true
-                input "pauseDuration", "number", title: "Pause duration (${pauseDurationUnit.toLowerCase()})", required: true, defaultValue: pauseDurationUnit == "Hours" ? 1 : 60
+                input 'pauseButtonAction', 'enum', title: 'Action to pause/resume', options: ['pushed', 'held', 'doubleTapped'], required: true
+                input 'pauseDurationUnit', 'enum', title: 'Pause duration unit', options: ['Minutes', 'Hours'], defaultValue: 'Minutes', submitOnChange: true
+                input 'pauseDuration', 'number', title: "Pause duration (${pauseDurationUnit?.toLowerCase()})", required: true, defaultValue: pauseDurationUnit == 'Hours' ? 1 : 60
                 
-                input "controlLightsOnPause", "bool", title: "Control lights when pausing?", defaultValue: false, submitOnChange: true
+                input 'controlLightsOnPause', 'bool', title: 'Control lights when pausing?', defaultValue: false, submitOnChange: true
                 if (controlLightsOnPause) {
-                    input "pauseLightAction", "enum", title: "Light action when pausing", options: ["toggle", "turn on", "turn off"], required: true
-                    input "additionalPauseSwitches", "capability.switch", title: "Additional switches to control when pausing", multiple: true, required: false
+                    input 'pauseLightAction', 'enum', title: 'Light action when pausing', options: ['toggle', 'turn on', 'turn off'], required: true
+                    input 'additionalPauseSwitches', 'capability.switch', title: 'Additional switches to control when pausing', multiple: true, required: false
                 }
                 
-                input "controlLightsOnResume", "bool", title: "Control lights when resuming?", defaultValue: false, submitOnChange: true
+                input 'controlLightsOnResume', 'bool', title: 'Control lights when resuming?', defaultValue: false, submitOnChange: true
                 if (controlLightsOnResume) {
-                    input "resumeLightAction", "enum", title: "Light action when resuming", options: ["toggle", "turn on", "turn off"], required: true
-                    input "additionalResumeSwitches", "capability.switch", title: "Additional switches to control when resuming", multiple: true, required: false
+                    input 'resumeLightAction', 'enum', title: 'Light action when resuming', options: ['toggle', 'turn on', 'turn off'], required: true
+                    input 'additionalResumeSwitches', 'capability.switch', title: 'Additional switches to control when resuming', multiple: true, required: false
                 }
             }
         }
-        section("Restrictions") {
-            input "restrictedModes", "mode", title: "Restricted modes", multiple: true
-            input "restrictedTimeStart", "time", title: "Don't run between"
-            input "restrictedTimeEnd", "time", title: "and"
+        section('Restrictions') {
+            input 'restrictedModes', 'mode', title: 'Restricted modes', multiple: true
+            input 'restrictedTimeStart', 'time', title: "Don't run between"
+            input 'restrictedTimeEnd', 'time', title: 'and'
         }
-        section("Advanced") {
-            input "contacts", "capability.contactSensor", title: "Use contact sensors", multiple: true
-            input "useIlluminance", "bool", title: "Use illuminance sensor?", defaultValue: false, submitOnChange: true
+        section('Advanced') {
+            input 'contacts', 'capability.contactSensor', title: 'Use contact sensors', multiple: true
+            input 'useIlluminance', 'bool', title: 'Use illuminance sensor?', defaultValue: false, submitOnChange: true
             if (useIlluminance) {
-                input "illuminanceSensor", "capability.illuminanceMeasurement", title: "Select illuminance sensor", required: true
-                input "illuminanceThreshold", "number", title: "Illuminance threshold (lux)", required: true, defaultValue: 50
+                input 'illuminanceSensor', 'capability.illuminanceMeasurement', title: 'Select illuminance sensor', required: true
+                input 'illuminanceThreshold', 'number', title: 'Illuminance threshold (lux)', required: true, defaultValue: 50
             }
-            input "watchdog", "bool", title: "Enable Watchdog", defaultValue: false
+            input 'watchdog', 'bool', title: 'Enable Watchdog', defaultValue: false
         }
-        section("App Control") {
-            input "update", "button", title: "UPDATE"
-            input "run", "button", title: "RUN"
+        section('App Control') {
+            input 'update', 'button', title: 'UPDATE'
+            input 'run', 'button', title: 'RUN'
         }
-        section("Logging") {
-            input "enableDebug", "bool", title: "Enable debug logging", defaultValue: false
-            input "enableTrace", "bool", title: "Enable trace logging", defaultValue: false
-            input "description", "bool", title: "Enable info logging", defaultValue: true
+        section('Logging') {
+            input 'enableDebug', 'bool', title: 'Enable debug logging', defaultValue: false
+            input 'enableTrace', 'bool', title: 'Enable trace logging', defaultValue: false
+            input 'description', 'bool', title: 'Enable info logging', defaultValue: true
         }
     }
 }
@@ -156,29 +157,29 @@ def updated() {
 }
 
 def initialize() {
-    log.debug "Initializing"
-    subscribe(motionSensors, "motion", motionHandler)
-    subscribe(switches, "switch", switchHandler)
+    log.debug 'Initializing'
+    subscribe(motionSensors, 'motion', motionHandler)
+    subscribe(switches, 'switch', switchHandler)
     if (contacts) {
-        subscribe(contacts, "contact", contactHandler)
+        subscribe(contacts, 'contact', contactHandler)
     }
     if (useIlluminance) {
-        subscribe(illuminanceSensor, "illuminance", illuminanceHandler)
+        subscribe(illuminanceSensor, 'illuminance', illuminanceHandler)
     }
-    subscribe(location, "mode", modeChangeHandler)
+    subscribe(location, 'mode', modeChangeHandler)
 
 
     if (watchdog) {
         // Subscribe to hub events
-        subscribe(location, "systemStart", hubEventHandler)
-        subscribe(location, "zigbeeStatus", hubEventHandler)
-        subscribe(location, "zwaveStatus", hubEventHandler)
-        subscribe(location, "hubHealthStatus", hubEventHandler)
-        subscribe(location, "internetStatus", hubEventHandler)
-        subscribe(location, "cloudStatus", hubEventHandler)
-        subscribe(location, "alertStatus", hubEventHandler)
-        subscribe(location, "cpuUsage", hubEventHandler)
-        subscribe(location, "memoryUsage", hubEventHandler)
+        subscribe(location, 'systemStart', hubEventHandler)
+        subscribe(location, 'zigbeeStatus', hubEventHandler)
+        subscribe(location, 'zwaveStatus', hubEventHandler)
+        subscribe(location, 'hubHealthStatus', hubEventHandler)
+        subscribe(location, 'internetStatus', hubEventHandler)
+        subscribe(location, 'cloudStatus', hubEventHandler)
+        subscribe(location, 'alertStatus', hubEventHandler)
+        subscribe(location, 'cpuUsage', hubEventHandler)
+        subscribe(location, 'memoryUsage', hubEventHandler)
     }
 
     if (pauseButtons) {
@@ -189,7 +190,7 @@ def initialize() {
         }
     }
 
-    schedule("0 * * * * ?", master)
+    schedule('0 * * * * ?', master)
 
     state.paused = false
     state.pauseStart = null
@@ -200,7 +201,7 @@ def initialize() {
 
 def master() {
     def startTime = now()
-    if (enableDebug) log.debug "master start"
+    if (enableDebug) log.debug 'master start'
 
     check_logs_timer()
     appLabel()
@@ -211,13 +212,13 @@ def master() {
         if (now() - state.pauseStart > getPauseDurationMillis()) {
             resumeNormalOperation()
         } else {
-            if (enableDebug) log.debug "App is paused. Skipping master execution."
+            if (enableDebug) log.debug 'App is paused. Skipping master execution.'
             return
         }
     }
 
     if (useIlluminance) {
-        def currentLux = illuminanceSensor.currentValue("illuminance")
+        def currentLux = illuminanceSensor.currentValue('illuminance')
         if (currentLux > illuminanceThreshold) {
             off()
             if (enableDebug) log.debug "Turned off lights due to high illuminance (${currentLux} lux)"
@@ -227,10 +228,10 @@ def master() {
 
     if (Active()) {
         on()
-        if (enableDebug) log.debug "lights turned on"
+        if (enableDebug) log.debug 'lights turned on'
     } else {
         off()
-        if (enableDebug) log.debug "lights turned off"
+        if (enableDebug) log.debug 'lights turned off'
     }
 
     if (enableDebug) log.debug "---end of master loop. Duration = ${now() - startTime} milliseconds"
@@ -238,11 +239,11 @@ def master() {
 
 def handlePresenceRestrictions() {
     if (managePresence) {
-        boolean presenceRestriction = presenceRestricted ? presenceRestricted.any{ it -> it.currentValue("presence") == "present" } : false
-        boolean absenceRestriction = absenceRestricted ? absenceRestricted.every{ it.currentValue("presence") == "not present" } : false
+        boolean presenceRestriction = presenceRestricted ? presenceRestricted.any{ it -> it.currentValue('presence') == 'present' } : false
+        boolean absenceRestriction = absenceRestricted ? absenceRestricted.every{ it.currentValue('presence') == 'not present' } : false
 
         if (presenceRestriction || absenceRestriction) {
-            log.info "App is paused due to presence/absence restrictions"
+            log.info 'App is paused due to presence/absence restrictions'
             state.pausedByPresenceSensor = true
             state.paused = true
         } else if (state.pausedByPresenceSensor) {
@@ -267,7 +268,7 @@ def pauseApp() {
 def resumeNormalOperation() {
     state.paused = false
     state.pauseStart = null
-    log.debug "Resuming normal operation"
+    log.debug 'Resuming normal operation'
 
     if (controlLightsOnResume) {
         def allSwitches = (switches + additionalResumeSwitches).unique { it.id }
@@ -283,10 +284,10 @@ def controlLights(action, mainSwitches, additionalSwitches = []) {
     log.debug "Controlling lights: action=${action}, switches=${allSwitches.collect { it.displayName }}"
 
     switch (action) {
-        case "toggle":
+        case 'toggle':
             allSwitches.each { sw ->
                 if (!shouldKeepSwitchOff(sw)) {
-                    if (sw.currentValue("switch") == "on") {
+                    if (sw.currentValue('switch') == 'on') {
                         sw.off()
                         log.debug "Turned off: ${sw.displayName}"
                     } else {
@@ -298,7 +299,7 @@ def controlLights(action, mainSwitches, additionalSwitches = []) {
                 }
             }
             break
-        case "turn on":
+        case 'turn on':
             allSwitches.each { sw ->
                 if (!shouldKeepSwitchOff(sw)) {
                     sw.on()
@@ -308,7 +309,7 @@ def controlLights(action, mainSwitches, additionalSwitches = []) {
                 }
             }
             break
-        case "turn off":
+        case 'turn off':
             allSwitches.each { sw ->
                 sw.off()
                 log.debug "Turned off: ${sw.displayName}"
@@ -320,7 +321,7 @@ def controlLights(action, mainSwitches, additionalSwitches = []) {
 }
 
 def formatPauseDuration() {
-    if (pauseDurationUnit == "Hours") {
+    if (pauseDurationUnit == 'Hours') {
         return "${pauseDuration} hour${pauseDuration == 1 ? '' : 's'}"
     } else {
         return "${pauseDuration} minute${pauseDuration == 1 ? '' : 's'}"
@@ -337,7 +338,7 @@ def handleOverride() {
     if (allowOverride && state.override) {
         def overrideMillis = overrideDelay * 60 * 60 * 1000 // Override is always in hours
         if (now() - state.overrideStart > overrideMillis) {
-            if (enableTrace) log.trace "END OF OVERRIDE"
+            if (enableTrace) log.trace 'END OF OVERRIDE'
             resumeNormalOperation()
         } else {
             def remainingHours = ((overrideMillis - (now() - state.overrideStart)) / (60 * 60 * 1000)).toDouble().round(2)
@@ -347,27 +348,27 @@ def handleOverride() {
 }
 
 def getPauseDurationMillis() {
-    return pauseDurationUnit == "Hours" ? pauseDuration * 60 * 60 * 1000 : pauseDuration * 60 * 1000
+    return pauseDurationUnit == 'Hours' ? pauseDuration * 60 * 60 * 1000 : pauseDuration * 60 * 1000
 }
 
 def Active() {
     if (enableDebug) log.debug "Checking if motion is active. Motion sensors: $motionSensors"
 
     // Check current state
-    def currentlyActive = motionSensors.findAll{ it -> it.currentValue("motion") == "active" }
+    def currentlyActive = motionSensors.findAll{ it -> it.currentValue('motion') == 'active' }
     if (currentlyActive.size() > 0) {
-        if (enableTrace) log.trace "${currentlyActive.join(", ")} ${currentlyActive.size() > 1 ? "are" : "is"} currently active"
+        if (enableTrace) log.trace "${currentlyActive.join(', ')} ${currentlyActive.size() > 1 ? 'are' : 'is'} currently active"
         return true
     }
 
     // Check recent history
     int timeOut = getTimeout()
-    long Dtime = timeUnit == "minutes" ? timeOut * 60 * 1000 : timeOut * 1000
+    long Dtime = timeUnit == 'minutes' ? timeOut * 60 * 1000 : timeOut * 1000
     def period = new Date(now() - Dtime)
 
     def recentEvents = motionSensors.collect {
         sensor ->
-            sensor.eventsSince(period, [max: 200]).findAll { it.name == "motion" && it.value == "active" }
+            sensor.eventsSince(period, [max: 200]).findAll { it.name == 'motion' && it.value == 'active' }
     }.flatten()
 
     if (enableDebug) {
@@ -385,14 +386,14 @@ def Active() {
 
 
 def on() {
-    logDebug("Entering on() method")
+    logDebug('Entering on() method')
     if (InRestrictedModeOrTime()) {
-        logDebug("In restricted mode or time, exiting on() method")
+        logDebug('In restricted mode or time, exiting on() method')
         return
     }
 
     if (useIlluminance) {
-        def currentLux = illuminanceSensor.currentValue("illuminance")
+        def currentLux = illuminanceSensor.currentValue('illuminance')
         if (currentLux > illuminanceThreshold) {
             logDebug("Current illuminance ($currentLux lux) is above threshold ($illuminanceThreshold lux). Not turning on lights.")
             return
@@ -411,14 +412,14 @@ def on() {
                 if (useColor) {
                     def colorValue = getColorValue()
                     if (colorValue.containsKey('colorTemperature')) {
-                        if (sw.hasCapability("ColorTemperature") && sw.hasCommand('setColorTemperature')) {
+                        if (sw.hasCapability('ColorTemperature') && sw.hasCommand('setColorTemperature')) {
                             sw.setColorTemperature(colorValue.colorTemperature)
                             pauseExecution(300) // 300ms delay
                             logDebug("Set ${sw.displayName} color temperature to ${colorValue.colorTemperature}K")
                         } else {
                             logDebug("${sw.displayName} does not support color temperature")
                         }
-                    } else if (sw.hasCapability("ColorControl") && sw.hasCommand('setColor')) {
+                    } else if (sw.hasCapability('ColorControl') && sw.hasCommand('setColor')) {
                         sw.setColor(colorValue)
                         pauseExecution(300) // 300ms delay
                         logDebug("Set ${sw.displayName} color to HSL: ${colorValue}")
@@ -434,32 +435,32 @@ def on() {
         }
     }
 
-    logInfo("Finished processing switches")
+    logInfo('Finished processing switches')
 }
 
 private Map getColorValue() {
     switch (colorPreset) {
-        case "Soft White":
+        case 'Soft White':
             return [colorTemperature: 2700, level: 100]
-        case "Warm White":
+        case 'Warm White':
             return [colorTemperature: 3000, level: 100]
-        case "Cool White":
+        case 'Cool White':
             return [colorTemperature: 4000, level: 100]
-        case "Daylight":
+        case 'Daylight':
             return [colorTemperature: 6500, level: 100]
-        case "Red":
+        case 'Red':
             return [hue: 0, saturation: 100, level: 100]
-        case "Green":
+        case 'Green':
             return [hue: 120, saturation: 100, level: 100]
-        case "Blue":
+        case 'Blue':
             return [hue: 240, saturation: 100, level: 100]
-        case "Yellow":
+        case 'Yellow':
             return [hue: 60, saturation: 100, level: 100]
-        case "Purple":
+        case 'Purple':
             return [hue: 280, saturation: 100, level: 100]
-        case "Pink":
+        case 'Pink':
             return [hue: 300, saturation: 100, level: 100]
-        case "Custom":
+        case 'Custom':
             return [colorTemperature: customColorTemperature, level: 100]
         default:
             return [colorTemperature: 6500, level: 100]  // Default to Daylight
@@ -496,25 +497,25 @@ def shouldKeepSwitchOff(sw) {
 
         logInfo("Keeping ${sw.displayName} off due to current mode: ${location.mode}")
         return true
-    }
+}
 
     logDebug("${sw.displayName} can be turned on")
     return false
 }
 
 def off() {
-    if (enableDebug) log.debug "off function"
+    if (enableDebug) log.debug 'off function'
 
-    def anyOn = switches.any{ it -> it.currentValue("switch") == "on" }
+    def anyOn = switches.any{ it -> it.currentValue('switch') == 'on' }
 
     state.mainHandlerEventTime = now()
     if (anyOn) {
-        if (!state.test && (state.switches == "on" || !allowOverride)) {
+        if (!state.test && (state.switches == 'on' || !allowOverride)) {
             switchesOff()
-            if (description) log.info "turning off ${switches.join(", ")} 59989e"
-            state.switches = "off"
-        } else if (allowOverride && !state.test && state.switches == "off" && switches.any{ it -> it.currentValue("switch") == "on" }) {
-            if (description) log.info "lights were turned on manually, app in override mode"
+            if (description) log.info "turning off ${switches.join(', ')} 59989e"
+            state.switches = 'off'
+        } else if (allowOverride && !state.test && state.switches == 'off' && switches.any{ it -> it.currentValue('switch') == 'on' }) {
+            if (description) log.info 'lights were turned on manually, app in override mode'
         } else {
             if (enableDebug) log.debug "$switches would have turned off - test succeeded!"
         }
@@ -525,8 +526,8 @@ def off() {
 }
 
 def appLabel() {
-    def baseName = settings?.appName ?: "Advanced Motion Lighting Management V2"
-    def pausedSuffix = "(Paused)"
+    def baseName = settings?.appName ?: 'Advanced Motion Lighting Management V2'
+    def pausedSuffix = '(Paused)'
     
     log.debug "Current app label: ${app.label}"
     log.debug "Base name: ${baseName}"
@@ -542,17 +543,17 @@ def appLabel() {
         app.updateLabel(newLabel)
         log.debug "Updated app label to: ${newLabel}"
     } else {
-        log.debug "App label unchanged"
+        log.debug 'App label unchanged'
     }
 }
 
 def restoreLabel() {
-    def currentLabel = app.label ?: "Advanced Motion Lighting Management V2"
-    def newLabel = currentLabel.replace("<font color = 'red'>(Paused)</font>", "")
-        .replace(" (Paused) ", "")
-        .replace("Paused", "")
-        .replace("(", "")
-        .replace(")", "")
+    def currentLabel = app.label ?: 'Advanced Motion Lighting Management V2'
+    def newLabel = currentLabel.replace("<font color = 'red'>(Paused)</font>", '')
+        .replace(' (Paused) ', '')
+        .replace('Paused', '')
+        .replace('(', '')
+        .replace(')', '')
         .trim()
 
     if (newLabel != currentLabel) {
@@ -568,7 +569,7 @@ def InRestrictedModeOrTime() {
     boolean inRestrictedTime = restrictedTime()
     boolean inRestrictedMode = location.mode in restrictedModes
     if (inRestrictedMode || inRestrictedTime) {
-        if (description) log.info "location ${inRestrictedMode ? " in restricted mode" : inRestrictedTime ? "outside of time window" : "ERROR"}, doing nothing"
+        if (description) log.info "location ${inRestrictedMode ? ' in restricted mode' : inRestrictedTime ? 'outside of time window' : 'ERROR'}, doing nothing"
         return true
     }
     return false
@@ -607,7 +608,7 @@ def getTimeout() {
 
     try {
         if (absenceTimeoutSensor) {
-            def listOfAbsents = absenceTimeoutSensor.findAll{ it.currentValue("presence") == "not present" }
+            def listOfAbsents = absenceTimeoutSensor.findAll{ it.currentValue('presence') == 'not present' }
             boolean absenceRestriction = absenceTimeoutSensor ? listOfAbsents.size() == absenceTimeoutSensor.size() : false
             if (absenceRestriction) {
                 if (description) log.info "$absenceTimeoutSensor not present, timeout returns $absenceTimeout"
@@ -641,15 +642,15 @@ def getTimeout() {
 }
 
 def checkPauseButton() {
-    if (enableDebug) log.debug("check pause")
+    if (enableDebug) log.debug('check pause')
     def pauseMillis = getPauseDurationMillis()
     if (state.pauseDueToButtonEvent && now() - state.buttonPausedTime > pauseMillis) {
         state.paused = false
         state.pauseDueToButtonEvent = false
-        log.warn "PAUSE BUTTON TIME IS UP! Resuming operations"
+        log.warn 'PAUSE BUTTON TIME IS UP! Resuming operations'
         unschedule(checkPauseButton)
     } else if (state.pauseDueToButtonEvent) {
-        if (enableDebug) log.debug("APP PAUSED BY BUTTON EVENT")
+        if (enableDebug) log.debug('APP PAUSED BY BUTTON EVENT')
     }
 }
 
@@ -657,55 +658,55 @@ def checkPauseButton() {
 
 def hubEventHandler(evt) {
     switch (evt.name) {
-        case "systemStart":
-            log.warn "Hub has rebooted or app has been updated"
+        case 'systemStart':
+            log.warn 'Hub has rebooted or app has been updated'
             // might want to re-initialize some states or perform certain actions here
             updated()
             break
-        case "zigbeeStatus":
-            if (evt.value != "online") {
-                log.error "Zigbee network is offline or experiencing issues"
+        case 'zigbeeStatus':
+            if (evt.value != 'online') {
+                log.error 'Zigbee network is offline or experiencing issues'
             } else {
-                log.info "Zigbee network is back online"
+                log.info 'Zigbee network is back online'
             }
             break
-        case "zwaveStatus":
-            if (evt.value != "online") {
-                log.error "Z-Wave network is offline or experiencing issues"
+        case 'zwaveStatus':
+            if (evt.value != 'online') {
+                log.error 'Z-Wave network is offline or experiencing issues'
             } else {
-                log.info "Z-Wave network is back online"
+                log.info 'Z-Wave network is back online'
             }
             break
-        case "hubHealthStatus":
-            if (evt.value != "online") {
+        case 'hubHealthStatus':
+            if (evt.value != 'online') {
                 log.error "Hub health status: ${evt.value}"
             } else {
-                log.info "Hub health status is back to normal"
+                log.info 'Hub health status is back to normal'
             }
             break
-        case "internetStatus":
-            if (evt.value != "full") {
+        case 'internetStatus':
+            if (evt.value != 'full') {
                 log.warn "Internet connectivity issue: ${evt.value}"
             } else {
-                log.info "Internet connectivity restored"
+                log.info 'Internet connectivity restored'
             }
             break
-        case "cloudStatus":
-            if (evt.value != "connected") {
+        case 'cloudStatus':
+            if (evt.value != 'connected') {
                 log.warn "Cloud connection issue: ${evt.value}"
             } else {
-                log.info "Cloud connection restored"
+                log.info 'Cloud connection restored'
             }
             break
-        case "alertStatus":
+        case 'alertStatus':
             log.warn "Hub alert: ${evt.value}"
             break
-        case "cpuUsage":
+        case 'cpuUsage':
             if (evt.numberValue > 80) {
                 log.warn "High CPU usage: ${evt.numberValue}%"
             }
             break
-        case "memoryUsage":
+        case 'memoryUsage':
             if (evt.numberValue > 80) {
                 log.warn "High memory usage: ${evt.numberValue}%"
             }
@@ -726,19 +727,19 @@ def motionHandler(evt) {
     state.activeEvents = state.activeEvents == null ? 0 : state.activeEvents
     state.lastActiveEvent = state.lastActiveEvent == null ? now() : state.lastActiveEvent
 
-    if (evt.value == "active") {
+    if (evt.value == 'active') {
         state.activeEvents += 1
         state.lastActiveEvent = now()
         on()
     }
-    // else {
-    //     runIn(getTimeout(), master)
-    // }
+// else {
+//     runIn(getTimeout(), master)
+// }
 }
 
 def buttonHandler(evt) {
     if (evt == null) {
-        log.error "buttonHandler received null event"
+        log.error 'buttonHandler received null event'
         return
     }
 
@@ -764,12 +765,12 @@ def switchHandler(evt) {
     }
 
     if (allowOverride == true) {
-        if ((evt.value == "on" && state.switches == "off") || (evt.value == "off" && state.switches == "on")) {
-            log.warn "OVERRIDE TRIGGERED for $overrideDelay ${overrideDelay > 1 ? "hours" : "hour"} (evt handler)"
+        if ((evt.value == 'on' && state.switches == 'off') || (evt.value == 'off' && state.switches == 'on')) {
+            log.warn "OVERRIDE TRIGGERED for $overrideDelay ${overrideDelay > 1 ? 'hours' : 'hour'} (evt handler)"
             state.overrideStart = now()
             state.override = true
         } else if (evt.value == state.switches) {
-            log.warn "END OF OVERRIDE (evt handler)"
+            log.warn 'END OF OVERRIDE (evt handler)'
             state.override = false
         }
     } else {
@@ -785,11 +786,11 @@ def contactHandler(evt) {
 
     if (InRestrictedModeOrTime()) return
 
-    if (evt.value == "open") {
-        if (switches.any{ it -> it.currentValue("switch") == "off" }) {
+    if (evt.value == 'open') {
+        if (switches.any{ it -> it.currentValue('switch') == 'off' }) {
             switches.on()
-            if (enableDebug) log.debug("switches on 5dfrj")
-        }
+            if (enableDebug) log.debug('switches on 5dfrj')
+    }
 
         if (powerOnWithContactOnly) {
             if (location.mode in noTurnOnMode && !ignoreModes) {
@@ -797,13 +798,13 @@ def contactHandler(evt) {
                 return
             }
             if (switchOnWithContactOnly) {
-                if (powerSwitch?.currentValue("switch") == "off") {
-                    if (enableDebug) log.debug("switches on 34ghj4")
+                if (powerSwitch?.currentValue('switch') == 'off') {
+                    if (enableDebug) log.debug('switches on 34ghj4')
                     powerSwitch?.on()
                 }
             }
         }
-    }
+}
 }
 
 def illuminanceHandler(evt) {
@@ -813,7 +814,7 @@ def illuminanceHandler(evt) {
 
     if (description) log.info "$evt.name is now $evt.value"
     
-    def anyOn = switches.any{ it -> it.currentValue("switch") == "on" }
+    def anyOn = switches.any{ it -> it.currentValue('switch') == 'on' }
     if (description) log.info "anyOn = $anyOn"
     state.LuxCanceledbyButtonEvt = state.LuxCanceledbyButtonEvt == null ? false : state.LuxCanceledbyButtonEvt
     boolean daytime = evt.value.toInteger() > illuminanceThreshold && !state.LuxCanceledbyButtonEvt
@@ -841,7 +842,7 @@ def switchesOff() {
 }
 
 def powerSwitchOff() {
-    if (powerSwitch?.currentValue("switch") == "on") powerSwitch?.off()
+    if (powerSwitch?.currentValue('switch') == 'on') powerSwitch?.off()
 }
 
 def specificSwitch(boolean exception) {
@@ -852,38 +853,38 @@ def specificSwitch(boolean exception) {
 
         if (exception) {
             if (thisIsTheSwitchToKeepOff) {
-                if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && device.hasCapability("SwitchLevel")) {
+                if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && device.hasCapability('SwitchLevel')) {
                     if (enableDebug) log.debug "not turning $device off because it's a dimmer and it's been requested to stay at level $keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes"
                 } else {
-                    if (device.currentValue("switch") == "on" && (state.switches == "on" || !allowOverride)) {
+                    if (device.currentValue('switch') == 'on' && (state.switches == 'on' || !allowOverride)) {
                         device.off()
-                        state.switches = "off"
-                    } else if (state.switches == "off" && allowOverride) {
-                        if (description) log.info "lights were turned on manually, app in override mode"
+                        state.switches = 'off'
+                    } else if (state.switches == 'off' && allowOverride) {
+                        if (description) log.info 'lights were turned on manually, app in override mode'
                     }
                 }
             }
         } else {
             if (!thisIsTheSwitchToKeepOff) {
                 if (!switchOnWithContactOnly) {
-                    boolean isOff = device.currentValue("switch") == "off"
-                    if (isOff && (state.switches == "off" || !allowOverride)) {
+                    boolean isOff = device.currentValue('switch') == 'off'
+                    if (isOff && (state.switches == 'off' || !allowOverride)) {
                         device.on()
-                        state.switches = "on"
+                        state.switches = 'on'
                         if (enableDebug) log.debug "${device} stays on at user's request"
-                    } else if (allowOverride && state.switches == "on" && isOff) {
-                        if (description) log.info "lights were turned on manually, app in override mode"
+                    } else if (allowOverride && state.switches == 'on' && isOff) {
+                        if (description) log.info 'lights were turned on manually, app in override mode'
                     }
                 }
             } else {
-                if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && device.hasCapability("SwitchLevel")) {
+                if (keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes && device.hasCapability('SwitchLevel')) {
                     if (enableDebug) log.debug "not turning $device off because it's a dimmer and it's been requested to stay at level $keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes"
-                } else if (device.currentValue("switch") != "off" && (state.switches == "on" || !allowOverride)) {
+                } else if (device.currentValue('switch') != 'off' && (state.switches == 'on' || !allowOverride)) {
                     device.off()
-                    state.switches = "off"
+                    state.switches = 'off'
                     if (enableDebug) log.debug "${device} is turned off at user's request"
-                } else if (allowOverride && state.switches == "off") {
-                    if (description) log.info "lights were turned on manually, app in override mode"
+                } else if (allowOverride && state.switches == 'off') {
+                    if (description) log.info 'lights were turned on manually, app in override mode'
                 }
             }
         }
@@ -892,10 +893,10 @@ def specificSwitch(boolean exception) {
 
 def dim() {
     if (keepSomeSwitches_Off_InCertainModes && location.mode in modeSpecificSwitches_stay_Off && !keepDimmerAtValueWhenSupposedToBeOffInSpecificSwitchOffModes) {
-        log.warn "not dimming because app is in specific switches mode"
+        log.warn 'not dimming because app is in specific switches mode'
     } else {
         boolean closed = !contactsAreOpen()
-        def switchesWithDimCap = switches.findAll{ it.hasCapability("SwitchLevel") }
+        def switchesWithDimCap = switches.findAll{ it.hasCapability('SwitchLevel') }
         if (enableDebug) log.debug "list of devices with dimming capability = $switchesWithDimCap"
 
         switchesWithDimCap.each {
@@ -932,7 +933,7 @@ def dim() {
 }
 
 def contactsAreOpen() {
-    def openList = contacts?.findAll{ it.currentValue("contact") == "open" }
+    def openList = contacts?.findAll{ it.currentValue('contact') == 'open' }
     openList = openList != null ? openList : []
     if (enableDebug) log.debug("Currently Open Contacts $openList")
     return openList.size() > 0
@@ -952,11 +953,11 @@ def contactModeOk() {
 def checkLuxCancel() {
     long dt = state.LuxCancelDeltaTime * 1000
     if (state.LuxCanceledbyButtonEvt && now() - state.LuxCanceledbyButtonEvtTime > dt) {
-        log.warn "(periodic schedule version) LUX PAUSE TIME IS UP! Resuming operations (runIn method seems to have failed)"
+        log.warn '(periodic schedule version) LUX PAUSE TIME IS UP! Resuming operations (runIn method seems to have failed)'
         state.LuxCanceledbyButtonEvt = false
         unschedule(resetLuxCancel)
     } else if (state.LuxCanceledbyButtonEvt) {
-        if (description) log.info "LUX SENSITIVITY PAUSED BY BUTTON EVENT"
+        if (description) log.info 'LUX SENSITIVITY PAUSED BY BUTTON EVENT'
     }
 }
 
@@ -966,21 +967,21 @@ def resetLuxCancel() {
 
 def appButtonHandler(btn) {
     switch (btn) {
-        case "pause":
+        case 'pause':
             state.paused = !state.paused
             log.debug "${app.label} is now ${state.paused ? 'PAUSED' : 'RESUMING'}"
             break
-        case "update":
-            log.debug "Update button pressed. Refreshing app configuration."
+        case 'update':
+            log.debug 'Update button pressed. Refreshing app configuration.'
             state.paused = false
             updated()
             break
-        case "run":
+        case 'run':
             if (!state.paused) {
-                log.debug "Run button pressed. Executing master() function."
+                log.debug 'Run button pressed. Executing master() function.'
                 master()
             } else {
-                log.warn "App is paused. Cannot run master() function."
+                log.warn 'App is paused. Cannot run master() function.'
             }
             break
     }
@@ -992,40 +993,40 @@ def appButtonHandler(btn) {
 
 def enableDebugLog() {
     state.EnableDebugTime = now()
-    app.updateSetting("enableDebug", [type: "bool", value: true])
-    log.debug "Debug logging enabled. Will automatically disable in 30 minutes."
+    app.updateSetting('enableDebug', [type: 'bool', value: true])
+    log.debug 'Debug logging enabled. Will automatically disable in 30 minutes.'
     runIn(1800, disableDebugLog)
 }
 
 def disableDebugLog() {
     state.EnableDebugTime = null
-    app.updateSetting("enableDebug", [type: "bool", value: false])
-    log.info "Debug logging disabled."
+    app.updateSetting('enableDebug', [type: 'bool', value: false])
+    log.info 'Debug logging disabled.'
 }
 
 def enableTraceLog() {
     state.EnableTraceTime = now()
-    app.updateSetting("enableTrace", [type: "bool", value: true])
-    log.trace "Trace logging enabled. Will automatically disable in 30 minutes."
+    app.updateSetting('enableTrace', [type: 'bool', value: true])
+    log.trace 'Trace logging enabled. Will automatically disable in 30 minutes.'
     runIn(1800, disableTraceLog)
 }
 
 def disableTraceLog() {
     state.EnableTraceTime = null
-    app.updateSetting("enableTrace", [type: "bool", value: false])
-    log.info "Trace logging disabled."
+    app.updateSetting('enableTrace', [type: 'bool', value: false])
+    log.info 'Trace logging disabled.'
 }
 
 def enableDescriptionLog() {
     state.EnableDescriptionTime = now()
-    app.updateSetting("description", [type: "bool", value: true])
-    log.info "Description logging enabled."
+    app.updateSetting('description', [type: 'bool', value: true])
+    log.info 'Description logging enabled.'
 }
 
 def disableDescriptionLog() {
     state.EnableDescriptionTime = null
-    app.updateSetting("description", [type: "bool", value: false])
-    log.info "Description logging disabled."
+    app.updateSetting('description', [type: 'bool', value: false])
+    log.info 'Description logging disabled.'
 }
 
 def check_logs_timer() {
@@ -1076,14 +1077,14 @@ private void initializeLogging() {
     state.lastCheckTimer = now()
 
     if (enableDebug) {
-        log.debug "Debug logging enabled. Will automatically disable in 30 minutes."
+        log.debug 'Debug logging enabled. Will automatically disable in 30 minutes.'
         runIn(1800, disableDebugLog)
     }
     if (enableTrace) {
-        log.trace "Trace logging enabled. Will automatically disable in 30 minutes."
+        log.trace 'Trace logging enabled. Will automatically disable in 30 minutes.'
         runIn(1800, disableTraceLog)
     }
     if (description) {
-        log.info "Description logging enabled."
+        log.info 'Description logging enabled.'
     }
 }

@@ -1,5 +1,15 @@
 # Advanced Motion Lighting Management
 
+## Table of Contents
+1. [General Description of Functionalities](#1-general-description-of-functionalities)
+2. [History of Changes](#2-history-of-changes)
+3. [Improvements in V2 compared to V1](#3-improvements-in-v2-compared-to-v1)
+4. [Quick Start](#4-quick-start)
+5. [Configuration](#5-configuration)
+6. [Troubleshooting](#6-troubleshooting)
+7. [Contributing](#7-contributing)
+8. [License](#8-license)
+
 ## 1. General Description of Functionalities
 
 The Advanced Motion Lighting Management is a sophisticated SmartThings app designed to automate lighting based on motion detection, time, modes, and various other conditions. Key functionalities include:
@@ -87,4 +97,60 @@ The Advanced Motion Lighting Management is a sophisticated SmartThings app desig
 13. **Compatibility:**
     - Ensured compatibility with a wider range of devices and hub capabilities
 
-These improvements make Version 2 more flexible, powerful, and user-friendly compared to its predecessor, offering users greater control over their home automation setup while improving overall system reliability and performance.
+## 4. Quick Start
+
+To install and set up the Advanced Motion Lighting Management app:
+
+1. Open your SmartThings IDE
+2. Go to "My SmartApps"
+3. Click on "New SmartApp"
+4. Copy and paste the code from `Advanced_Motion_Lighting_Management_V2.groovy`
+5. Click "Create"
+6. Click "Publish" -> "For Me"
+7. Open your SmartThings mobile app
+8. Go to "Automations" -> "Add a SmartApp"
+9. Find and select "Advanced Motion Lighting Management V2"
+10. Follow the on-screen instructions to configure the app
+
+## 5. Configuration
+
+The app offers various configuration options:
+
+- **Motion Sensors**: Select the motion sensors to trigger the lighting.
+- **Switches**: Choose the switches or dimmers to control.
+- **Time Restrictions**: Set specific times when the app should or shouldn't operate.
+- **Mode Restrictions**: Configure the app to work only in certain modes.
+- **Dimming Options**: Set default and mode-specific dimming levels.
+- **Color Control**: Configure color settings for RGB-capable dimmers.
+- **Illuminance Threshold**: Set a lux level to prevent unnecessary light activation.
+- **Button Control**: Set up buttons to pause/resume the app or control lights.
+- **Contact Sensors**: Integrate contact sensors for additional control.
+- **Logging Options**: Configure debug, trace, and description logging.
+
+Refer to the app's settings page for detailed configuration options.
+
+## 6. Troubleshooting
+
+- **Lights not turning on**: Ensure motion sensors are properly placed and functioning.
+- **Lights not turning off**: Check timeout settings and ensure no continuous motion is being detected.
+- **App not respecting modes**: Verify mode restrictions are correctly set up.
+- **Dimming not working**: Ensure switches support dimming and dimming is enabled in settings.
+- **Color control issues**: Verify switches support color control and color settings are correctly configured.
+- **Button control not working**: Check button device selection and configured actions.
+
+For persistent issues, enable debug logging and check the IDE logs for more information.
+
+## 7. Contributing
+
+Contributions to the Advanced Motion Lighting Management app are welcome! Here's how you can contribute:
+
+1. Fork the repository
+2. Create a new branch for your feature or bug fix
+3. Commit your changes
+4. Push to your fork and submit a pull request
+
+Please ensure your code adheres to the existing style and includes appropriate tests.
+
+## 8. License
+
+This project is licensed under the MIT License. See the LICENSE file for details.

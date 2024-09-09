@@ -471,7 +471,7 @@ private int getCurrentDimLevel() {
     if (useDim) {
         if (useModeSpecificDimming) {
             def currentMode = location.mode
-            def modeSpecificLevel = settings["dimLevel_${currentMode.id}"]
+            def modeSpecificLevel = settings["dimLevel_${currentMode}"]
             if (modeSpecificLevel != null) {
                 logDebug("Using mode-specific dim level for ${currentMode}: ${modeSpecificLevel}")
                 return modeSpecificLevel

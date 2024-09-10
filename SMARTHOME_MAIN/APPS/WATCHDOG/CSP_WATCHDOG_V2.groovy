@@ -66,42 +66,93 @@ def mainPage() {
                 }
             }
         }
+        section("Reboot Settings") {
+            input "rebootCooldown", "enum", title: "Minimum time between reboots", options: [
+                30: "30 minutes", 60: "1 hour", 120: "2 hours", 180: "3 hours", 
+                240: "4 hours", 300: "5 hours", 360: "6 hours", 480: "8 hours", 600: "10 hours"
+            ], defaultValue: 60, required: true
+        }
         section("Actions") {
+            // Health Check and Dev Mode
             input "testNow", "button", title: "Run Health Check Now"
-            
-            input "devmode", "bool", title: "Test the reboot buttons without rebooting", submitOnChange: true
+            input "devmode", "bool", title: "Test reboot buttons without rebooting", submitOnChange: true
+            if (devmode) {
+                paragraph "<span style='color:orange;'>Dev Mode Enabled! Will auto-disable in 10 minutes.</span>"
+                runIn(600, cancel_devmode)
+            }
 
-            // Local hub reboot controls
+            // Local Hub Controls
+            input "no_reboot", "bool", title: "Disable local hub reboot?", defaultValue: true, submitOnChange: true
             if (!no_reboot) {
-                input "rebootLocalHub", "button", title: "Reboot Local Hub", width: 1, submitOnChange: true
+                input "rebootLocalHub", "button", title: "Reboot Local Hub", submitOnChange: true
+            } else {
+                input "forceReboot", "button", title: "Force Local Hub Reboot", submitOnChange: true
             }
-            else {
-                input "forceReboot", "button", title: "Force Reboot", width: 1, submitOnChange: true
-            }
-            input "no_reboot", "bool", title: "Disable local hub reboot?", defaultValue: true, submitOnChange: true, width: 3
 
-            // Remote hub reboot controls (if enabled)
+            // Remote Hub Controls
             if (enableRemote) {
+                input "no_remote_reboot", "bool", title: "Disable remote hub reboot?", defaultValue: true, submitOnChange: true
                 if (!no_remote_reboot) {
-                    input "rebootRemoteHub", "button", title: "Reboot Remote Hub", width: 2, submitOnChange: true
+                    input "rebootRemoteHub", "button", title: "Reboot Remote Hub", submitOnChange: true
+                } else {
+                    input "forceRebootRemoteHub", "button", title: "Force Remote Hub Reboot", submitOnChange: true
                 }
-                else {
-                    input "forceRebootRemoteHub", "button", title: "Force Reboot Remote Hub", width: 1, submitOnChange: true
+                input "createRemoteBackup", "button", title: "Create a new backup on remote hub"
+                
+                if (state.backupInProgress) {
+                def backup_status = state.backupStillInProgress ? "Backup still in progress..." : "Backup in progress..."
+                paragraph """
+                    <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    $backup_status
+                    <style>
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    </style>
+                    <script>
+                        setTimeout(function() {
+                            location.reload();
+                        }, 30000);
+                    </script>
+                """
+                state.backupStillInProgress = false
+                input "checkBackupStatus", "button", title: "Check Backup Status", submitOnChange: true
+                input "stopBackup", "button", title: "Cancel Backup Request", submitOnChange: true
+
+                } else if (state.backupComplete) {
+                    paragraph state.backupSuccess ? "Backup completed successfully!" : "Backup failed. Please check logs."
                 }
-                input "no_remote_reboot", "bool", title: "Disable remote hub reboot?", defaultValue: true, submitOnChange: true, width: 3
+                
+                
             }
 
+            // Confirmation Dialogs
             if (state.confirmReboot) {
                 paragraph "<b style='color:red;'>Are you sure you want to reboot the ${state.hubToReboot} hub (${state.hubToReboot == 'local' ? location.name : clientName})?</b>"
                 input "confirmReboot", "button", title: "Yes, Reboot"
                 input "cancelReboot", "button", title: "Cancel"
             }
-            if (devmode) {
-                log.debug "Dev Mode Enabled!"
-                runIn(600, cancel_devmode)
-            }
-            input "clearRebootHistoryBtn", "button", title: "Clear Reboot History"
 
+            // EzOutlet Controls
+            if (EzOutlet2) {
+                input "resetEzOutlet", "button", title: "Reset Remote Hub via EzOutlet", submitOnChange: true
+                if (state.confirmEzOutletReset) {
+                    paragraph """
+                        <div style="color: red; font-weight: bold;">
+                            WARNING: You are about to power cycle the remote hub using the EzOutlet.
+                            This should only be used if the hub has become completely unreachable.
+                            Are you sure you want to proceed?
+                        </div>
+                    """
+                    input "confirmEzOutletReset", "button", title: "Yes, Reset EzOutlet"
+                    input "cancelEzOutletReset", "button", title: "Cancel"
+                }
+            }
+
+            // Maintenance Actions
+            input "clearRebootHistoryBtn", "button", title: "Clear Reboot History"
+            
             if (state.installed) {
                 input "update", "button", title: "Update"
             } else {
@@ -301,6 +352,27 @@ def appButtonHandler(btn) {
         case "addAdditionalHub":
             def currentHubs = settings.additionalHubs ?: []
             app.updateSetting("additionalHubs", currentHubs + [""])
+            break
+        case "resetEzOutlet":
+            state.confirmEzOutletReset = true
+            break
+        case "confirmEzOutletReset":
+            resetRemoteUsingEzOutlet2()
+            state.confirmEzOutletReset = false
+            break
+        case "cancelEzOutletReset":
+            state.confirmEzOutletReset = false
+            break
+        case "createRemoteBackup":
+            createRemoteBackup()
+            break
+        case "stopBackup": 
+            state.backupInProgress = false
+            state.backupComplete = false
+            state.backupSuccess = false
+            break
+        case "checkBackupStatus":
+            checkBackupStatus()
             break
         default:
             if (btn.startsWith("rebootAdditionalHub_")) {
@@ -679,14 +751,22 @@ def sendGetCommand(String command, String overrideUri = null) {
 /** ####################################### REMOTE HUB REBOOT PROCEDURE #######################################*/
 
 def rebootRemoteHub(override = false) {
-    if (no_remote_reboot && !override) {
-        log.warn "Remote hub reboot is disabled. Skipping reboot despite connection issues."
-        sendNotification("Connection to ${clientName} lost, but reboot is disabled. Please check manually.")
+
+    if(!isRemoteRebootAllowed()) {
+        log.warn "Remote hub reboot prevented due to cooldown period"
         return
     }
-    if (devmode) {
-        log.warn "Remote Reboot command test successful for monitored remote hub - the hub WILL NOT REBOOT"
-        return
+
+    if(!override){
+        if (no_remote_reboot) {
+            log.warn "Remote hub reboot is disabled. Skipping reboot despite connection issues."
+            sendNotification("Connection to ${clientName} lost, but reboot is disabled. Please check manually.")
+            return
+        }
+        if (devmode) {
+            log.warn "Remote Reboot command test successful for monitored remote hub - the hub WILL NOT REBOOT"
+            return
+        }
     }
 
     log.warn formatText("----------------- INITIATING REBOOT OF ${clientName} ----------------------", "white", "red")
@@ -849,25 +929,160 @@ def getMACAddress(){
 }
 
 def resetRemoteUsingEzOutlet2() {
-    def uri = "http://${EzOutlet2IP}/reset.cgi"
-    log.debug "sending $uri"
+    if (!isRemoteRebootAllowed()) {
+        log.warn "EzOutlet reset prevented due to cooldown period"
+        sendNotification("Remote hub ${clientName}: EzOutlet reset prevented due to cooldown period. Please check manually.")
+        return
+    }
 
-    def reqParams = [
-        uri: uri
+    def backupSuccess = false
+    def resetUri = "http://${EzOutlet2IP}/reset.cgi"
+    
+    createRemoteBackup()
+
+    // Wait for backup to complete
+    def timeout = 300 // 5 minutes timeout
+    def startTime = now()
+    while (!state.backupComplete && now() - startTime < timeout * 1000) {
+        pause(1000) // Wait for 1 second
+    }
+    
+    if (!state.backupComplete) {
+        log.warn "Backup timed out after ${timeout} seconds"
+    }
+
+    log.warn formatText("NO RESET - TEST MODE!", "white", "red")
+    return 
+
+    if (!backupSuccess) {
+        log.warn "Proceeding with EzOutlet2 reset without successful backup"
+    }
+
+    log.debug "Sending reset command to EzOutlet2 at $resetUri"
+
+    def reqParamsAuth = [
+        uri: resetUri,
+        headers: [
+            'Authorization': "Basic ${(ez_username + ':' + ez_password).bytes.encodeBase64()}"
+        ]
     ]
 
+    def reqParamsNoAuth = [
+        uri: resetUri
+    ]
+
+    def resetSuccess = false
+
+    // First attempt with authentication
     try {
-        httpGet(reqParams) { resp ->
+        httpGet(reqParamsAuth) { resp ->
             if (resp.status == 200) {
-                log.info "Reset successful: ${resp.data}"
+                resetSuccess = true
+                handleResetSuccess(resp, backupSuccess)
             } else {
-                log.warn "Failed to reset: ${resp.status}, ${resp.data}"
+                log.warn "Failed to reset EzOutlet2 with auth: ${resp.status}, ${resp.data}"
             }
         }
     } catch (Exception e) {
-        log.warn "Call to $uri failed: ${e.message}"
+        log.warn "Failed to send EzOutlet2 reset command with auth: ${e.message}"
+    }
+
+    // If first attempt failed, try without authentication
+    if (!resetSuccess) {
+        log.debug "Retrying EzOutlet2 reset without authentication"
+        try {
+            httpGet(reqParamsNoAuth) { resp ->
+                if (resp.status == 200) {
+                    resetSuccess = true
+                    handleResetSuccess(resp, backupSuccess)
+                } else {
+                    log.warn "Failed to reset EzOutlet2 without auth: ${resp.status}, ${resp.data}"
+                }
+            }
+        } catch (Exception e) {
+            log.error "Failed to send EzOutlet2 reset command without auth: ${e.message}"
+        }
+    }
+
+    if (!resetSuccess) {
+        log.error "All attempts to reset EzOutlet2 failed"
+        sendNotification("Remote hub ${clientName}: All attempts to send EzOutlet2 reset command failed")
     }
 }
+
+private def handleResetSuccess(resp, backupSuccess) {
+    log.info "EzOutlet2 reset command sent successfully"
+    log.info "Reset successful: ${resp.data}"
+    state.lastRemoteReboot = now()
+    sendNotification("Remote hub ${clientName}: EzOutlet2 reset command sent successfully" + 
+    (backupSuccess ? " (backup created)" : " (backup failed)"))
+}
+
+def createRemoteBackup() {
+    if (state.backupInProgress) {
+        log.warn "Backup already in progress"
+        return
+    }
+
+    state.backupInProgress = true
+    state.backupComplete = false
+    state.backupSuccess = false
+
+    def baseUri = state.remoteUri.split('/')[0..2].join('/')
+    def backupUri = "${baseUri}/hub/backupDB?fileName=latest"
+
+    log.debug "Attempting to create a backup on remote hub at ${backupUri}"
+
+    try {
+        asynchttpGet(
+            'handleBackupResponse', 
+            [
+                uri: backupUri,
+                timeout: 300  // 5 minutes timeout for backup
+            ],
+            [:]
+        )
+    } catch (Exception e) {
+        log.error "Failed to initiate backup: ${e.message}"
+        state.backupInProgress = false
+        state.backupComplete = true
+        state.backupSuccess = false
+    }
+}
+
+def handleBackupResponse(response, data) {
+    state.backupInProgress = false
+    state.backupComplete = true
+    
+    if (response.hasError()) {
+        log.error "Backup failed: ${response.getErrorMessage()}"
+        state.backupSuccess = false
+    } else {
+        def status = response.status
+        if (status == 200) {
+            log.info "Backup created successfully on remote hub"
+            state.backupSuccess = true
+        } else {
+            log.warn "Failed to create backup. Status code: ${status}"
+            state.backupSuccess = false
+        }
+    }
+    
+    // Force a page refresh
+    state.lastBackupCheck = now()
+}
+
+def checkBackupStatus() {
+    if (!state.backupComplete) {
+        state.backupStillInProgress = true
+        log.debug "Backup still in progress"
+    } else {
+        state.backupStillInProgress = false
+        log.debug "Backup process completed"
+    }
+    // The page will refresh when this button is pressed due to submitOnChange: true
+}
+
 
 
 /** ####################################### END REMOTE REBOOT PROCEDURE #######################################*/
@@ -1014,7 +1229,6 @@ def rebootHub(override = false) {
         }
         if (!isRebootAllowed()) {
             log.warn "Reboot prevented due to excessive reboot frequency"
-            sendNotification("Hub health check: Reboot needed but prevented due to recent reboots. Please check manually.")
             return
         }
     }
@@ -1109,15 +1323,34 @@ def addRebootToHistory() {
 }
 
 def isRebootAllowed() {
+
+    def result = false 
     def now = now()
     def recentReboots = state.rebootHistory.findAll { (now - it) < state.rebootTimeWindow }
 
-    if (recentReboots.size() < state.rebootLimit) {
-        return true
+   if (recentReboots.size() < state.rebootLimit) {
+        result = true
     } else {
         log.warn "Too many reboots (${recentReboots.size()}) in the last ${state.rebootTimeWindow / (60 * 1000)} minutes"
-        return false
+        result = false
     }
+    
+    def lastReboot = state.lastLocalReboot ?: 0
+    def cooldownMillis = (settings.rebootCooldown as Integer) * 60 * 1000
+    if ((now() - lastReboot) > cooldownMillis){
+        result = true
+    }
+    else{
+        result = false
+    }
+
+    return result
+}
+
+def isRemoteRebootAllowed() {
+    def lastReboot = state.lastRemoteReboot ?: 0
+    def cooldownMillis = (settings.rebootCooldown as Integer) * 60 * 1000
+    return (now() - lastReboot) > cooldownMillis
 }
 
 //###############################################################################

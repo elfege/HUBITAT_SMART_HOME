@@ -43,6 +43,11 @@ CSP Watchdog is a comprehensive monitoring and maintenance application for Hubit
    - Support for rebooting additional remote hubs
    - Reboot history tracking and management
 
+8. **Remote Hub Backup**:
+   - Initiate backups on remote hubs directly from the app
+   - Real-time status updates with auto-refresh functionality
+   - Visual indicators for backup progress
+
 ## Installation
 
 1. Log in to your Hubitat hub's admin interface.
@@ -90,6 +95,14 @@ CSP Watchdog is a comprehensive monitoring and maintenance application for Hubit
 
 - Enter IP addresses for additional remote Hubitat hubs you want to be able to reboot.
 - Each added hub will have its own reboot button.
+
+### Remote Hub Backup
+
+- Enable remote hub monitoring to access backup features.
+- Use the "Create a new backup on remote hub" button to initiate a backup.
+- The app will display a spinner and auto-refresh every 30 seconds to show backup progress.
+- Once complete, the app will display the backup status (success or failure).
+
 
 ## Usage
 

@@ -144,9 +144,14 @@ def mainPage() {
                             This should only be used if the hub has become completely unreachable.
                             Are you sure you want to proceed?
                         </div>
+                        <script>
+                        setTimeout(function() {
+                            location.reload();
+                        }, 30000);
+                        </script>
                     """
-                    input "confirmEzOutletReset", "button", title: "Yes, Reset EzOutlet"
-                    input "cancelEzOutletReset", "button", title: "Cancel"
+                    input "confirmEzOutletReset", "button", title: "Yes, Reset EzOutlet", submitOnChange: true
+                    input "cancelEzOutletReset", "button", title: "Cancel", submitOnChange: true
                 }
             }
 
@@ -237,6 +242,8 @@ def initialize() {
     state.attempts = 0
     state.pausedRemoteReboot = false
     state.paused = false
+    state.cancelReboot = false
+    state.interrupPauseLoop = false
 
     unsubscribe()
     unschedule()
@@ -336,6 +343,8 @@ def appButtonHandler(btn) {
         case "cancelReboot":
             state.confirmReboot = false
             state.forceReboot = false
+            state.cancelReboot = true
+            state.interrupPauseLoop = true
             break
         case "testNow":
             runHealthCheck()
@@ -943,16 +952,26 @@ def resetRemoteUsingEzOutlet2() {
     // Wait for backup to complete
     def timeout = 300 // 5 minutes timeout
     def startTime = now()
-    while (!state.backupComplete && now() - startTime < timeout * 1000) {
+    while (!state.backupComplete && now() - startTime < timeout * 1000 && !state.cancelReboot && !state.interrupPauseLoop) {
         pause(1000) // Wait for 1 second
     }
     
+    if(state.cancelReboot){
+        log.warn "EzOutlet Reset canceled at user request"
+        state.cancelReboot = false
+        return
+    }
+    if(state.interrupPauseLoop){
+        state.handleResetSuccess = false
+        log.warn "Pause loop stopped"
+    }
+
     if (!state.backupComplete) {
         log.warn "Backup timed out after ${timeout} seconds"
     }
 
-    log.warn formatText("NO RESET - TEST MODE!", "white", "red")
-    return 
+    // log.warn formatText("NO RESET - TEST MODE!", "white", "red")
+    // return 
 
     if (!backupSuccess) {
         log.warn "Proceeding with EzOutlet2 reset without successful backup"
@@ -1014,6 +1033,8 @@ private def handleResetSuccess(resp, backupSuccess) {
     log.info "EzOutlet2 reset command sent successfully"
     log.info "Reset successful: ${resp.data}"
     state.lastRemoteReboot = now()
+    state.handleResetSuccess = false
+    state.cancelReboot = false
     sendNotification("Remote hub ${clientName}: EzOutlet2 reset command sent successfully" + 
     (backupSuccess ? " (backup created)" : " (backup failed)"))
 }

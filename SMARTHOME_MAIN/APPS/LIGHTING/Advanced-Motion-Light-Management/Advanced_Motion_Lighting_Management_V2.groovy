@@ -190,7 +190,9 @@ def initialize() {
         }
     }
 
-    schedule('0 * * * * ?', master)
+    // schedule('0 * * * * ?', master)
+    // schedule the first run:
+    scheduleNextRun()
 
     state.paused = false
     state.pauseStart = null
@@ -206,35 +208,27 @@ def master() {
     check_logs_timer()
     appLabel()
 
-    if (InRestrictedModeOrTime()) return
-
-    if (state.paused) {
-        if (now() - state.pauseStart > getPauseDurationMillis()) {
-            resumeNormalOperation()
-        } else {
-            if (enableDebug) log.debug 'App is paused. Skipping master execution.'
-            return
-        }
+    if (InRestrictedModeOrTime() || state.paused) {
+        scheduleNextRun()
+        return
     }
 
-    if (useIlluminance) {
-        def currentLux = illuminanceSensor.currentValue('illuminance')
-        if (currentLux > illuminanceThreshold) {
-            off()
-            if (enableDebug) log.debug "Turned off lights due to high illuminance (${currentLux} lux)"
-            return
-        }
+    if (useIlluminance && illuminanceSensor.currentValue('illuminance') > illuminanceThreshold) {
+        off()
+        if (enableDebug) log.debug "Turned off lights due to high illuminance"
+        scheduleNextRun()
+        return
     }
 
     if (Active()) {
         on()
-        if (enableDebug) log.debug 'lights turned on'
     } else {
         off()
-        if (enableDebug) log.debug 'lights turned off'
     }
 
     if (enableDebug) log.debug "---end of master loop. Duration = ${now() - startTime} milliseconds"
+    
+    scheduleNextRun()
 }
 
 def handlePresenceRestrictions() {
@@ -354,36 +348,29 @@ def getPauseDurationMillis() {
 def Active() {
     if (enableDebug) log.debug "Checking if motion is active. Motion sensors: $motionSensors"
 
-    // Check current state
-    def currentlyActive = motionSensors.findAll{ it -> it.currentValue('motion') == 'active' }
-    if (currentlyActive.size() > 0) {
-        if (enableTrace) log.trace "${currentlyActive.join(', ')} ${currentlyActive.size() > 1 ? 'are' : 'is'} currently active"
+    // Check current state first (faster)
+    if (motionSensors.any { it.currentValue('motion') == 'active' }) {
+        if (enableTrace) log.trace "Motion is currently active"
         return true
     }
 
-    // Check recent history
+    // Only check recent history if necessary
     int timeOut = getTimeout()
     long Dtime = timeUnit == 'minutes' ? timeOut * 60 * 1000 : timeOut * 1000
     def period = new Date(now() - Dtime)
 
-    def recentEvents = motionSensors.collect {
-        sensor ->
-            sensor.eventsSince(period, [max: 200]).findAll { it.name == 'motion' && it.value == 'active' }
-    }.flatten()
-
-    if (enableDebug) {
-        log.debug "Found ${recentEvents.size()} active motion events in the last ${timeOut} ${timeUnit}"
-        recentEvents.each {
-            event ->
-               if (enableDebug) log.debug "Active event: ${event.date} - ${event.device}"
-        }
+    return motionSensors.any { sensor ->
+        sensor.eventsSince(period, [max: 1]).any { it.name == 'motion' && it.value == 'active' }
     }
-
-    return recentEvents.size() > 0
 }
 
 
-
+def scheduleNextRun() {
+    def timeout = getTimeout()
+    def nextRun = timeout * (timeUnit == 'minutes' ? 60 : 1)
+    runIn(nextRun, master)
+    if (enableDebug) log.debug "Next master() run scheduled in ${nextRun} seconds"
+}
 
 def on() {
     logDebug('Entering on() method')
@@ -392,43 +379,28 @@ def on() {
         return
     }
 
-    if (useIlluminance) {
-        def currentLux = illuminanceSensor.currentValue('illuminance')
-        if (currentLux > illuminanceThreshold) {
-            logDebug("Current illuminance ($currentLux lux) is above threshold ($illuminanceThreshold lux). Not turning on lights.")
-            return
-        }
+    if (useIlluminance && illuminanceSensor.currentValue('illuminance') > illuminanceThreshold) {
+        logDebug("Current illuminance is above threshold. Not turning on lights.")
+        return
     }
 
     def currentDimLevel = getCurrentDimLevel()
+    def colorValue = useColor ? getColorValue() : null
 
     switches.each { sw ->
         if (shouldKeepSwitchOff(sw)) {
             logInfo("${sw.displayName} is kept off due to mode settings")
-            sw.off()
         } else {
             logInfo("Turning on ${sw.displayName}")
             if (useDim && sw.hasCommand('setLevel')) {
-                if (useColor) {
-                    def colorValue = getColorValue()
-                    if (colorValue.containsKey('colorTemperature')) {
-                        if (sw.hasCapability('ColorTemperature') && sw.hasCommand('setColorTemperature')) {
-                            sw.setColorTemperature(colorValue.colorTemperature)
-                            pauseExecution(300) // 300ms delay
-                            logDebug("Set ${sw.displayName} color temperature to ${colorValue.colorTemperature}K")
-                        } else {
-                            logDebug("${sw.displayName} does not support color temperature")
-                        }
-                    } else if (sw.hasCapability('ColorControl') && sw.hasCommand('setColor')) {
+                if (colorValue) {
+                    if (colorValue.containsKey('colorTemperature') && sw.hasCapability('ColorTemperature')) {
+                        sw.setColorTemperature(colorValue.colorTemperature)
+                    } else if (sw.hasCapability('ColorControl')) {
                         sw.setColor(colorValue)
-                        pauseExecution(300) // 300ms delay
-                        logDebug("Set ${sw.displayName} color to HSL: ${colorValue}")
-                    } else {
-                        logDebug("${sw.displayName} does not support color control")
                     }
                 }
                 sw.setLevel(currentDimLevel)
-                logDebug("Set ${sw.displayName} to dim level: $currentDimLevel")
             } else {
                 sw.on()
             }
@@ -717,6 +689,7 @@ def hubEventHandler(evt) {
 
 
 }
+
 def motionHandler(evt) {
     if (state.paused) return
 
@@ -724,18 +697,30 @@ def motionHandler(evt) {
 
     if (InRestrictedModeOrTime()) return
 
-    state.activeEvents = state.activeEvents == null ? 0 : state.activeEvents
-    state.lastActiveEvent = state.lastActiveEvent == null ? now() : state.lastActiveEvent
+    def now = now()
+    def lastMotionHandled = state.lastMotionHandled ?: 0
+    def thirtySecondsAgo = now - 30000 // 30 seconds in milliseconds
+
+    if (lastMotionHandled > thirtySecondsAgo) {
+        if (enableDebug) log.debug "Motion event received within 30 seconds of last handled event. Skipping processing."
+        return
+    }
+
+    state.lastMotionHandled = now
 
     if (evt.value == 'active') {
-        state.activeEvents += 1
-        state.lastActiveEvent = now()
-        on()
+        if (switches.any { it.currentValue('switch') == 'on' }) {
+            if (enableDebug) log.debug "Lights are already on. Skipping 'on' action."
+            return
+        }
+        unschedule(master)  // Unschedule the next run
+        master()  // Run master immediately
+    } else {
+        // For 'inactive' events, we'll let the scheduled master() handle it
+        // This avoids running master() too frequently on motion stopping
     }
-// else {
-//     runIn(getTimeout(), master)
-// }
 }
+
 
 def buttonHandler(evt) {
     if (evt == null) {
@@ -808,32 +793,30 @@ def contactHandler(evt) {
 }
 
 def illuminanceHandler(evt) {
-    if (state.paused) return
+    if (state.paused || InRestrictedModeOrTime()) return
 
-    if (InRestrictedModeOrTime()) return
+    def lastIlluminanceHandled = state.lastIlluminanceHandled ?: 0
+    def now = now()
+    if (now - lastIlluminanceHandled < 60000) { // 1 minute debounce
+        if (enableDebug) log.debug "Illuminance change within 1 minute of last handled event. Skipping processing."
+        return
+    }
+
+    state.lastIlluminanceHandled = now
 
     if (description) log.info "$evt.name is now $evt.value"
     
-    def anyOn = switches.any{ it -> it.currentValue('switch') == 'on' }
-    if (description) log.info "anyOn = $anyOn"
-    state.LuxCanceledbyButtonEvt = state.LuxCanceledbyButtonEvt == null ? false : state.LuxCanceledbyButtonEvt
-    boolean daytime = evt.value.toInteger() > illuminanceThreshold && !state.LuxCanceledbyButtonEvt
-
-    state.daytimeSwitchExecuted = state.daytimeSwitchExecuted == null ? false : state.daytimeSwitchExecuted
-
-    if (daytime && anyOn && !state.daytimeSwitchExecuted) {
-        if (description) log.info "turning off ${switches} 545r"
-        off()
-        state.daytimeSwitchExecuted = true
-    } else if (state.daytimeSwitchExecuted && !daytime) {
-        state.daytimeSwitchExecuted = false
+    boolean daytime = evt.value.toInteger() > illuminanceThreshold
+    if (daytime != state.lastDaytimeState) {
+        state.lastDaytimeState = daytime
+        unschedule(master)
+        master()
     }
-
-    master()
 }
 
 def modeChangeHandler(evt) {
     if (enableDebug) log.debug("$evt.name is now in $evt.value mode")
+    unschedule(master)
     master()
 }
 
@@ -929,6 +912,12 @@ def dim() {
                 }
             }
         }
+    }
+}
+
+def scheduleOff() {
+    if (!Active()) {
+        off()
     }
 }
 

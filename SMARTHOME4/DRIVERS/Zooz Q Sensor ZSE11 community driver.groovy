@@ -1,6 +1,6 @@
 /**
  *  Zooz ZSE11 (Q Sensor) community driver for Hubitat
- * 
+ *
  *  Copyright 2021 Robert Morris
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -11,7 +11,7 @@
  *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
- * 
+ *
  *  Version History
  *  2021-04-25: Fix displayed temperature units to be correct if hub units different from sensor units
  *  2021-04-23: Pad firmware subversion with 0 as needed
@@ -43,7 +43,7 @@ import groovy.transform.Field
    0x85: 2,    // Association
    0x86: 2,    // Version
    0x98: 1,    // Security
-    0x9F: 1     // Security 2
+   0x9F: 1     // Security 2
 ]
 
 

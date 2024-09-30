@@ -56,7 +56,9 @@ def initialize()
     unschedule()
     state.level = state.level != null ? state.level : 73
     state.level = value.toString()
-    setLevel(state.value)
+    state.max_value = 130
+    log.debug "state.max_value: $state.max_value"
+    // setLevel(state.value)
     sendEvent(name: "switch", value: "on")
     sendEvent(name: "thermostatMode",value: "heat") // NEVER AUTO NEVER OFF !!
     schedule("0 0/10 * * * ?", setToHeat) 
@@ -117,15 +119,19 @@ def setCoolingSetpoint(value){
 def setLevel(value)
 {
     log.info "setLevel $value"
+
+    max_value = state.max_value
+    log.debug "max_value (setLevel): $state.max_value"
     
     // Ensure that the level does not exceed 110%
-    if (value > 110) {
-        log.warn "Value exceeds the maximum limit of 110%, setting to 110%"
-        value = 110
+    if (value > max_value.toInteger()) {
+        log.warn "Value exceeds the maximum limit of ${state.max_value}%, setting to 110%"
+        value = max_value.toInteger() ?: 130
     } 
     
     state.level = value.toInteger()
     sendEvent(name: "level", value: value.toString())
+    sendEvent(name: "thermostatSetpoint", value: value.toString())
 }
 def cool()
 {

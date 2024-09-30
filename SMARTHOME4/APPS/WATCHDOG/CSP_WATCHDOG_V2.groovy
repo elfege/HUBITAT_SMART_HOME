@@ -4,9 +4,11 @@ import groovy.json.JsonOutput
 
 @Field static remoteResponded = true
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                               DEFINITION                                     
-//###############################################################################
+//#######################################-#######################################
+
 
 definition(
     name: "CSP Watchdog",
@@ -19,9 +21,11 @@ definition(
     oauth: true
 )
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                               PREFERENCES                                    
-//###############################################################################
+//#######################################-#######################################
+
 
 preferences {
     page(name: "mainPage")
@@ -100,29 +104,31 @@ def mainPage() {
                 input "createRemoteBackup", "button", title: "Create a new backup on remote hub"
                 
                 if (state.backupInProgress) {
-                def backup_status = state.backupStillInProgress ? "Backup still in progress..." : "Backup in progress..."
-                paragraph """
-                    <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    $backup_status
-                    <style>
-                        @keyframes spin {
-                            0% { transform: rotate(0deg); }
-                            100% { transform: rotate(360deg); }
-                        }
-                    </style>
-                    <script>
-                        setTimeout(function() {
-                            location.reload();
-                        }, 30000);
-                    </script>
-                """
-                state.backupStillInProgress = false
-                input "checkBackupStatus", "button", title: "Check Backup Status", submitOnChange: true
-                input "stopBackup", "button", title: "Cancel Backup Request", submitOnChange: true
+                    def backup_status = state.backupStillInProgress ? "Backup still in progress..." : "Backup in progress..."
+                    paragraph """
+                        <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        $backup_status
+                        <style>
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
+                        </style>
+                        <script>
+                            setTimeout(function() {
+                                location.reload();
+                            }, 30000);
+                        </script>
+                    """
+                    state.backupStillInProgress = false
+                    
 
                 } else if (state.backupComplete) {
                     paragraph state.backupSuccess ? "Backup completed successfully!" : "Backup failed. Please check logs."
                 }
+                input "checkBackupStatus", "button", title: "Check Backup Status", submitOnChange: true
+                input "stopBackup", "button", title: "Cancel Backup Request", submitOnChange: true
+                input "cancelReboot", "button", title: "Cancel"
                 
                 
             }
@@ -131,7 +137,7 @@ def mainPage() {
             if (state.confirmReboot) {
                 paragraph "<b style='color:red;'>Are you sure you want to reboot the ${state.hubToReboot} hub (${state.hubToReboot == 'local' ? location.name : clientName})?</b>"
                 input "confirmReboot", "button", title: "Yes, Reboot"
-                input "cancelReboot", "button", title: "Cancel"
+                input "cancelBackup", "button", title: "Skip Backup and Reset"
             }
 
             // EzOutlet Controls
@@ -203,9 +209,11 @@ def cancel_devmode() {
     log.debug "devmode disabled"
 }
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                               MAPPINGS                                       
-//###############################################################################
+//#######################################-#######################################
+
 
 mappings {
     path("/ping") { action: [GET: "parsePing"] }
@@ -216,9 +224,11 @@ mappings {
 }
 
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                           LIFECYCLE METHODS                                  
-//###############################################################################
+//#######################################-#######################################
+
 
 def installed() {
     log.info "CSP Watchdog installed"
@@ -256,12 +266,7 @@ def initialize() {
         resumeRemoteHubChecks()
         try {
             log.debug "Retrieving and storing management token..."
-            if (getAndStoreManagementToken()) {
-                log.debug "Sending management token to remote hub..."
-                runIn(5, "sendRemoteManagementToken")
-            } else {
-                log.error "Failed to retrieve and store management token"
-            }
+            getAndStoreManagementToken()
 
             // Schedule daily token refresh
             schedule("0 0 0 * * ?", refreshManagementToken)
@@ -304,9 +309,10 @@ def scheduleJobs() {
     }
 }
 
-//###############################################################################
+//#######################################-#######################################
 //#                           EVENT HANDLERS                                     
-//###############################################################################
+//#######################################-#######################################
+
 
 def appButtonHandler(btn) {
     switch (btn) {
@@ -333,9 +339,9 @@ def appButtonHandler(btn) {
             break
         case "confirmReboot":
             if (state.hubToReboot == "local") {
-                rebootHub(override = state.forceReboot)
+                rebootHub(override = true)
             } else if (state.hubToReboot == "remote") {
-                rebootRemoteHub(override = state.forceReboot)
+                rebootRemoteHub(override = true)
             }
             state.confirmReboot = false
             state.forceReboot = false
@@ -344,8 +350,15 @@ def appButtonHandler(btn) {
             state.confirmReboot = false
             state.forceReboot = false
             state.cancelReboot = true
+            state.interrupPauseLoop = false
+            break
+        case "cancelBackup":
+            state.confirmReboot = false
+            state.forceReboot = false
+            state.cancelReboot = false
             state.interrupPauseLoop = true
             break
+        case "testNow":
         case "testNow":
             runHealthCheck()
             break
@@ -364,6 +377,7 @@ def appButtonHandler(btn) {
             break
         case "resetEzOutlet":
             state.confirmEzOutletReset = true
+            state.interrupPauseLoop = true
             break
         case "confirmEzOutletReset":
             resetRemoteUsingEzOutlet2()
@@ -376,6 +390,7 @@ def appButtonHandler(btn) {
             createRemoteBackup()
             break
         case "stopBackup": 
+            state.interrupPauseLoop = true
             state.backupInProgress = false
             state.backupComplete = false
             state.backupSuccess = false
@@ -413,6 +428,7 @@ def systemStartHandler(evt) {
 def zigbeeStatusHandler(evt) {
     log.debug "Zigbee status changed: ${evt.value}"
     if (evt.value == "down") {
+        sendNotification("Zigbee status changed: ${evt.value} ($location.name)")
         log.warn "Zigbee network is down"
         rebootHub(override=true)
     }
@@ -452,9 +468,11 @@ def cloudStatusHandler(evt) {
     }
 }
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                           HEALTH CHECK METHODS                               
-//###############################################################################
+//#######################################-#######################################
+
 
 def runHealthCheck() {
     log.debug "Running health check"
@@ -500,9 +518,11 @@ def handleCriticalEvent(String reason) {
     }
 }
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                           REMOTE HUB METHODS                                 
-//###############################################################################
+//#######################################-#######################################
+
 
 def remoteServerHealth() {
     if (state.remoteHubChecksPaused) {
@@ -608,25 +628,31 @@ def sendConfirmation() {
 }
 
 def sendRemoteManagementToken() {
-    if (state.localManagementToken) {
-        try {
-            // "/receiveManagementToken?..." calls the receiveManagementToken() method on the remote hub through the mappings' API
-            // and passes the local management token in the query params. 
-            sendGetCommand("/receiveManagementToken?token=${state.localManagementToken}")
-            log.debug "Management token sent to remote hub"
-            return [status: "success", message: "Management token sent to remote hub"]
-        } catch (e) {
-            log.error "Failed to send management token to remote hub: ${e.message}"
-            return [status: "error", message: "Failed to send management token to remote hub: ${e.message}"]
+    log.debug "sendRemoteManagementToken///"
+    try {
+        if (state.localManagementToken) {
+            try {
+                // "/receiveManagementToken?..." calls the receiveManagementToken() method on the remote hub through the mappings' API
+                // and passes the local management token in the query params. 
+                sendGetCommand("/receiveManagementToken?token=${state.localManagementToken}")
+                log.debug "Management token sent to remote hub"
+                return [status: "success", message: "Management token sent to remote hub"]
+            } catch (e) {
+                log.error "Failed to send management token to remote hub: ${e.message}"
+                return [status: "error", message: "Failed to send management token to remote hub: ${e.message}"]
+            }
+        } else {
+            log.error "No local management token available to send"
+            return [status: "error", message: "No local management token available"]
         }
-    } else {
-        log.error "No local management token available to send"
-        return [status: "error", message: "No local management token available"]
+    } catch (Exception e){
+        log.error "Failed to send Remote Management Token to remote hub: ${e}"
     }
 }
 
 def receiveManagementToken() {
     // Never called locally. Always by remote hub, through mappings. 
+    log.debug "receiving remote management token..."
     def token = params.token
     if (token) {
         state.remoteManagementToken = token ? token : state.remoteManagementToken == null ? "not_received" : state.remoteManagementToken
@@ -646,25 +672,12 @@ private getAndStoreManagementToken() {
         // The token is a string, so we can store it directly
         state.localManagementToken = token.trim() // Trim any potential whitespace
         log.debug "Management token stored successfully: ${state.localManagementToken ? state.localManagementToken[0..4] + '...' : 'null'}" // Only log the first 5 characters for security
+        log.debug "Sending management token to remote hub... this can take a while"
+        sendRemoteManagementToken()
         return true
     } else {
-        log.error "Failed to retrieve management token"
+        log.error "Failed to retrieve and thus share management token"
         return false
-    }
-}
-
-def getAndSendManagementToken() {
-    log.debug "Attempting to get and store management token..."
-    if (state.localManagementToken) {
-        log.debug "Sending management token to remote hub"
-        def result = sendRemoteManagementToken()
-        if (result.status == "success") {
-            log.debug "Management token sent to remote hub successfully"
-        } else {
-            log.warn "Failed to send management token to remote hub: ${result.message}"
-        }
-    } else {
-        log.warn "Failed to send management token to remote hub"
     }
 }
 
@@ -727,7 +740,7 @@ def sendGetCommand(String command, String overrideUri = null) {
         headers: [
             Authorization: "Bearer ${state.remoteToken}"
         ],
-        timeout: 10
+        timeout: 30
     ]
 
     try {
@@ -754,10 +767,11 @@ def sendGetCommand(String command, String overrideUri = null) {
 
 
 
+//#######################################-#######################################
+//#                        REMOTE HUB REBOOT PROCEDURE                           
+//#######################################-#######################################
 
 
-
-/** ####################################### REMOTE HUB REBOOT PROCEDURE #######################################*/
 
 def rebootRemoteHub(override = false) {
 
@@ -786,9 +800,9 @@ def rebootRemoteHub(override = false) {
     unschedule(remoteServerHealth)
 
     try {
-        // def rebootSuccess = reboot_remote_hub_with_8080()
+        // def rebootSuccess = reboot_remote_hub()
 
-        def rebootSuccess = false
+        def rebootSuccess = reboot_remote_hub()
 
         if (!rebootSuccess) {
             log.warn "POST reboot command failed"
@@ -819,18 +833,20 @@ def rebootRemoteHub(override = false) {
     runIn(300, "checkRemoteHubReboot")
 }
 
-def reboot_remote_hub_with_8080() {
+def reboot_remote_hub() {
     def serverURI = state.remoteUri.split('/')[0..2].join('/')
     
 	log.debug "serverURI: $serverURI"
 
     def rebootUris = [
         "${serverURI}:8080/hub/reboot", 
-        "${serverURI}:8081/api/rebootHub"
+        "${serverURI}:8081/management/reboot?token=${state.remoteManagementToken}",
+        "${serverURI}:8080/management/reboot?token=${state.remoteManagementToken}"
     ]
 
     for (rebootUri in rebootUris) {
 	    log.debug "rebootUri   :  $rebootUri"
+        success = false
 
         try {
             httpPost(
@@ -839,12 +855,39 @@ def reboot_remote_hub_with_8080() {
                 ]
             ) 
             {
-                resp -> log.debug "response from hub: ${resp.data}"
+                resp -> log.debug "response from hub: ${resp.data.message}"
+                if(resp.data.message == "Hub rebooting"){
+                    log.warn "remote hub is rebooting"
+                    success = true
+                }
             }
         } catch (Exception e) {
             log.debug "Unable to reach $rebootUri. Error: ${e.message}"
         }
+
+        if (success) return true
+
+        try {
+            httpGet(
+                [
+                    uri: rebootUri
+                ]
+            ) 
+            {
+                resp -> log.debug "response from hub: ${resp.data.message}"
+                if(resp.data.message == "Hub rebooting"){
+                    log.warn "remote hub is rebooting"
+                    success = true
+                }
+            }
+        } catch (Exception e) {
+            log.debug "Unable to reach $rebootUri. Error: ${e.message}"
+        }
+
+        if (success) return true
     }
+
+    return false
 }
 
 def hubActionCallback(response, data) {
@@ -954,6 +997,7 @@ def resetRemoteUsingEzOutlet2() {
     def startTime = now()
     while (!state.backupComplete && now() - startTime < timeout * 1000 && !state.cancelReboot && !state.interrupPauseLoop) {
         pause(1000) // Wait for 1 second
+        log.debug "waiting for backup to finish..."
     }
     
     if(state.cancelReboot){
@@ -1035,7 +1079,7 @@ private def handleResetSuccess(resp, backupSuccess) {
     state.lastRemoteReboot = now()
     state.handleResetSuccess = false
     state.cancelReboot = false
-    sendNotification("Remote hub ${clientName}: EzOutlet2 reset command sent successfully" + 
+    sendNotification("Remote hub ${clientName}: EzOutlet2 reset command sent successfully from ${location.name}" + 
     (backupSuccess ? " (backup created)" : " (backup failed)"))
 }
 
@@ -1094,7 +1138,7 @@ def handleBackupResponse(response, data) {
 }
 
 def checkBackupStatus() {
-    if (!state.backupComplete) {
+    if (!state.backupComplete && !state.interrupPauseLoop) {
         state.backupStillInProgress = true
         log.debug "Backup still in progress"
     } else {
@@ -1233,9 +1277,11 @@ def handleExternalRebootDetected() {
     return [status: "received"]
 }
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                           LOCAL HUB REBOOT METHODS                                    
-//###############################################################################
+//#######################################-#######################################
+
 
 def rebootHub(override = false) {
     if (!override) {
@@ -1248,13 +1294,13 @@ def rebootHub(override = false) {
             log.warn "Remote Reboot command test successful for $ip - the hub WILL NOT REBOOT"
             return
         }
-        if (!isRebootAllowed()) {
+        if (!isRebootAllowed(override)) {
             log.warn "Reboot prevented due to excessive reboot frequency"
             return
         }
     }
 
-    log.warn "Initiating hub reboot due to failed tests"
+    log.warn "Initiating ${location.name} due to failed tests"
 
     // Add this reboot to the history
     addRebootToHistory()
@@ -1343,10 +1389,10 @@ def addRebootToHistory() {
     state.rebootHistory = state.rebootHistory.findAll { (now - it) < state.rebootTimeWindow }
 }
 
-def isRebootAllowed() {
+def isRebootAllowed(override=false) {
 
-    def result = false 
-    def now = now()
+    def result = false
+    long now = now()
     def recentReboots = state.rebootHistory.findAll { (now - it) < state.rebootTimeWindow }
 
    if (recentReboots.size() < state.rebootLimit) {
@@ -1356,9 +1402,9 @@ def isRebootAllowed() {
         result = false
     }
     
-    def lastReboot = state.lastLocalReboot ?: 0
+    long lastReboot = state.lastLocalReboot == null ? now : state.lastLocalReboot
     def cooldownMillis = (settings.rebootCooldown as Integer) * 60 * 1000
-    if ((now() - lastReboot) > cooldownMillis){
+    if ((now - lastReboot) > cooldownMillis){
         result = true
     }
     else{
@@ -1374,9 +1420,11 @@ def isRemoteRebootAllowed() {
     return (now() - lastReboot) > cooldownMillis
 }
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                           UTILITY METHODS                                    
-//###############################################################################
+//#######################################-#######################################
+
 
 def resumeRemoteHubChecks() {
     log.info "Resuming remote hub checks after reboot attempt"
@@ -1444,9 +1492,11 @@ def jsonResponse(respMap) {
     render contentType: 'application/json', data: JsonOutput.toJson(respMap)
 }
 
-//###############################################################################
+//#######################################-#######################################
+
 //#                           HELPER METHODS                                     
-//###############################################################################
+//#######################################-#######################################
+
 
 def formatText(title, textColor, bckgColor) {
     return "<div style=\"width:102%;background-color:${bckgColor};color:${textColor};padding:10px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: 3px\">${title}</div>"

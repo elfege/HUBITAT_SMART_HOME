@@ -1348,7 +1348,7 @@ def initialize(){
     }
 
     if (polldevices) {
-        schedule("0 0/5 * * * ?", Poll)
+        schedule("0 0/2 * * * ?", Poll)
     }
     if (controlPowerConsumption || coolerControlPowerConsumption) {
         schedule("0 0/5 * * * ?", poll_power_meters)
@@ -1743,23 +1743,23 @@ def pushableButtonHandler(evt){
     }
 }
 def doubleTapableButtonHandler(evt){
-    if (!state.paused) {
-        if (location.mode in restricted) {
-            if (enableinfo) log.info "location in restricted mode, doing nothing"
-            return
-        }
-        if (enableinfo) log.info "BUTTON EVT $evt.device $evt.name $evt.value"
 
-        if (evt.name == "doubleTapped") {
-            state.paused = !state.paused 
-            def message = state.paused ? "APP PAUSED BY DOUBLE TAP" : "APP RESUMED BY DOUBLE TAP"
-            if (enablewarning) log.warn message
-            if (buttonTimer && state.paused) {
-                if (enableinfo) log.info "App will resume in $buttonTimer minutes"
-                runIn(buttonTimer, updated)
-            }
+    if (location.mode in restricted) {
+        if (enableinfo) log.info "location in restricted mode, doing nothing"
+        return
+    }
+    if (enableinfo) log.info "BUTTON EVT $evt.device $evt.name $evt.value"
+
+    if (evt.name == "doubleTapped") {
+        state.paused = !state.paused 
+        def message = state.paused ? "APP PAUSED BY DOUBLE TAP" : "APP RESUMED BY DOUBLE TAP"
+        if (enablewarning) log.warn message
+        if (buttonTimer && state.paused) {
+            if (enableinfo) log.info "App will resume in $buttonTimer minutes"
+            runIn(buttonTimer, updated)
         }
     }
+    
 }
 def thermostatModeHandler(evt){
 
@@ -2638,7 +2638,7 @@ def powerManagement(inside,
     opStateOk,
     humThres){
 
-    /**************** CONSISTENCY EVALUATIONS **************************/
+    log.warn "**************** CONSISTENCY CHECK **************************"
 
     if (enabledebug) {
     def msg = [
@@ -3091,6 +3091,9 @@ def powerManagement(inside,
 }
 
 def powerConsistency(need, target, inside, cmd, contactsClosed, doorsContactsAreOpen, motionActive, thermModes, operatingStateOk, currentOperatingNeed, humThres){
+    def resendId = new Date().format("yyyyMMdd-HHmmss-SSS", location.timeZone)
+    log.debug "Starting powerConsistency check (ID: ${resendId})"
+
     boolean pwLow
     boolean timeToRefreshMeters
     def timeElapsedSinceLastResend
@@ -3103,43 +3106,39 @@ def powerConsistency(need, target, inside, cmd, contactsClosed, doorsContactsAre
 
     try {
         if (pw) {
-            if (enabledebug) log.trace "Power evaluation"
+            if (enabletrace) log.trace "Power evaluation"
             state.resendAttempt = state.resendAttempt ? state.resendAttempt : now()
             state.offAttempt = state.offAttempt ? state.offAttempt : now()
-            // here we manage possible failure for a thermostat to have received the z-wave/zigbee or http command
             timeElapsedSinceLastResend = now() - state.resendAttempt
-            state.timeElapsedSinceLastOff = now() - state.offAttempt // when device driver returns state off while in fact signal didn't go through
-            state.threshold = 3 * 60 * 1000 // give power meter 3 minutes to have its power measurement refreshed before attempting new request 
+            state.timeElapsedSinceLastOff = now() - state.offAttempt
+            state.threshold = 3 * 60 * 1000 
             timeIsUp = timeElapsedSinceLastResend > state.threshold
             timeIsUpOff = state.timeElapsedSinceLastOff > state.threshold
             def pwVal = pw.currentValue("power")
-            if (enabledebug) log.trace "${pw}'s current power consumption is $pwVal"
+            if (enabletrace) log.trace "${pw}'s current power consumption is $pwVal"
 
             try {
-                pwLow = pwVal < 100 // below 100 watts we assume there's no AC compression nor resistor heat currently at work
+                pwLow = pwVal < 100
                 timeToRefreshMeters = need == "off" ? state.timeElapsedSinceLastOff > 10000 && !pwLow : timeElapsedSinceLastResend > 10000 && pwLow
             }
             catch (Exception e) {
                 log.error "boolean pwlow => $e"
             }
 
-            // timeToRefreshMeters = true // for testing
-            if (timeToRefreshMeters /*&& !timeIsUp && !timeIsUpOff && !doNotSendAnyCoolHeatOffComm*/) // make sure to attempt a refresh before sending more commands
-            {
-                if (enableinfo) log.info "pwLow = $pwLow refreshing $pw because power is $pwVal while it should be ${need == "off" ? "below 100 Watts":"above 100 Watts"}"
+            if (timeToRefreshMeters) {
+                if (enableinfo) log.info "pwLow = $pwLow refreshing $pw because power is $pwVal while it should be ${need == "off" ? "below 100 Watts":"above 100 Watts"} (ID: ${resendId})"
                 try {
                     poll_power_meters()
                 }
                 catch (Exception e) {
-                    log.error "poll_power_meters() => $e"
+                    log.error "poll_power_meters() => $e (ID: ${resendId})"
                 }
             }   
-
 
             boolean doorsOpen = doorsOpen()
 
             if (enablewarning) {
-            def m = [
+                def m = [
                     "<br> doNotSendAnyCoolHeatOffComm: $doNotSendAnyCoolHeatOffComm",
                     "<br> timeIsUp: $timeIsUp",
                     "<br> pwLow: $pwLow",
@@ -3148,115 +3147,87 @@ def powerConsistency(need, target, inside, cmd, contactsClosed, doorsContactsAre
                     "<br> timeIsUpOff: $timeIsUpOff",
                     "<br> doorsOpen: $doorsOpen",
                     "<br> fanCirculateAlways: $fanCirculateAlways",
-
+                    "<br> ID: ${resendId}"
                 ]
-
-                if (enablewarning) log.warn m.join()
+                log.warn m.join()
             }
 
-            // timeIsUp = true
             if (need != "off" && timeIsUp && pwLow) {
-
-                def message = "<div style='color:white;background:red;'> resending commands to thermostat due to inconsistency between power measurement (${pwVal}Watts) and current need ($need)</div>"
-
+                log.warn "Inconsistency detected: resending commands to thermostat (ID: ${resendId})"
                 if (!doNotSendAnyCoolHeatOffComm) {
-                    message = "<div style='color:white;background:red;'> resending setThermostatMode(${need}) due to inconsistency between power measurement (${pwVal}Watts) and current need ($need)</div>"
-                    set_multiple_thermostats_mode(need, "checkthermstate force command", null)
+                    set_multiple_thermostats_mode(need, "powerConsistency resend ${resendId}", null)
                 }
                 if (!ignoreTarget) {
-                    message = "<div style='color:white;background:red;'> resending ${cmd}(${target}) due to inconsistency between power measurement (${pwVal}Watts) and current need ($need)</div>"
-                    set_target(cmd, target, inside, get_outside_temperature(), motionActive, doorsContactsAreOpen, contactsClosed, thermModes, humThres, "checkthermstate force command")
+                    set_target(cmd, target, inside, get_outside_temperature(), motionActive, doorsContactsAreOpen, contactsClosed, thermModes, humThres, "powerConsistency resend ${resendId}")
                 }
                 state.resendAttempt = now()
                 state.setpointSentByApp = true
                 runIn(3, resetSetByThisApp)
 
-
-
-                try {
-                    if (!operatingStateOk) {
-
-                        if (enablewarning) log.warn "EMERGENCY COMMAND"
-                            def faulty_devices = neededThermostats.findAll{ it -> it.currentValue("thermostatOperatingState") != currentOperatingNeed }
-                        if (enablewarning) log.warn "faulty_device: $faulty_devices need: $need"
-
-                        try {
-                            for (device in faulty_devices) {
-                                try {
-                                    device.refresh()
-                                    pauseExecution(1000)
-                                }
-                                catch (Exception) {
-                                    try {
-                                        device.poll()
-                                        pauseExecution(1000)
-                                    }
-                                    catch (Exception e) {
-                                        log.error "$device can't be refreshed nor polled, for some reason: ${e}"
-                                    }
-                                }
-                                if (enablewarning) log.warn("TRYING TO SET $device to $need")
-                                if (device.currentValue("thermostatOperatingState") != "fanCirculate") {
-                                    set_thermostat_mode(device, need, "ermergency resend")
-                                }
-                                else {
-                                    log.debug "$device in fanCriclateMode, not re-sending $need command"
-                                }
-                            }
-                            // set_multiple_thermostats_mode(need, "emergency_restore", null)
-                        } catch (Exception error) {
-                            log.error "Failed to loop through emergency commands for faulty devices: $error"
+                if (!operatingStateOk) {
+                    log.warn "EMERGENCY COMMAND (ID: ${resendId})"
+                    def faulty_devices = neededThermostats.findAll{ it -> it.currentValue("thermostatOperatingState") != currentOperatingNeed }
+                    faulty_devices.each { device ->
+                        device.refresh()
+                        pauseExecution(1000)
+                        if (device.currentValue("thermostatOperatingState") != "fanCirculate") {
+                            set_thermostat_mode(device, need, "emergency resend ${resendId}")
                         }
                     }
                 }
-                catch (Exception err) {
-                    log.error "Failed to send emergency command for faulty devices: $err"
-                }
-
-                //poll_power_meters()
             }
             else if (timeIsUpOff && need == "off" && !pwLow && !doorsOpen) {
-
                 if (!fanCirculateAlways) {
                     if (!state.userWantsWarmer && !state.userWantsCooler) {
-                        if (enablewarning) log.warn "$thermostat should be off but still draining power, resending cmd"
-                        if (enableinfo) log.info "thermostat off 34t5zl"
+                        log.warn "$thermostat should be off but still draining power, resending cmd (ID: ${resendId})"
                         turn_off_thermostats(need, inside, thermModes, !contactsClosed)
                         state.offAttempt = now()
                     }
                 }
                 else if (need == "off" && fanCirculateAlways) {
-                    boolean thermModeNotOff = thermModes.any{ it -> it.currentValue("thermostatMode") != "off" }
-                    if (!motionActive && alwaysButNotWhenPowerSaving) {
-                        if (thermModeNotOff || (overrideThermostatModeCheckBeforeSendingCmd && state.dontChekcThermostatStateCount < state.reCheckStateCount)) {
-                            state.dontChekcThermostatStateCount += 1
-
-                            if (enableinfo) log.info "thermostat off fan auto 639t4js"
-                            turn_off_thermostats(need, inside, thermModes, !contactsClosed)
-                            set_multiple_thermostats_fan_mode("on", "fan on instead of off 2")
-
-                        }
-                    }
-                    else {
-                        if (enableinfo) log.info "fancriculateAlways is true, so not turning off the thermostat despite power discrepancy. resending fanonly() instead"
-
-                        turn_off_thermostats(need, inside, thermModes, !contactsClosed) // needed to prevent thermostat staying in "cool" or "heat" mod, thermModese
-                        if (enableinfo) log.info "thermostat fan on 47tyuz"
-                        set_multiple_thermostats_fan_mode("on", "fanOn when thermostat off 47tyuz")
-
-                    }
+                    handleFanCirculateAlways(need, inside, thermModes, contactsClosed, resendId)
                 }
             }
             else if ((!pwLow && need in ["heat", "cool"]) || (need == "off" && pwLow)) {
-                if (enabledebug) log.debug "EVERYTHING OK"
+                if (enabledebug) log.debug "EVERYTHING OK (ID: ${resendId})"
             }
             else {
-                if (enabledebug) log.debug "Auto Fix Should Kick in within time threshold"
+                if (enabledebug) log.debug "Auto Fix Should Kick in within time threshold (ID: ${resendId})"
             }
         }
     }
     catch (Exception e) {
-        log.error "pw tests ==> $e"
+        log.error "pw tests ==> $e (ID: ${resendId})"
+    }
+}
+
+def handleFanCirculateAlways(need, inside, thermModes, contactsClosed, resendId) {
+    boolean thermModeNotOff = thermModes.any{ it -> it.currentValue("thermostatMode") != "off" }
+    if (!motionActive && alwaysButNotWhenPowerSaving) {
+        if (thermModeNotOff || (overrideThermostatModeCheckBeforeSendingCmd && state.dontChekcThermostatStateCount < state.reCheckStateCount)) {
+            state.dontChekcThermostatStateCount += 1
+            log.info "thermostat off fan auto (ID: ${resendId})"
+            turn_off_thermostats(need, inside, thermModes, !contactsClosed)
+            set_multiple_thermostats_fan_mode("on", "fan on instead of off (ID: ${resendId})")
+        }
+    }
+    else {
+        log.info "fancriculateAlways is true, not turning off the thermostat. Setting fan to 'on' (ID: ${resendId})"
+        turn_off_thermostats(need, inside, thermModes, !contactsClosed)
+        set_multiple_thermostats_fan_mode("on", "fanOn when thermostat off (ID: ${resendId})")
+    }
+}
+
+
+def sendEmergencyCommand(need, currentOperatingNeed) {
+    def faulty_devices = neededThermostats.findAll{ it -> it.currentValue("thermostatOperatingState") != currentOperatingNeed }
+    faulty_devices.each { device ->
+        log.warn "Sending emergency command to ${device}"
+        device.refresh()
+        pauseExecution(1000)
+        if (device.currentValue("thermostatOperatingState") != "fanCirculate") {
+            set_thermostat_mode(device, need, "emergency resend")
+        }
     }
 }
 def fanCirculateManagement(need, target, inside, contactsClosed, motionActive, thermModes){

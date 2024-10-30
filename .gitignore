@@ -13,4 +13,15 @@ V1/
 credentials.js
 credentials.txt
 credentials.json
+*credentials*
 settings.json
+
+*.json
+
+*test*
+*draft*
+**/draft/
+**/drafts/
+
+.vs
+.vscode

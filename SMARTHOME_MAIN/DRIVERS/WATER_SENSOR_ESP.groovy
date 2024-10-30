@@ -42,8 +42,10 @@ def parse(String description) {
             switch(name) {
                 case "water":
                     if (value == "wet" || value == "dry") {
-                        sendEvent(name: "water", value: value)
-                        updateLastUpdated()
+                        if (state.lastWaterState != value){
+                            sendEvent(name: "water", value: value)
+                            state.lastWaterState = value
+                        }
                     }
                     break
                 case "temperature":

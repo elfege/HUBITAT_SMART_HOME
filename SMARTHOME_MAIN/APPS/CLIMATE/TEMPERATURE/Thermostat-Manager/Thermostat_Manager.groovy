@@ -255,7 +255,7 @@ def thermostats(){
                 // app.updateSetting("thermostatCool", [type: "capability", value:null])
                 // app.updateSetting("thermostatHeat", [type: "capability", value:null])
             }
-            if ((useBothThermostatsForCool && !useBothThermostatsForHeat) || (!useBothThermostatsForCool && useBothThermostatsForHeat)) {
+            if ((!useBothThermostatsForCool && !useBothThermostatsForHeat)) {
                 // this option becomes mandatory if only one of these two options is selected: in the other mode than the one using 2 therms, other therm must stay off (except if too cold, see logic further down)
                 app.updateSetting("keep2ndThermOffAtAllTimes", [type: "bool", value: true])
             }
@@ -320,7 +320,7 @@ def methods(){
     dynamicPage(pageProperties) {
 
         section(){
-            input "autoOverride", "bool", title: "Ighore all commands to a thermostat when it is set to 'auto'", submitOnChange: true, defaultValue: false
+            input "autoOverride", "bool", title: "Ignore all commands to a thermostat when it is set to 'auto'", submitOnChange: true, defaultValue: false
             if (autoOverride) {
                 input "overrideDuration", "number", title: "Set a time limit", description: "number in hours, 0 means unlimitted time", submitOnChange: true
             }
@@ -406,8 +406,8 @@ Are you sure ? You will lose everything your app has learned over time!</div > "
         }
         section(){
             if (sensor) {
-                input "manageThermDiscrepancy", "bool", title: "My thermosat needs to be boosted (for example, because it's too close to a window or to your HVAC", submitOnChange: true
-                if (manageThermDiscrepancy) {
+                input "needsToBeBoosted", "bool", title: "My thermosat needs to be boosted (for example, because it's too close to a window or to your HVAC", submitOnChange: true
+                if (needsToBeBoosted) {
                     input "UserSwing", "double", title: "Input your thermostat's default swing/offset", defaultValue: 0.5, submitOnChange: true
                     def text = """This is a setting made directly on your physical thermoat. If you need to cool at 73F, your thermostat will stop at 73 but not start again until 73.5 if your swing is set to 0.5. Generally this swing can be up to 2 or more degrees of variation. This input is necessary to allow this app to detect discrpancies and run emergency heating or cooling when, for example, your thermostat is located too close to a window or any other heat/cold source. Make sure you checked this setting on your thermostat directly (not accessible through device driver interface) and that it is set to your liking. See your thermostat documentation if you don't know how to modify this value."""
                     paragraph format_text(text, "white", "grey")
@@ -1594,15 +1594,17 @@ def setPointHandler(evt){
                     inside = get_inside_temperature()
                     set_target(
                         cmd,
-                        evt.value,
-                        inside,
-                        outside = get_outside_temperature(),
-                        motionActive = Active(),
-                        doorsContactsAreOpen = doorsContactsAreOpen(),
-                        contactsClosed = contactsClosed,
-                        thermModes = get_thermostats_modes(),
-                        humThres = get_humidity_threshold(inside)
-                    "5df4grlgk")
+                        evt.value.toDouble(),
+                        inside.toDouble(),
+                        get_outside_temperature().toDouble(),
+                        Active(),
+                        doorsContactsAreOpen(),
+                        contactsClosed,
+                        get_thermostats_modes(),
+                        get_humidity_threshold(inside),
+                        "5df4grlgk")
+
+                        // (cmd, target, inside, outside, motionActive, doorsContactsAreOpen, contactsClosed, thermModes, humThres, origin)
                 }
                 //
             }
@@ -1613,8 +1615,9 @@ def setPointHandler(evt){
             if (enableinfo) log.info "new $evt.name is $evt.value -------------------------------------"
             def inside = get_inside_temperature()
 
-            userWants(evt.value.toInteger(),
-                inside)
+            log.warn "evt.value: $evt.value"
+            log.warn "inside: $inside"
+            userWants(evt.value.toDouble(), inside.toDouble())
 
             def currDim = !dimmer ? state.lastThermostatInput : get_dimmer_value()
 
@@ -1641,8 +1644,7 @@ def setPointHandler(evt){
             state.inside = state.inside != null ? state.inside : inside
 
             def thermModes = get_thermostats_modes()
-
-            def needData = get_need(target, simpleModeActive, inside, outside, Active(), doorsOpen(), state.neededThermostats, thermModes, get_humidity_threshold(), "setPointHandler")
+            def needData = get_need(target, simpleModeActive, inside, outside, Active(), doorsOpen(), !contactsAreOpen(), state.neededThermostats, thermModes, get_humidity_threshold(), "setPointHandler")
                   
             def need = needData[1]
             def cmd = need == "auto" ? "setThermostatSetpoint" : "set" + "${needData[0]}" + "ingSetpoint" // "Cool" or "Heat" with a capital letter
@@ -2724,7 +2726,7 @@ def powerManagement(inside,
             thermTempTooCloseToCoolTargetdWhileInsideNotGood = thermostatTemp == target && inside >= target && !opStateOk
             thermTempTooCloseToHeatTargetdWhileInsideNotGood = thermostatTemp == target && inside <= target && !opStateOk
             thermostatTempProblem = (need == "cool" && thermTempTooCloseToCoolTargetdWhileInsideNotGood) || (need == "heat" && thermTempTooCloseToHeatTargetdWhileInsideNotGood)
-            thermTempDiscrepancy = manageThermDiscrepancy && sensor && thermostatTempProblem && contactsClosed
+            thermTempDiscrepancy = needsToBeBoosted && sensor && thermostatTempProblem && contactsClosed
 
 
             // check cooler performance and turn thermostat back on (override preferCooler bool) if needed 
@@ -2741,74 +2743,9 @@ def powerManagement(inside,
                 checkEfficiency(coolerNotEfficientEnough, boost, thermModes, need, inside, contactsClosed)
             }
             else {
-                if (enablewarning && !contactsClosed) log.warn format_text("contactsClosed = $contactsClosed", "white", "red")
+                if (enablewarning || !contactsClosed) log.warn format_text("contactsClosed = $contactsClosed | ${WindowsContact.findAll{ it -> it.currentValue('contact') == 'open'}?.join(', ')}", "white", "red")
 
-                if (manageThermDiscrepancy && thermTempDiscrepancy && contactsClosed) {
-                    state.setPointOverride = true // avoids modifying target values (in setDimmer) and prevents the app from running other normal operations
-
-                    m = ""
-                    delayBtwMessages = 5 * 60000
-                    state.lastSetpointMessage = state.lastSetpointMessage == null ? state.lastSetpointMessage : now()
-                    timeBeforeNewtOverrideBigMessage = (delayBtwMessages - (now() - state.lastSetpointMessage)) / 1000 / 60
-                    timeBeforeNewtOverrideBigMessage = timeBeforeNewtOverrideBigMessage.toDouble().round(2)
-                    if ((now() - state.lastSetpointMessage) > delayBtwMessages) {
-                        m = "SET POINT OVERRIDE - make sure your main thermostat is not too close to a window. If so, this app will attempt to keep your room at your target temperature ($target) by temporarily changing setpoints on your thermostat. This should not be affecting your input values (your target temperature)"
-                        state.lastSetpointMessage = now()
-                    }
-                    else {
-                        timeUnit = timeBeforeNewtOverrideBigMessage < 1 ? "seconds" : timeBeforeNewtOverrideBigMessage >= 2 ? "minutes" : "minute"
-                        timeDisplay = timeBeforeNewtOverrideBigMessage < 1 ? timeBeforeNewtOverrideBigMessage * 100 : timeBeforeNewtOverrideBigMessage
-                        m = "SET POINT OVERRIDE (detailed description in ${timeDisplay} ${timeUnit})"
-                    }
-
-                    if (enablewarning) log.warn format_text(m, "red", "white")
-
-                    temporarySetpoint = need == "cool" ? 62 : need == "heat" ? 85 : 72 // 72 if by any chance this went wrong
-
-                    currCSP = thermostat.currentValue("coolingSetpoint").toInteger()
-                    currHSP = thermostat.currentValue("heatingSetpoint").toInteger()
-                    boolean notSet = need == "cool" && currCSP != temporarySetpoint.toInteger() || need == "heat" && currHSP != temporarySetpoint.toInteger()
-
-
-                    if (notSet) {
-
-                        if (enabledebug) log.trace "setting $thermostat to $need"
-
-                        if (heatpumpConditionsTrue && need != "off") {
-                            if (enableinfo) log.info "$thermostat stays off due to heatpump and cold temp outside"
-                        }
-                        else {
-                            if (enablewarning) log.warn "$thermostat $cmd to temporarySetpoint $temporarySetpoint 478r6gh"
-                            state.setpointSentByApp = true // prevents new inputs to be taken as new heuristics // reset by set_dimmer() method. 
-                            runIn(3, resetSetByThisApp)
-
-                            set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, contactsClosed, thermModes, humThres, "temporarysetpoint")
-
-                        }
-
-                        if (need == "cool") // prevent thermostat firmware from circling down its setpoints
-                        {
-                            state.setpointSentByApp = true // prevents new inputs to be taken as new heuristics // reset by set_dimmer() method. 
-                            runIn(3, resetSetByThisApp)
-                            thermostat.setHeatingSetpoint(temporarySetpoint - 2)
-                            if (enableinfo) log.info "$thermostat heatingsetpoint set to ${temporarySetpoint-2} to prevent circling down SP's"
-                        }
-                        else if (need == "heat") // prevent thermostat firmware from circling down its setpoints
-                        {
-                            state.setpointSentByApp = true // prevents new inputs to be taken as new heuristics // reset by set_dimmer() method. 
-                            runIn(3, resetSetByThisApp)
-                            thermostat.setCoolingSetpoint(temporarySetpoint + 2)
-                            if (enableinfo) log.info "$thermostat coolingSetpoint set to ${temporarySetpoint+2} to prevent circling down SP's"
-                        }
-
-                        state.lastSetTime = now()
-                        return
-                    }
-                }
-                else if (!thermTempDiscrepancy && state.setPointOverride) {
-                    state.setPointOverride = false // if this line is read, then setpoint override is no longer needed
-                    if (manageThermDiscrepancy && enabledebug) log.trace  format_text("END OF SET POINT OVERRIDE - BACK TO NORMAL OPERATION", "white", "grey")
-                }
+                
 
                 if (enabledebug) log.debug "forceCommand ? $forceCommand state.forceAttempts = $state.forceAttempts | abs(inside-target) = ${Math.abs(inside-target).round(2)}"
             }
@@ -4117,7 +4054,6 @@ def resetUserWants(){
     state.userWantsWarmer = false
     state.userWantsCooler = false
 }
-
 
 /* ############################### GETTERS ############################### */
 
@@ -5546,23 +5482,75 @@ def set_target(cmd, target, inside, outside, motionActive, doorsContactsAreOpen,
 }
 def set_thermostat_mode(t, mode, origin){
     if (enablewarning) log.warn "set_thermostat_mode called from $origin"
-    try {
-        if (t.currentValue("thermostatMode") != mode || origin in ["checkthermstate force command", "remainsOffCmd"]) {
-            if (enabledebug) log.trace  "$t set to $mode (origin: $origin)"
-            if (autoOverride && t.currentValue("thermostatMode") == "auto") {
-                if (enablewarning) log.warn "$t is in auto mode - command to set to $mode ignored..."
+
+    if(t.currentValue("thermostatMode") != auto || !autoOverride){ 
+        try{
+            // if user doesn't want to ignore current thermostat settings, target reference is no longer the dimmer, but the thermostat's current value
+            // this supercedes any other specific settings, including setpoints automatic selection 
+            if(!simpleModeActive()){
+                if(!ignoreTarget && !doNotSendAnyCoolHeatOffComm){
+                
+                        
+                        log.debug "needsToBeBoosted = $needsToBeBoosted"
+                        if(needsToBeBoosted) {
+                            log.warn "Boosting...dimmer input ignored. Enable 'ignore target' or 'do not send any cool/heat command' in settings to prevent this."
+                            state.setpointSentByApp = true
+                            log.debug "required mode = $mode"
+                            def boost_setPoint = mode == "cool" ? 62 : 86
+                            log.debug "boost_setPoint: $boost_setPoint"
+                            def cmd = mode == "cool" ? "setCoolingSetpoint" : mode == "heat" ? "setHeatingSetpoint" : "setThermostatSetpoint"
+                            def query = cmd == "setCoolingSetpoint" ? "coolingSetpoint" : cmd == "setHeatingSetpoint" ? "heatingSetpoint" : "thermostatSetpoint"
+                            if ((isMideaThermostat(t) || t.currentValue("thermostatMode") == "auto") && t.hasCommand("setThermostatSetpoint")){
+                                cmd = "setThermostatSetpoint"
+                            }
+                            log.debug "boost setpoint cmd: $cmd"
+                            try{
+                                if(t.currentValue(query) == boost_setPoint) {
+                                    log.debug "${t}.${cmd}(${boost_setPoint})"
+                                    t."${cmd}"(boost_setPoint)
+                                }
+                                    log.debug "$t already set to boost_setpoint:$boost_setpoint"
+                                }
+                            } catch (Exception err){
+                                log.error "Exception in setting boost temperature: ${err}"
+
+                            }
+                        }
+                        runIn(10, set_turbo)
+                        return
+                    
+                }
             }
             else {
-                t.setThermostatMode(mode)
+                log.debug "Simple mode active: ignoring boost mode"
+            }
+        } catch (Exception e){
+            log.error "Failed to adjust value in set boost mode::: ${e}"
+        }
+
+
+        try {
+            if (t.currentValue("thermostatMode") != mode || origin in ["checkthermstate force command", "remainsOffCmd"]) {
+                if (enabledebug) log.trace  "$t set to $mode (origin: $origin)"
+                if (autoOverride && t.currentValue("thermostatMode") == "auto") {
+                    if (enablewarning) log.warn "$t is in auto mode - command to set to $mode ignored..."
+                }
+                else {
+                    t.setThermostatMode(mode)
+                }
+            }
+            else {
+                if (enabledebug) log.trace  "$t already set to $mode (set_thermostat_mode origin: $origin)"
             }
         }
-        else {
-            if (enabledebug) log.trace  "$t already set to $mode (set_thermostat_mode origin: $origin)"
+        catch (Exception e) {
+            if (enablewarning) log.warn "Object class error for 't' in set_thermostat - item skipped: $e"
         }
+        }
+    else {
+        log.debug "$t is in auto. skipping."
     }
-    catch (Exception e) {
-        if (enablewarning) log.warn "Object class error for 't' in set_thermostat - item skipped: $e"
-    }
+    
 }
 def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionActive, doorsContactsAreOpen, contactsClosed, thermModes, humThres, origin){
     /**
@@ -5650,8 +5638,25 @@ def set_thermostat_target_ignore_setpoint(cmd, target, inside, outside, motionAc
         log.error "set_thermostat_target_ignore_setpoint: $e"
     }
 }
+def set_turbo(){
+    if(thermostat.hasCommand("controlTurboMode")) {
+        def currentTurboMode = thermostat.currentValue("turboMode")
+        if(currentTurboMode != "on") {  // Only send command if not already on
+            log.warn "Using turbo mode"
+            try {
+                thermostat.controlTurboMode("on")
+            } catch (Exception error) {
+                log.error("Turbo mode command failed: ${error}")
+            }
+        } else {
+            if(enableinfo) log.info "Turbo mode is already on"
+        }
+    }
+}
 def set_thermostat_target(t, cmd, target, override, origin){
     if (dev_mode) log.debug "set_thermostat_target called from $origin | ignoreTarget: $ignoreTarget"
+
+    
 
     if (ignoreTarget && !override) {
         if (dev_mode) log.debug "set_thermostat_target exiting due to ignoreTarget setting"
@@ -6278,6 +6283,26 @@ Boolean writeToFile(String fileName, String data) {
         log.error "HTTP POST failed: ${e.message}"
         return false
     }
+}
+Boolean isMideaThermostat(thermostat) {
+    try {
+        // First check if it's likely a Midea by verifying presence of turbo mode command
+        def hasTurboMode = thermostat.hasCommand("controlTurboMode")
+        
+        // Then verify if it has the problematic single setpoint behavior
+        def coolingSetpoint = thermostat.currentValue("coolingSetpoint")
+        def heatingSetpoint = thermostat.currentValue("heatingSetpoint")
+        def thermostatSetpoint = thermostat.currentValue("thermostatSetpoint")
+        
+        // If all setpoints are identical, and it has turbo mode, it's likely a Midea
+        if (hasTurboMode && coolingSetpoint == heatingSetpoint && heatingSetpoint == thermostatSetpoint) {
+            log.debug "Detected Midea thermostat behavior - will use setThermostatSetpoint instead"
+            return true
+        }
+    } catch (Exception e) {
+        log.error "Error detecting thermostat type: ${e}"
+    }
+    return false
 }
 
 /* ################################# POLLING AND LOGGING ################################# */

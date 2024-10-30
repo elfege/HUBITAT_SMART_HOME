@@ -48,6 +48,14 @@ def mainPage() {
                 paragraph "$app.label will continuously monitor critical events such as CPU severe load, radios and cloud connectivity. It will assess the severity and reboot the hub if deemed necessary"
             }
             input "rebootThreshold", "number", title: "Number of failed tests before reboot", defaultValue: 3, range: "1..10", submitOnChange: true
+
+            // local_http_relay_switch Controls
+            input "local_http_relay_switch", "bool", title: "Use a web/http relay power switch to <b><u>POWER CYCLE</u></b> your <b><u>LOCAL</u></b> hub", submitOnChange:true, defaultValue:false
+            if(local_http_relay_switch){
+                input "local_http_relay_switch_url", "text", title: "Url", required: true, description:"enter your http switch API reset url", submitOnChange:true
+                input "local_http_relay_username", "text", title: "Username", defaultValue: "admin", required: false
+                input "local_http_relay_password", "text", title: "Password", defaultValue: "admin", required: false
+            }
         }
         section("Remote Hub Monitoring") {
             input "enableRemote", "bool", title: "Enable remote hub monitoring?", defaultValue: false, submitOnChange: true
@@ -103,8 +111,8 @@ def mainPage() {
                 }
                 input "createRemoteBackup", "button", title: "Create a new backup on remote hub"
                 
-                if (state.backupInProgress) {
-                    def backup_status = state.backupStillInProgress ? "Backup still in progress..." : "Backup in progress..."
+                if (state.localBackupInProgress) {
+                    def backup_status = state.localBackupStillInProgress ? "Backup still in progress..." : "Backup in progress..."
                     paragraph """
                         <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                         $backup_status
@@ -120,15 +128,15 @@ def mainPage() {
                             }, 30000);
                         </script>
                     """
-                    state.backupStillInProgress = false
+                    state.localBackupInProgress = false
                     
 
-                } else if (state.backupComplete) {
-                    paragraph state.backupSuccess ? "Backup completed successfully!" : "Backup failed. Please check logs."
+                } else if (state.localBackupComplete) {
+                    paragraph state.localBackupSuccess ? "Backup completed successfully!" : "Backup failed. Please check logs."
                 }
-                input "checkBackupStatus", "button", title: "Check Backup Status", submitOnChange: true
+                input "checkLocalBackupStatus", "button", title: "Check Backup Status", submitOnChange: true
                 input "stopBackup", "button", title: "Cancel Backup Request", submitOnChange: true
-                input "cancelReboot", "button", title: "Cancel"
+                input "cancelReboot", "button", title: "Cancel Reboot"
                 
                 
             }
@@ -140,29 +148,33 @@ def mainPage() {
                 input "cancelBackup", "button", title: "Skip Backup and Reset"
             }
 
-            // EzOutlet Controls
-            if (EzOutlet2) {
-                input "resetEzOutlet", "button", title: "Reset Remote Hub via EzOutlet", submitOnChange: true
-                if (state.confirmEzOutletReset) {
-                    paragraph """
-                        <div style="color: red; font-weight: bold;">
-                            WARNING: You are about to power cycle the remote hub using the EzOutlet.
-                            This should only be used if the hub has become completely unreachable.
-                            Are you sure you want to proceed?
-                        </div>
-                        <script>
-                        setTimeout(function() {
-                            location.reload();
-                        }, 30000);
-                        </script>
-                    """
-                    input "confirmEzOutletReset", "button", title: "Yes, Reset EzOutlet", submitOnChange: true
-                    input "cancelEzOutletReset", "button", title: "Cancel", submitOnChange: true
+            // remote relay switch confirmation message (see remotePage() separate dynamicPage's handler for details)
+            if (remote_http_relay_switch) {
+                input "reset_remote_http_relay_switch", "button", title: "Power Cycle <b><u>Remote Hub</u></b>", submitOnChange: true
+                if (state.confirm_remote_http_relay_switch_reset) {
+                    paragraph warning_with_javascript()
+
+                    input "confirm_remote_http_relay_switch_reset", "button", title: "Yes, Reset local_http_relay_switch", submitOnChange: true
+                    input "cancel_remote_http_relay_switch_reset", "button", title: "Cancel Remote Power Cycle", submitOnChange: true
                 }
             }
 
+            // local relay switch button and confirmation message (see remotePage() 'Local Hub Monitoring' section for details)
+            if (local_http_relay_switch) {
+                input "reset_local_http_relay_switch", "button", title: "Power Cycle Local Hub", submitOnChange: true
+
+                // confirmation message
+                if (state.confirm_local_http_relay_switch_reset) {
+                    paragraph warning_with_javascript()
+                    input "confirm_local_http_relay_switchReset", "button", title: "Yes, Reset local_http_relay_switch", submitOnChange: true
+                    input "cancel_local_http_relay_switch_reset", "button", title: "Cancel Local Power Cycle", submitOnChange: true
+                }
+            }
+            
+
             // Maintenance Actions
             input "clearRebootHistoryBtn", "button", title: "Clear Reboot History"
+            input "clearStates", "button", title: "Clear States"
             
             if (state.installed) {
                 input "update", "button", title: "Update"
@@ -172,6 +184,37 @@ def mainPage() {
         }
         section("Logging") {
             input "enableLogging", "bool", title: "Enable debug logging", defaultValue: false, submitOnChange: true
+        }
+    }
+}
+
+def warning_with_javascript(){
+
+    return """
+    <div style="color: red; font-weight: bold;">
+        WARNING: You are about to power cycle the remote hub using the local_http_relay_switch.
+        This should only be used if the hub has become completely unreachable.
+        Are you sure you want to proceed?
+    </div>
+    <script>
+    let timeoutId = setTimeout(function() {
+        location.reload();
+    }, 30000);
+    </script>
+
+    """
+}
+
+def cancel_javascript(){
+    state.lastBackupCheck = now() // force a page refresh
+    dynamicPage(name: "scriptPage", title: "Test") {
+        section(){
+            paragraph """
+            <script>
+            clearTimeout(timeoutId)
+            </script>
+
+            """
         }
     }
 }
@@ -189,11 +232,11 @@ def remotePage() {
             }
         }
         section ("Reset Remote Hub With A Network Switch (failsafe)"){
-            input "EzOutlet2", "bool", title: "Use EzOutlet2 to reset your hub's power as a fallback if remote reboot fails", submitOnChange:true, defaultValue:false
-            if(EzOutlet2){
-                input "EzOutlet2IP", "text", title: "Control an EzOutlet2 ethernet power switch", required: true, description:"enter your EzOutlet2's IP", submitOnChange:true
-                input "ez_username", "text", title: "Username", defaultValue: "admin", required: true
-                input "ez_password", "text", title: "Password", defaultValue: "admin", required: true
+            input "remote_http_relay_switch", "bool", title: "Use a web/http relay power switch to <b><u>POWER CYCLE</u></b> your <b><u>REMOTE</u></b> hub if reboot command failed", submitOnChange:true, defaultValue:false
+            if(remote_http_relay_switch){
+                input "remote_http_relay_switch_url", "text", title: "Url", required: true, description:"enter your http switch API reset url", submitOnChange:true
+                input "remote_http_relay_username", "text", title: "Username", defaultValue: "admin", required: false
+                input "remote_http_relay_password", "text", title: "Password", defaultValue: "admin", required: false
             }
         }
         if (remoteConnectionString && clientName) {
@@ -210,7 +253,6 @@ def cancel_devmode() {
 }
 
 //#######################################-#######################################
-
 //#                               MAPPINGS                                       
 //#######################################-#######################################
 
@@ -219,6 +261,7 @@ mappings {
     path("/ping") { action: [GET: "parsePing"] }
     path("/confirmPing") { action: [GET: "confirmPing"] }
     path("/rebooting") { action: [GET: "registerRebootHub"] }
+    path("/localHubRebooting") { action: [GET: "handleLocalHubRebooting"] } // Add this line
     path("/getManagementToken") { action: [GET: "sendRemoteManagementToken"] }
     path("/receiveManagementToken") { action: [GET: "receiveManagementToken"] }
 }
@@ -289,6 +332,7 @@ def subscribeToEvents() {
     subscribe(location, "systemStart", systemStartHandler)
     subscribe(location, "zigbeeStatus", zigbeeStatusHandler)
     subscribe(location, "zwaveStatus", zwaveStatusHandler)
+    subscribe(location, "zwaveCrashed", zwaveStatusHandler)
     subscribe(location, 'cloudStatus', cloudStatusHandler)
 
     if(useMotionSensorsAndSwitches){
@@ -350,13 +394,15 @@ def appButtonHandler(btn) {
             state.confirmReboot = false
             state.forceReboot = false
             state.cancelReboot = true
-            state.interrupPauseLoop = false
+            state.interrupPauseLoop = true
+            cancel_javascript()
             break
         case "cancelBackup":
             state.confirmReboot = false
             state.forceReboot = false
             state.cancelReboot = false
             state.interrupPauseLoop = true
+            cancel_javascript()
             break
         case "testNow":
         case "testNow":
@@ -375,29 +421,51 @@ def appButtonHandler(btn) {
             def currentHubs = settings.additionalHubs ?: []
             app.updateSetting("additionalHubs", currentHubs + [""])
             break
-        case "resetEzOutlet":
-            state.confirmEzOutletReset = true
-            state.interrupPauseLoop = true
+        
+        // remote
+        case "reset_remote_http_relay_switch":
+            state.confirm_remote_http_relay_switch_reset = true
+            state.interrupPauseLoop = false
             break
-        case "confirmEzOutletReset":
-            resetRemoteUsingEzOutlet2()
-            state.confirmEzOutletReset = false
+        case "confirm_remote_http_relay_switch_reset":
+            reset_with_http_switch(remote_http_relay_switch_url, remote_http_relay_username, remote_http_relay_password, local=false)
+            state.confirm_remote_http_relay_switch_reset = false
+            state.cancelReboot = false
             break
-        case "cancelEzOutletReset":
-            state.confirmEzOutletReset = false
+        case "cancel_remote_http_relay_switch_reset":
+            state.confirm_remote_http_relay_switch_reset = false
+            cancel_javascript()
+            break
+        
+        // local
+        case "reset_local_http_relay_switch":
+            state.confirm_local_http_relay_switch_reset = true
+            state.interrupPauseLoop = false
+            break
+        case "confirm_local_http_relay_switchReset":
+            reset_with_http_switch(local_http_relay_switch_url, local_http_relay_username, local_http_relay_password, local=true)
+            state.confirm_local_http_relay_switch_reset = false
+            state.cancelReboot = false
+            break
+        case "cancel_local_http_relay_switch_reset":
+            state.confirm_local_http_relay_switch_reset = false
+            cancel_javascript()
             break
         case "createRemoteBackup":
             createRemoteBackup()
             break
         case "stopBackup": 
+            log.debug("stopBackup")
             state.interrupPauseLoop = true
-            state.backupInProgress = false
-            state.backupComplete = false
-            state.backupSuccess = false
+            state.localBackupInProgress = false
+            state.localBackupComplete = false
+            state.localBackupSuccess = false
             break
-        case "checkBackupStatus":
-            checkBackupStatus()
+        case "checkLocalBackupStatus":
+            checkLocalBackupStatus()
             break
+        case "clearStates":
+            clear_states()
         default:
             if (btn.startsWith("rebootAdditionalHub_")) {
                 def ip = btn.split("_")[1..- 1].join('.') // Convert back to IP format
@@ -405,6 +473,32 @@ def appButtonHandler(btn) {
             }
     }
 }
+
+def clear_states() {
+    state.localBackupInProgress = false
+    state.localBackupStillInProgress = false
+    state.localBackupComplete = false
+    state.localBackupSuccess = false
+    state.confirmReboot = false
+    state.confirm_remote_http_relay_switch_reset = false
+    state.confirm_local_http_relay_switch_reset = false
+    state.installed = false
+    state.pausedRemoteReboot = false
+    state.paused = false
+    state.cancelReboot = false
+    state.interrupPauseLoop = false
+    state.forceReboot = false
+    state.remoteHubChecksPaused = false
+    state.remoteResponded = false
+    state.remoteBackupComplete = false
+    state.remoteBackupInProgress = false
+    state.remoteBackupSuccess = false
+    state.remoteBackupStillInProgress = false
+    state.localBackupStillInProgress = false
+    state.remoteRebooting = false
+    log.debug ("All states variables set to false")
+}
+
 
 def hubInfoHandler(evt) {
     log.debug "Hub info event: ${evt.descriptionText}"
@@ -435,8 +529,8 @@ def zigbeeStatusHandler(evt) {
 }
 
 def zwaveStatusHandler(evt) {
-    log.debug "Z-Wave status changed: ${evt.value}"
-    if (evt.value == "down") {
+    log.warn "Z-Wave status changed: ${evt.value}"
+    if (evt.value in ["zwaveCrashed", "down"]) {
         log.warn "Z-Wave network is down"
         rebootHub(override=true)
     }
@@ -469,7 +563,6 @@ def cloudStatusHandler(evt) {
 }
 
 //#######################################-#######################################
-
 //#                           HEALTH CHECK METHODS                               
 //#######################################-#######################################
 
@@ -519,7 +612,6 @@ def handleCriticalEvent(String reason) {
 }
 
 //#######################################-#######################################
-
 //#                           REMOTE HUB METHODS                                 
 //#######################################-#######################################
 
@@ -575,7 +667,6 @@ def checkResult() {
         resumeNormalOperations()
     }
 }
-
 
 def checkRemoteHubrebootHub() {
     log.info "Checking if ${clientName} has successfully rebooted..."
@@ -724,7 +815,6 @@ def refreshManagementToken() {
     }
 }
 
-
 def sendGetCommand(String command, String overrideUri = null) {
     def serverURI = overrideUri ?: state.remoteUri
     def fullUri = serverURI + command
@@ -762,11 +852,6 @@ def sendGetCommand(String command, String overrideUri = null) {
 }
 
 
-
-
-
-
-
 //#######################################-#######################################
 //#                        REMOTE HUB REBOOT PROCEDURE                           
 //#######################################-#######################################
@@ -800,15 +885,13 @@ def rebootRemoteHub(override = false) {
     unschedule(remoteServerHealth)
 
     try {
-        // def rebootSuccess = reboot_remote_hub()
-
         def rebootSuccess = reboot_remote_hub()
 
         if (!rebootSuccess) {
             log.warn "POST reboot command failed"
-            if (EzOutlet2) {
-                log.warn "Resetting the EzOutlet2... "
-                rebootSuccess = resetRemoteUsingEzOutlet2()
+            if (remote_http_relay_switch) {
+                log.warn "Resetting the remote_http_relay_switch... "
+                rebootSuccess = reset_with_http_switch(url, username, password)
             }
             if(!rebootSuccess){
                 resumeNormalOperations()
@@ -845,7 +928,7 @@ def reboot_remote_hub() {
     ]
 
     for (rebootUri in rebootUris) {
-	    log.debug "rebootUri   :  $rebootUri"
+	    log.debug "rebootUri : $rebootUri"
         success = false
 
         try {
@@ -853,7 +936,7 @@ def reboot_remote_hub() {
                 [
                     uri: rebootUri
                 ]
-            ) 
+            )
             {
                 resp -> log.debug "response from hub: ${resp.data.message}"
                 if(resp.data.message == "Hub rebooting"){
@@ -942,7 +1025,6 @@ def checkIfHubRebooted() {
     }
 }
 
-
 def getRebootCommandToRemoteHub() {
     def serverURI = state.remoteUri.split('/')[0..2].join('/')
     def rebootUri = "${serverURI}:8081/api/rebootHub"
@@ -980,53 +1062,84 @@ def getMACAddress(){
     return remoteMAC
 }
 
-def resetRemoteUsingEzOutlet2() {
+def reset_with_http_switch(url, username, password, local=true) {
     if (!isRemoteRebootAllowed()) {
-        log.warn "EzOutlet reset prevented due to cooldown period"
-        sendNotification("Remote hub ${clientName}: EzOutlet reset prevented due to cooldown period. Please check manually.")
+        log.warn "local_http_relay_switch reset prevented due to cooldown period"
+        sendNotification("Remote hub ${clientName}: local_http_relay_switch reset prevented due to cooldown period. Please check manually.")
         return
     }
 
-    def backupSuccess = false
-    def resetUri = "http://${EzOutlet2IP}/reset.cgi"
-    
-    createRemoteBackup()
-
-    // Wait for backup to complete
-    def timeout = 300 // 5 minutes timeout
-    def startTime = now()
-    while (!state.backupComplete && now() - startTime < timeout * 1000 && !state.cancelReboot && !state.interrupPauseLoop) {
-        pause(1000) // Wait for 1 second
-        log.debug "waiting for backup to finish..."
+     if(local){
+        createLocalBackup()
+    } else {
+        createRemoteBackup()
     }
-    
-    if(state.cancelReboot){
-        log.warn "EzOutlet Reset canceled at user request"
+
+     // Start monitoring the backup progress
+    state.backupStartTime = now()
+        monitorBackupProgress([url: url, username: username, password: password, local: local])
+}
+
+def monitorBackupProgress(data) {
+
+    def url = data.url
+    def username = data.username
+    def password = data.password
+    def local = data.local
+
+    def timeout = 300 // 5 minutes in seconds
+    def elapsedTime = (now() - state.backupStartTime) / 1000
+
+    if (state.cancelReboot || state.interrupPauseLoop) {
+        log.warn "Reset canceled by user request"
         state.cancelReboot = false
+        state.interrupPauseLoop = false
         return
     }
-    if(state.interrupPauseLoop){
-        state.handleResetSuccess = false
-        log.warn "Pause loop stopped"
+
+    def backupComplete = local ? state.localBackupComplete : state.remoteBackupComplete
+
+    if (backupComplete || elapsedTime >= timeout) {
+        if (backupComplete) {
+            log.debug "Backup completed successfully"
+        } else {
+            log.warn "Backup timed out after ${timeout} seconds"
+        }
+        proceedWithReset(url, username, password, local)
+    } else {
+        log.debug "Waiting for backup to finish... elapsed time: ${elapsedTime}s"
+        // Schedule this method to run again in 3 seconds
+        log.debug "calling: runIn(3, 'monitorBackupProgress', [data: [url: url, username: username, password: password, local: local]])"
+        runIn(3, "monitorBackupProgress", [data: data])
+
     }
+}
+    
+def proceedWithReset(url, username, password, local) {
+    log.debug "Proceeding with reset for ${local ? 'local' : 'remote'} hub"
 
-    if (!state.backupComplete) {
-        log.warn "Backup timed out after ${timeout} seconds"
+    log.debug "url: ${url}"
+    log.debug "username: ${url}"
+    log.debug "password: ${url}"
+    log.debug "local: ${url}"
+
+    if(url.contains('http://')){
+        normalized_url = url.minus('http://')
     }
+    def resetUri = "http://${normalized_url}"
+    // ip/reset.cgi
 
-    // log.warn formatText("NO RESET - TEST MODE!", "white", "red")
-    // return 
+    log.debug "Sending reset command to http relay switch at $resetUri (url: $url)"
 
-    if (!backupSuccess) {
-        log.warn "Proceeding with EzOutlet2 reset without successful backup"
-    }
-
-    log.debug "Sending reset command to EzOutlet2 at $resetUri"
+    // ########################################################################################################
+    log.warn formatText("NO WEB RELAY RESET CMD EXECUTED - TEST MODE!", "white", "red")
+    return
+    // ########################################################################################################
 
     def reqParamsAuth = [
         uri: resetUri,
         headers: [
-            'Authorization': "Basic ${(ez_username + ':' + ez_password).bytes.encodeBase64()}"
+            'Authorization': "Basic ${(remote_http_relay_username + ':' + remote_http_relay_password).bytes.encodeBase64()}"
         ]
     ]
 
@@ -1043,55 +1156,105 @@ def resetRemoteUsingEzOutlet2() {
                 resetSuccess = true
                 handleResetSuccess(resp, backupSuccess)
             } else {
-                log.warn "Failed to reset EzOutlet2 with auth: ${resp.status}, ${resp.data}"
+                log.warn "Failed to reset http relay switch with auth: ${resp.status}, ${resp.data} (url: $url)"
             }
         }
     } catch (Exception e) {
-        log.warn "Failed to send EzOutlet2 reset command with auth: ${e.message}"
+        log.warn "Failed to send http relay switch reset command with auth: ${e.message} (url: $url)"
     }
 
     // If first attempt failed, try without authentication
     if (!resetSuccess) {
-        log.debug "Retrying EzOutlet2 reset without authentication"
+        log.debug "Retrying http relay switch reset without authentication (url: $url)"
         try {
             httpGet(reqParamsNoAuth) { resp ->
                 if (resp.status == 200) {
                     resetSuccess = true
                     handleResetSuccess(resp, backupSuccess)
                 } else {
-                    log.warn "Failed to reset EzOutlet2 without auth: ${resp.status}, ${resp.data}"
+                    log.warn "Failed to reset http relay switch without auth: ${resp.status}, ${resp.data} (url: $url)"
                 }
             }
         } catch (Exception e) {
-            log.error "Failed to send EzOutlet2 reset command without auth: ${e.message}"
+            log.error "Failed to send http relay switch reset command without auth: ${e.message} (url: $url)"
         }
     }
 
     if (!resetSuccess) {
-        log.error "All attempts to reset EzOutlet2 failed"
-        sendNotification("Remote hub ${clientName}: All attempts to send EzOutlet2 reset command failed")
+        log.error "All attempts to reset http relay switch failed (url: $url)"
+        sendNotification("Remote hub ${clientName}: All attempts to send http relay switch reset command failed (url: $url)" )
     }
 }
 
-private def handleResetSuccess(resp, backupSuccess) {
-    log.info "EzOutlet2 reset command sent successfully"
-    log.info "Reset successful: ${resp.data}"
-    state.lastRemoteReboot = now()
-    state.handleResetSuccess = false
+def soft_local_shutdown(){
+    // to be implemented with an app button. For later dev. 
+    try {
+        httpPost([
+            uri: "http://localhost:8080",
+            path: "/hub/shutdown",
+            timeout: 10
+        ]) {
+            response ->
+                log.info "Shutdown command sent successfully"
+        }
+    
+    } catch (Exception e) {
+        log.error "All Shutdown attempts failed. Final error: ${e.message}"
+        sendNotification("Failed to Shutdown hub. Manual intervention is required.")
+        if (enableRemote) {
+            resumeRemoteHubChecks()
+        }
+        return
+    }
+}
+
+def soft_remote_shutdown(){
+   // to be implemented with an app button. For later dev. 
+    def success = false
+    try {
+        httpPost([
+            uri: "http://localhost:8080",
+            path: "/hub/shutdown",
+            timeout: 10
+        ]) {
+            response ->
+                log.info "Shutdown command sent successfully"
+                return true
+        }    
+    } catch (Exception e) {
+        log.error "All Shutdown attempts failed. Final error: ${e.message}"
+        sendNotification("Failed to Shutdown hub. Manual intervention is required.")
+        if (enableRemote) {
+            resumeRemoteHubChecks()
+        }
+        return false
+    }
+}
+
+private def handleResetSuccess(resp, backupSuccess, local=true) {
+    log.info "http power cycle reset command sent successfully"
+    log.info "Reset successful: ${resp.data}"    
     state.cancelReboot = false
-    sendNotification("Remote hub ${clientName}: EzOutlet2 reset command sent successfully from ${location.name}" + 
-    (backupSuccess ? " (backup created)" : " (backup failed)"))
+    if(!local) {
+        state.lastRemoteReboot = now()
+        sendNotification("Remote hub ${clientName}: http power cycle reset command sent successfully from ${location.name} ${!local ?: 'to ${clientName}'} + (backupSuccess ? ' (backup created)' : ' (but backup failed)')")
+    }
+    cancel_javascript()
 }
 
 def createRemoteBackup() {
-    if (state.backupInProgress) {
-        log.warn "Backup already in progress"
+    log.debug "executing createRemoteBackup"
+    if (state.remoteBackupInProgress) {
+        log.warn "Backup already in progress - backup operation canceled"
+        state.interrupPauseLoop = true
         return
+    } else {
+        state.interrupPauseLoop = false
     }
 
-    state.backupInProgress = true
-    state.backupComplete = false
-    state.backupSuccess = false
+    state.remoteBackupInProgress = true
+    state.remoteBackupComplete = false
+    state.remoteBackupSuccess = false
 
     def baseUri = state.remoteUri.split('/')[0..2].join('/')
     def backupUri = "${baseUri}/hub/backupDB?fileName=latest"
@@ -1100,7 +1263,7 @@ def createRemoteBackup() {
 
     try {
         asynchttpGet(
-            'handleBackupResponse', 
+            'handleRemoteBackupResponse', 
             [
                 uri: backupUri,
                 timeout: 300  // 5 minutes timeout for backup
@@ -1109,27 +1272,96 @@ def createRemoteBackup() {
         )
     } catch (Exception e) {
         log.error "Failed to initiate backup: ${e.message}"
-        state.backupInProgress = false
-        state.backupComplete = true
-        state.backupSuccess = false
+        state.remoteBackupInProgress = false
+        state.remoteBackupComplete = true
+        state.remoteBackupSuccess = false
     }
 }
 
-def handleBackupResponse(response, data) {
-    state.backupInProgress = false
-    state.backupComplete = true
+def createLocalBackup() {
+    log.debug "executing createLocalBackup"
+    if (state.localBackupInProgress) {
+        log.warn "Backup already in progress - backup operation canceled"
+        state.interrupPauseLoop = true
+        return
+    } else {
+        state.interrupPauseLoop = false
+    }
+
+    state.localBackupInProgress = true
+    state.localBackupComplete = false
+    state.localBackupSuccess = false
+
+    def backupUri = "http://localhost:8080/hub/backupDB?fileName=latest"
+    // ${location.hub.localIP}
+
+    log.debug "Attempting to create a backup at ${backupUri}"
+
+    try {
+        asynchttpGet(
+            'handleLocalBackupResponse', 
+            [
+                uri: backupUri,
+                timeout: 300  // 5 minutes timeout for backup
+            ],
+            [:]
+        )
+    } catch (Exception e) {
+        log.error "Failed to initiate backup: ${e.message}"
+        state.localBackupInProgress = false
+        state.localBackupComplete = true
+        state.localBackupSuccess = false
+    }
+}
+
+def handleLocalBackupResponse(response, data) {
+    state.localBackupStillInProgress = false // not to be mistaken with state.localBackupInProgress
+    state.localBackupComplete = true
     
     if (response.hasError()) {
         log.error "Backup failed: ${response.getErrorMessage()}"
-        state.backupSuccess = false
+        state.localBackupSuccess = false
+    } else {
+        def status = response.status
+        if (status == 200) {
+            log.info "Backup created successfully on local hub"
+            state.localBackupSuccess = true
+        } else {
+            log.warn "Failed to create backup. Status code: ${status}"
+            state.localBackupSuccess = false
+        }
+    }
+    
+    // Forces a page refresh
+    state.lastBackupCheck = now()
+}
+
+def checkRemoteBackupStatus() {
+    if (!state.remoteBackupComplete && !state.interrupPauseLoop) {
+        state.remoteBackupStillInProgress = true // not the same as remoteBackupInProgress
+        log.debug "Backup still in progress"
+    } else {
+        state.remoteBackupInProgress = false
+        log.debug "Backup process completed"
+    }
+    // The page will refresh when this button is pressed due to submitOnChange: true
+}
+
+def handleRemoteBackupResponse(response, data) {
+    state.remoteBackupStillInProgress = false // not to be mistaken with state.remoteBackupInProgress
+    state.remoteBackupComplete = true
+    
+    if (response.hasError()) {
+        log.error "Backup failed: ${response.getErrorMessage()}"
+        state.remoteBackupSuccess = false
     } else {
         def status = response.status
         if (status == 200) {
             log.info "Backup created successfully on remote hub"
-            state.backupSuccess = true
+            state.remoteBackupSuccess = true
         } else {
             log.warn "Failed to create backup. Status code: ${status}"
-            state.backupSuccess = false
+            state.remoteBackupSuccess = false
         }
     }
     
@@ -1137,15 +1369,16 @@ def handleBackupResponse(response, data) {
     state.lastBackupCheck = now()
 }
 
-def checkBackupStatus() {
-    if (!state.backupComplete && !state.interrupPauseLoop) {
-        state.backupStillInProgress = true
+// for U.I. only
+def checkLocalBackupStatus() {
+    if (!state.localBackupComplete && !state.interrupPauseLoop) {
+        state.localBackupStillInProgress = true // not the same as state.remoteBackupInProgress
         log.debug "Backup still in progress"
     } else {
-        state.backupStillInProgress = false
+        state.localBackupStillInProgress = false
         log.debug "Backup process completed"
+        cancel_javascript() // cancel the page refresh interval
     }
-    // The page will refresh when this button is pressed due to submitOnChange: true
 }
 
 
@@ -1218,7 +1451,22 @@ def registerRebootHub() {
 
 def notifyRemoteHubOfrebootHub() {
     log.info "Notifying remote hub of local reboot"
-    sendGetCommand("/localHubRebooting")
+    
+    // Add mapping check
+    if (!enableRemote || !state.remoteUri) {
+        log.debug "Remote hub notifications disabled or not configured - skipping notification"
+        return
+    }
+
+    try {
+        
+        sendGetCommand("/localHubRebooting")
+
+    } catch (Exception e) {
+        // We'll let this exception bubble up to be handled by the caller
+        log.error "Failed to notify remote hub: ${e.message}"
+        throw e
+    }
 
     // Send notification to selected devices
     def message = "${location.name} hub is rebooting"
@@ -1295,18 +1543,37 @@ def rebootHub(override = false) {
             return
         }
         if (!isRebootAllowed(override)) {
-            log.warn "Reboot prevented due to excessive reboot frequency"
+            def m = "Reboot prevented due to excessive reboot frequency"
+            log.error m
+            sendNotification(m)
             return
         }
     }
 
     log.warn "Initiating ${location.name} due to failed tests"
 
+    // inform reboot hub
+    try {
+        notifyRemoteHubOfrebootHub()
+    } catch (Exception e){
+        log.error "failed to notify remote hub! ${e}"
+    }
+
     // Add this reboot to the history
-    addRebootToHistory()
+    try {
+        addRebootToHistory()
+    } catch (Exception e){
+        log.error "failed to update reboot history! ${e}"
+    }
+    
 
     // Notify about the reboot
-    sendNotification("Initiating hub reboot due to failed tests")
+    try {
+        sendNotification("Initiating hub reboot due to failed tests")
+    } catch (Exception e){
+        log.error "failed to send notification to notification devices! ${e}"
+    }
+    
 
     // Pause remote hub pinging if applicable
     if (enableRemote) {
@@ -1315,7 +1582,8 @@ def rebootHub(override = false) {
 
     try {
         httpPost([
-            uri: "http://${location.hub.localIP}:8080",
+            uri: "http://localhost:8080",
+            // ${location.hub.localIP}
             path: "/hub/reboot",
             timeout: 10
         ]) {

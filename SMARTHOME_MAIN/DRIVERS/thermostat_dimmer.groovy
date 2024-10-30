@@ -120,8 +120,8 @@ def setLevel(value)
 {
     log.info "setLevel $value"
 
-    max_value = state.max_value
-    log.debug "max_value (setLevel): $state.max_value"
+    max_value = state.max_value == null ? 130 : state.max_value
+    log.debug "max_value (setLevel): $max_value"
     
     // Ensure that the level does not exceed 110%
     if (value > max_value.toInteger()) {

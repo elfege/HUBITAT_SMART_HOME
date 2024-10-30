@@ -111,7 +111,6 @@ def parse(String description) {
 
 }
 
-
 def on() {
     log.debug "sending 'curtains opening'"
     //sendEvent(name: "switch", value: "on") 
@@ -120,7 +119,7 @@ def on() {
 
 def off() {
     log.debug "sending 'curtains closing'"
-    //sendEvent(name: "switch", value: "off") 
+    sendEvent(name: "switch", value: "off") 
     sendEthernet("off")
 }
 

@@ -478,6 +478,7 @@ def on() {
     switches.each { sw ->
         if (shouldKeepSwitchOff(sw)) {
             logInfo("${sw.displayName} is kept off due to mode settings")
+            sw.off()
         } else {
             logInfo("Turning on ${sw.displayName}")
             if (useDim && sw.hasCommand('setLevel')) {

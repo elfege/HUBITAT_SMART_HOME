@@ -155,7 +155,7 @@ def Boolean updateDevices()
             if (checkHttpResponse("update", resp))
             {
                 def status = resp.data.result
-
+                log.debug "updating status (from parent driver): ${status}"
                 result = dev.update(status, getChildDevice(dni+"-nl"))
             }
         }

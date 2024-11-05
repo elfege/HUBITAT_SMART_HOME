@@ -243,7 +243,7 @@ def off() {
 		sendKey("POWER", "Release")
 		
 		// Poll to check if successful
-		runIn(2, checkOffStatus)
+		runIn(5, checkOffStatus)
 		
 		// Reset attempt counter after 30 seconds
 		runIn(30, clearOffAttempts)
@@ -254,15 +254,32 @@ def off() {
 
 def checkOffStatus() {
 	log.debug "checking status..."
+	log.debug "state.offAttempts = $state.offAttempts"
+	
     onPoll()
-    // If still on after 3 attempts, log warning
+	def currentState = device.currentValue('switch')
+	log.debug "current state: ${currentState}"
+
+	// If still on after 3 attempts, log warning
     if (device.currentValue("switch") == "on" && state.offAttempts > 3) {
         logWarn("off: Multiple power off attempts unsuccessful")
         state.offAttempts = 0
+		clearOffAttempts()
     }
+	else {
+		if(currentState != "off") {
+			log.warn "Still on, new attempt"
+			off()
+		}
+	}
+
+	
+
+    
 }
 
 def clearOffAttempts() {
+	log.debug "clearOffAttempts()"
     state.offAttempts = 0
 }
 

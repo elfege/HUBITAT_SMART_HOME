@@ -2575,6 +2575,10 @@ def foolproof(){
 }
 def auto_override(inside, need, target, cmd, humThres, contactsAreOpen){
     //state.override = true // -> uncomment to test this function
+
+    // check it thermostat mode has changed
+    if(thermostat.currentValue("mode") != "auto" && state.override) return false
+
     if (state.override) {
         def overrideDur = overrideDuration != null ? overrideDuration : 0
         def timeLimit = overrideDur * 60 * 60 * 1000
@@ -5484,54 +5488,64 @@ def set_thermostat_mode(t, mode, origin){
     if (enablewarning) log.warn "set_thermostat_mode called from $origin"
 
     if(t.currentValue("thermostatMode") != auto || !autoOverride){ 
-        try{
-            // if user doesn't want to ignore current thermostat settings, target reference is no longer the dimmer, but the thermostat's current value
-            // this supercedes any other specific settings, including setpoints automatic selection 
-            if(!simpleModeActive()){
-                if(!ignoreTarget && !doNotSendAnyCoolHeatOffComm){
+        // try{
+        //     // if user doesn't want to ignore current thermostat settings, target reference is no longer the dimmer, but the thermostat's current value
+        //     // this supercedes any other specific settings, including setpoints automatic selection 
+        //     // if(!simpleModeIsActive()){
+        //         if(!ignoreTarget && !doNotSendAnyCoolHeatOffComm){
                 
                         
-                        log.debug "needsToBeBoosted = $needsToBeBoosted"
-                        if(needsToBeBoosted) {
-                            log.warn "Boosting...dimmer input ignored. Enable 'ignore target' or 'do not send any cool/heat command' in settings to prevent this."
-                            state.setpointSentByApp = true
-                            log.debug "required mode = $mode"
-                            def boost_setPoint = mode == "cool" ? 62 : 86
-                            log.debug "boost_setPoint: $boost_setPoint"
-                            def cmd = mode == "cool" ? "setCoolingSetpoint" : mode == "heat" ? "setHeatingSetpoint" : "setThermostatSetpoint"
-                            def query = cmd == "setCoolingSetpoint" ? "coolingSetpoint" : cmd == "setHeatingSetpoint" ? "heatingSetpoint" : "thermostatSetpoint"
-                            if ((isMideaThermostat(t) || t.currentValue("thermostatMode") == "auto") && t.hasCommand("setThermostatSetpoint")){
-                                cmd = "setThermostatSetpoint"
-                            }
-                            log.debug "boost setpoint cmd: $cmd"
-                            try{
-                                if(t.currentValue(query) == boost_setPoint) {
-                                    log.debug "${t}.${cmd}(${boost_setPoint})"
-                                    t."${cmd}"(boost_setPoint)
-                                }
-                                    log.debug "$t already set to boost_setpoint:$boost_setpoint"
-                                }
-                            } catch (Exception err){
-                                log.error "Exception in setting boost temperature: ${err}"
+        //                 log.debug "needsToBeBoosted = $needsToBeBoosted"
+        //                 if(needsToBeBoosted) {
+        //                     log.warn "Boosting...dimmer input ignored. Enable 'ignore target' or 'do not send any cool/heat command' in settings to prevent this."
+        //                     state.setpointSentByApp = true
+        //                     log.debug "required mode = $mode"
+        //                     def boost_setPoint = mode == "cool" ? 62 : 86
+        //                     log.debug "boost_setPoint: $boost_setPoint"
+        //                     log.debug "mode: $mode"
+                            
+        //                     def cmd = mode == "cool" ? "setCoolingSetpoint" : mode == "heat" ? "setHeatingSetpoint" : "setThermostatSetpoint"
+        //                     log.debug "cmd: $cmd"
 
-                            }
-                        }
-                        runIn(10, set_turbo)
-                        return
+        //                     def query = cmd == "setCoolingSetpoint" ? "coolingSetpoint" : cmd == "setHeatingSetpoint" ? "heatingSetpoint" : "thermostatSetpoint"
+
+        //                     def currentSetpoint = t.currentValue(query)
+
+        //                     if ((isMideaThermostat(t) || t.currentValue("thermostatMode") == "auto") && t.hasCommand("setThermostatSetpoint")){
+        //                         cmd = "setThermostatSetpoint"
+        //                     }
+        //                     log.debug "boost setpoint cmd: $cmd"
+        //                     try{
+        //                         if(currentSetpoint == boost_setPoint) {
+        //                             log.debug "${t}.${cmd}(${boost_setPoint})"
+        //                             t."${cmd}"(boost_setPoint)
+        //                         } else {
+        //                             log.debug "$t already set to boost_setPoint:$boost_setPoint (currentSetpoint: $currentSetpoint)"
+        //                         }
+        //                     } catch (Exception err){
+        //                         log.error "Exception in setting boost temperature: ${err}"
+
+        //                     }
+        //                 }
+        //                 runIn(10, set_turbo)
+        //                 return
                     
-                }
-            }
-            else {
-                log.debug "Simple mode active: ignoring boost mode"
-            }
-        } catch (Exception e){
-            log.error "Failed to adjust value in set boost mode::: ${e}"
-        }
+        //         }
+        //     // }
+        //     // else {
+        //     //     log.debug "Simple mode active: ignoring boost mode"
+        //     // }
+        // } catch (Exception e){
+        //     log.error "Failed to adjust value in set boost mode::: ${e}"
+        // }
 
+        if(needsToBeBoosted){
+            runIn(10, set_turbo)
+        }
 
         try {
             if (t.currentValue("thermostatMode") != mode || origin in ["checkthermstate force command", "remainsOffCmd"]) {
-                if (enabledebug) log.trace  "$t set to $mode (origin: $origin)"
+                if (enabletrace) log.trace  "$t set to $mode (origin: $origin)"
                 if (autoOverride && t.currentValue("thermostatMode") == "auto") {
                     if (enablewarning) log.warn "$t is in auto mode - command to set to $mode ignored..."
                 }

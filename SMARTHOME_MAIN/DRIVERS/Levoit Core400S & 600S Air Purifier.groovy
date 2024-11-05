@@ -363,6 +363,7 @@ def update() {
         if (checkHttpResponse("update", resp))
         {
             def status = resp.data.result
+            logDebug "updating status (from child device): ${status}"
             result = update(status, null)                
         }
     }
@@ -372,29 +373,32 @@ def update() {
 def update(status, nightLight){
     logDebug "update(status, nightLight)"
 
-    logDebug status
+    logDebug "status: ${status}"
+    logDebug "nightLight: ${nightLight}"
 
-    state.speed = mapIntegerToSpeed(status.result.level)
-    state.mode = status.result.mode
+    if(status){
+        state.speed = mapIntegerToSpeed(status.result.level)
+        state.mode = status.result.mode
 
-    handleEvent("switch", status.result.enabled ? "on" : "off")
-    handleEvent("mode",   status.result.mode)
-    handleEvent("filter", status.result.filter_life)
+        handleEvent("switch", status.result.enabled ? "on" : "off")
+        handleEvent("mode",   status.result.mode)
+        handleEvent("filter", status.result.filter_life)
 
-    switch(state.mode)
-    {
-        case "manual":
-        handleEvent("speed",  mapIntegerToSpeed(status.result.level))
-        break;
-        case "auto":
-        handleEvent("speed",  "auto")
-        break;
-        case "sleep":
-        handleEvent("speed",  "on")
-        break;
+        switch(state.mode)
+        {
+            case "manual":
+            handleEvent("speed",  mapIntegerToSpeed(status.result.level))
+            break;
+            case "auto":
+            handleEvent("speed",  "auto")
+            break;
+            case "sleep":
+            handleEvent("speed",  "on")
+            break;
+        }
+
+        updateAQIandFilter(status.result.air_quality_value.toString(),status.result.filter_life)
     }
-
-    updateAQIandFilter(status.result.air_quality_value.toString(),status.result.filter_life)
 }
 
 private void handleEvent(name, val){

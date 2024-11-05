@@ -40,6 +40,12 @@ metadata
         capability "Initialize"
         capability "Refresh"
         capability "Thermostat"
+        capability "ThermostatMode"
+        capability "ThermostatFanMode"
+        capability "ThermostatSetpoint"
+        capability "ThermostatCoolingSetpoint"
+        capability "ThermostatHeatingSetpoint"
+        capability "TemperatureMeasurement"
         
         command "dry"
         command "fan_only"
@@ -47,6 +53,8 @@ metadata
         command "setSpeed", [[name: "Fan speed*", type: "ENUM", constraints: supportedFanSpeedsList()]]
         command "setThermostatFanMode", [[name: "Fan mode*", type: "ENUM", constraints: supportedThermoFanModesList()]]        
         command "setThermostatMode", [[name: "Thermostat mode*", type: "ENUM", constraints: supportedThermoModesList()]]
+        command "setThermostatSetpoint", [[name: "Temperature*", type: "NUMBER", description: "Target temperature for the thermostat"]]
+
         
         command "controlTurboMode", [[name: "Turbo mode*", type: "ENUM", constraints: ["on", "off"]]]
         attribute "turboMode", "enum", ["on", "off"]
@@ -105,6 +113,7 @@ def supportedFanSpeedsList()
 def supportedThermoModesList()
 {
     return ["auto", "cool", "dry", "fan_only", "heat", "off"]    
+    // return ["auto", "cool", "heat", "off"]  // Only modes Alexa understands
 }
 
 def initialize()
@@ -417,6 +426,34 @@ def off()
     }
 }
 
+def setThermostatSetpoint(temperature) {
+    log.info "setThermostatSetpoint called with: ${temperature}"
+    
+    // Ensure we're working with a number
+    def targetTemp = new BigDecimal(temperature)
+    
+    // If the device is off, turn it on when setting temperature
+    def currentMode = device.currentValue("thermostatMode")
+    if (currentMode == "off") {
+        // Default to auto mode when turning on via temperature set
+        setThermostatMode("auto")
+    }
+    
+    // Convert and apply the temperature
+    def celsiusTemp = ensureCelsius(targetTemp)
+    def params = updateSettingParams([target_temperature: celsiusTemp])
+    if(params) {
+        // Ensure the device is on when setting temperature
+        params.power_state = true
+        apply(params)
+        
+        // Update both heating and cooling setpoints for Alexa compatibility
+        sendEvent(name: "thermostatSetpoint", value: targetTemp, unit: getUnit())
+        sendEvent(name: "coolingSetpoint", value: targetTemp, unit: getUnit())
+        sendEvent(name: "heatingSetpoint", value: targetTemp, unit: getUnit())
+    }
+}
+
 def setCoolingSetpoint(temperature)
 {
     logDebug("setCoolingSetpoint(${temperature})")
@@ -554,34 +591,86 @@ def correctTemp(input, inputScale)
     }
 }
 
-def ensureCelsius(input)
-{
-    return (degC) ? new BigDecimal(input) : fahrenheitToCelsius(new BigDecimal(input))
+
+// def ensureCelsius(input)
+// {
+//     log.debug "ensureCelsius input before conversion: ${input}"
+//     result = (degC) ? new BigDecimal(input) : fahrenheitToCelsius(new BigDecimal(input))
+//     log.debug "ensureCelsius input AFTER conversion: ${result}"
+//     return result
+// }
+def ensureCelsius(input) {
+    log.info "ensureCelsius input before conversion: ${input}"
+    def result
+    if (degC) {
+        result = new BigDecimal(input)
+    } else {
+        // Convert to Celsius
+        def celsius = fahrenheitToCelsius(new BigDecimal(input))
+        // Round to nearest 0.5°C that would display our desired Fahrenheit
+        def rounded = (celsius * 2).setScale(0, BigDecimal.ROUND_HALF_UP) / 2
+        // If the rounded value converts back to a lower Fahrenheit, bump up by 0.5
+        if (celsiusToFahrenheit(rounded) < input) {
+            rounded = rounded.add(new BigDecimal("0.5"))
+        }
+        result = rounded
+    }
+    log.info "ensureCelsius input AFTER conversion: ${result}"
+    return result
 }
 
-def _updateAttributes(resp)
-{
-    if(!resp)
-    {
+// def _updateAttributes(resp)
+// {
+//     if(!resp)
+//     {
+//         return
+//     }
+    
+//     def events = [[:]]
+//     // If the device is powered off, report thermostatMode as "off"
+//     def currentMode = resp.power_state ? translateMode(resp.operational_mode?.toInteger(), "integer") : "off"
+    
+//     events +=    [name: "coolingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "heatingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "temperature",                 value: correctTemp(resp.indoor_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "thermostatFanMode",           value: translateFanMode(resp.fan_speed?.toInteger(), "integer")]
+//     events +=    [name: "thermostatMode",              value: currentMode]
+//     events +=    [name: "thermostatOperatingState",    value: resp.power_state ? "on" : "off" ]
+//     events +=    [name: "thermostatSetpoint",          value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "outdoorTemperature",          value: correctTemp(resp.outdoor_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "turboMode",                   value: resp.turbo_mode ? "on" : "off"]
+    
+//     events.each
+//     {
+//         sendEvent(it)
+//     }  
+// }
+
+// Enhance the _updateAttributes method to ensure consistent state reporting
+def _updateAttributes(resp) {
+    if(!resp) {
+        log.warn "no resp!"
         return
     }
     
-    def events = [[:]]
+    // If the device is powered off, report thermostatMode as "off"
+    def currentMode = resp.power_state ? translateMode(resp.operational_mode?.toInteger(), "integer") : "off"
+    def currentTemp = correctTemp(resp.target_temperature, "C").toString()  // Convert to string
+    def indoorTemp = correctTemp(resp.indoor_temperature, "C").toString()   // Convert to string
+    def outdoorTemp = correctTemp(resp.outdoor_temperature, "C").toString() // Convert to string
     
-    events +=    [name: "coolingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
-    events +=    [name: "heatingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
-    events +=    [name: "temperature",                 value: correctTemp(resp.indoor_temperature, "C"), unit: getUnit()]
-    events +=    [name: "thermostatFanMode",           value: translateFanMode(resp.fan_speed?.toInteger(), "integer")]
-    events +=    [name: "thermostatMode",              value: translateMode(resp.operational_mode?.toInteger(), "integer")]
-    events +=    [name: "thermostatOperatingState",    value: resp.power_state ? "on" : "off" ]
-    events +=    [name: "thermostatSetpoint",          value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
-    events +=    [name: "outdoorTemperature",          value: correctTemp(resp.outdoor_temperature, "C"), unit: getUnit()]
-    events +=    [name: "turboMode",                   value: resp.turbo_mode ? "on" : "off"]
+    def events = []
+    events << [name: "coolingSetpoint", value: currentTemp, unit: getUnit()]
+    events << [name: "heatingSetpoint", value: currentTemp, unit: getUnit()]
+    events << [name: "temperature", value: indoorTemp, unit: getUnit()]
+    events << [name: "thermostatFanMode", value: translateFanMode(resp.fan_speed?.toInteger(), "integer")]
+    events << [name: "thermostatMode", value: currentMode]
+    events << [name: "thermostatOperatingState", value: resp.power_state ? "on" : "off"]
+    events << [name: "thermostatSetpoint", value: currentTemp, unit: getUnit()]
+    events << [name: "outdoorTemperature", value: outdoorTemp, unit: getUnit()]
+    events << [name: "turboMode", value: resp.turbo_mode ? "on" : "off"]
     
-    events.each
-    {
-        sendEvent(it)
-    }  
+    events.each { sendEvent(it) }
 }
 
 def getUnit()
@@ -589,34 +678,30 @@ def getUnit()
     return (degC) ? "°C" : "°F"
 }
 
-def translateMode(value, inputType)
-{
-    switch(inputType)
-    {
+// Update the translateMode method to be more Alexa-friendly
+def translateMode(value, inputType) {
+    switch(inputType) {
         case "integer":
-            switch(value.toInteger())
-            {
+            switch(value.toInteger()) {
                 case 1: return "auto"
                 case 2: return "cool"
-                case 3: return "dry"
+                case 3: return "cool"  // Map 'dry' to 'cool' for Alexa
                 case 4: return "heat"
-                case 5: return "fan_only"
-                default: return "unknown"
+                case 5: return "auto"  // Map 'fan_only' to 'auto' for Alexa
+                default: return "off"
             }
-
+            
         case "string":
-            switch(value)
-            {
+            switch(value.toLowerCase()) {
                 case "auto": return 1
                 case "cool": return 2
-                case "dry":  return 3
                 case "heat": return 4
-                case "fan_only": return 5
-                default: return
+                case "off": return 0
+                default: return 1  // Default to auto mode
             }
         
         default:
-            return
+            return "auto"  // Default to auto if unknown input type
     }
 }
 
@@ -889,6 +974,19 @@ def appliance_response(data)
     data = subBytes(data, 0xA, data.size() - 0xA)
     
     def resp = [:]
+
+     // Log the raw temperature bytes
+    log.info("appliance_response raw temp byte: ${data[0x02].toInteger()}")
+    log.info("appliance_response temp bits: ${Integer.toBinaryString(data[0x02] & 0xff)}")
+
+    // Original temperature decoding
+    def base_temp = (data[0x02] & 0xf)
+    def half_temp = ((data[0x02] & 0x10) > 0) ? 0.5 : 0.0
+    def final_temp = base_temp + 16.0 + half_temp
+    
+    log.debug("appliance_response base_temp: ${base_temp}")
+    log.debug("appliance_response half_temp: ${half_temp}")
+    log.debug("appliance_response final_temp: ${final_temp}")
     
     resp += [power_state:           (data[0x01] & 0x1) > 0]
     resp += [imode_resume:          (data[0x01] & 0x4) > 0]
@@ -986,7 +1084,10 @@ def set_command(Map cmdParams)
     data[0x0a] = 0x40
     
     // prompt_tone
+    // data[0x0b] = 0x40
+    // prompt_tone - Force to off by removing 0x42 bits
     data[0x0b] = 0x40
+    data[0x0b] &= ~0x42  // Always clear the feedback bits
     
     data = appendByteArr(data, [0x00, 0x00, 0x00])
     
@@ -1000,19 +1101,32 @@ def set_command(Map cmdParams)
     
     // target_temperature.setter
     def target_temperature = cmdParams.target_temperature
+
     // bound the temperature setpoint to within the range of 17C to 30C
     target_temperature = (target_temperature < 17) ? 17 : ((target_temperature > 30) ? 30 : target_temperature)
+    log.info "set_command target_temperature before encoding: ${target_temperature}"
+
+    // Subtract 16 from the temperature before encoding
+    def temp_for_device = target_temperature - 16.0
+    log.info "set_command temp_for_device: ${temp_for_device}"
+
+    // Set the base temperature in lower 4 bits
     data[0x0c] &= ~ 0x0f
-    data[0x0c] |= (target_temperature?.toInteger() & 0xf)
-    // temperature_dot5.setter
-    if((target_temperature * 2).toInteger() % 2 != 0)
-    {
+    data[0x0c] |= (temp_for_device.intValue() & 0xf)
+
+    // Set the half degree bit based on decimal part
+    // Using remainder() for BigDecimal instead of %
+    def decimal_part = temp_for_device.remainder(BigDecimal.ONE)
+    def has_half = decimal_part.abs() >= 0.5
+    log.info "set_command has_half degree: ${has_half} (decimal part: ${decimal_part})"
+    if(has_half) {
         data[0x0c] |= 0x10
-    }
-    else
-    {
+    } else {
         data[0x0c] &= (~0x10)
     }
+
+    log.info "set_command final temperature byte: ${data[0x0c].toInteger()}"
+
     
     // operational_mode.setter
     data[0x0c] &= ~ 0xe0

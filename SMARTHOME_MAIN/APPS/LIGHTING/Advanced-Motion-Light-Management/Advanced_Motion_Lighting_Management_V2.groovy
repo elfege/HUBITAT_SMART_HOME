@@ -133,6 +133,7 @@ preferences {
         section('App Control') {
             input 'update', 'button', title: 'UPDATE'
             input 'run', 'button', title: 'RUN'
+            input 'reset', 'button', title: 'Reset States Memoizations'
         }
         section('Logging') {
             input 'enableDebug', 'bool', title: 'Enable debug logging', defaultValue: false
@@ -215,6 +216,12 @@ def appButtonHandler(btn) {
                 master()
             } else {
                 log.warn 'App is paused. Cannot run master() function.'
+            }
+            break
+        case 'reset': 
+            def allSwitches = (switches + additionalResumeSwitches + additionalPauseSwitches).unique { it.id }
+            allSwitches.each { sw ->
+                resetMemoizations(sw)
             }
             break
     }
@@ -305,7 +312,7 @@ def motionHandler(evt) {
     if (evt.value == "active" && any_switch_off)
     {
         if(description) log.info "some switches that should be on are off. Ignoring interval between events"
-        on() // turn lights on immediately      
+        controlLights('turn on', switches) // turn lights on immediately      
     } else if (lastMotionHandled > someSecondsAgo) {
         log.debug "Motion event received within $intervalBetweenEvents seconds of last handled event. Skipping processing."
         return
@@ -339,19 +346,6 @@ def switchHandler(evt) {
     if (enableDebug) {
         def delay = state.mainHandlerEventTime ? now() - state.mainHandlerEventTime : 0
         log.debug "$evt.device is $evt.value (delay between cmd and this event = ${delay} milliseconds)"
-    }
-
-    if (allowOverride == true) {
-        if ((evt.value == 'on' && state.switches == 'off') || (evt.value == 'off' && state.switches == 'on')) {
-            log.warn "OVERRIDE TRIGGERED for $overrideDelay ${overrideDelay > 1 ? 'hours' : 'hour'} (evt handler)"
-            state.overrideStart = now()
-            state.override = true
-        } else if (evt.value == state.switches) {
-            log.warn 'END OF OVERRIDE (evt handler)'
-            state.override = false
-        }
-    } else {
-        state.override = false // make sure it stays false after user may have disabled this feature
     }
 
     state.thisIsAMotionEvent = false
@@ -405,6 +399,10 @@ def illuminanceHandler(evt) {
 }
 def modeChangeHandler(evt) {
     if (enableDebug) log.debug("$evt.name is now in $evt.value mode")
+    def allSwitches = (switches + additionalResumeSwitches + additionalPauseSwitches).unique { it.id }
+    allSwitches.each { sw ->
+        resetMemoizations(sw)
+    }
     unschedule(master)
     master()
 }
@@ -428,9 +426,9 @@ def master() {
     }
 
     if (Active()) {
-        on()
+        controlLights('turn on', switches)
     } else {
-        off()
+        controlLights('turn off', switches)
     }
 
     if (enableDebug) log.debug "---end of master loop. Duration = ${now() - startTime} milliseconds"
@@ -471,6 +469,19 @@ def controlLights(action, mainSwitches, additionalSwitches = []) {
 
     log.debug "Controlling lights: action=${action}, switches=${allSwitches.collect { it.displayName }}"
 
+    if (useDim && allSwitches.any{ it -> it.hasCommand('setLevel')}){
+        // Initialize memoization meant to prevent reseting the color/colorTemperature, 
+        // to allow other systems to use colors as needed (e.g. for water leak, smoke, gaz, fire alerts, etc.)
+        state.colorIsSet = state.colorIsSet ?: [:]                          // initialize memoization of colors. Reset to false by "turn off" case.
+        state.colorTemperatureIsSet = state.colorTemperatureIsSet ?: [:]    // initialize memoization of color temperatures. Reset to false by "turn off" case.
+
+        // same logic, but for comfort reasons: allow user to manually set a level value. 
+        state.dimLevelIsSet = state.dimLevelIsSet ?: [:] // Reset to false by "turn off" case.
+    }
+
+    // same logic as above, but for switch's 'on' state. 
+    state.switchAlreadyTurnedOn = state.switchAlreadyTurnedOn ?: [:] // Reset to false by "turn off" case.
+
     switch (action) {
         case 'toggle':
             allSwitches.each { sw ->
@@ -488,25 +499,83 @@ def controlLights(action, mainSwitches, additionalSwitches = []) {
             }
             break
         case 'turn on':
+            if (exceptions()){
+                break
+            }
+            
             allSwitches.each { sw ->
+                log.debug "switch -> $sw.displayName"
                 if (!shouldKeepSwitchOff(sw)) {
-                    sw.on()
-                    log.debug "Turned on: ${sw.displayName}"
+                    if(state.switchAlreadyTurnedOn[sw.displayName]){
+                        log.warn "$sw.displayName was already previously turned on. Skipping."
+                    } else {
+                        log.info "turning on $sw.displayName"
+                        sw.on()                    
+                        state.switchAlreadyTurnedOn[sw.displayName] = true
+                    }
+                    
+                    
+                    if (useDim && sw.hasCommand('setLevel')) {
+                        def currentDimLevelMode = getCurrentDimLevelPerMode()
+                        def colorValue = useColor ? getColorValue() : null
+                        if (colorValue) {
+                            if (colorValue.containsKey('colorTemperature') && sw.hasCapability('ColorTemperature')) {
+                                if (state.colorTemperatureIsSet[sw.displayName]){
+                                    log.warn "$sw.displayName color temperature was already previously set to $colorValue.colorTemperature. Not changing it"
+                                } else {
+                                    state.colorTemperatureIsSet[sw.displayName] = true
+                                    sw.setColorTemperature(colorValue.colorTemperature)
+                                }
+                            } else if (sw.hasCapability('ColorControl')) {
+                                if (state.colorIsSet[sw.displayName]){
+                                    log.warn "$sw.displayName color was already previously set to $colorValue. Not changing it"
+                                } else {
+                                    state.colorIsSet[sw.displayName] = true
+                                    sw.setColor(colorValue)
+                                }
+                            }
+                        }
+                        if (sw.currentValue('level') != currentDimLevelMode) {
+                            if (state.dimLevelIsSet[sw.displayName]){
+                                log.warn "$sw.displayName level already previously set to ${currentDimLevelMode}%. Not changing it."
+                            }
+                            else {
+                                sw.setLevel(currentDimLevelMode)
+                                state.dimLevelIsSet[sw.displayName] = true
+                            }
+                        }
+                    }
                 } else {
                     log.debug "Skipped turning on ${sw.displayName} due to keep-off rule"
+                    sw.off()
                 }
+                
             }
             break
         case 'turn off':
             allSwitches.each { sw ->
                 sw.off()
                 log.debug "Turned off: ${sw.displayName}"
+
+                resetMemoizations(sw)
             }
             break
         default:
             log.warn "Unknown light control action: ${action}"
     }
 }
+
+def resetMemoizations(sw){
+    log.debug "reseting memoization for ${sw.displayName}"
+    if (useDim && sw.hasCommand('setLevel')) {
+        state.colorTemperatureIsSet[sw.displayName] = false
+        state.colorIsSet[sw.displayName] = false
+        state.dimLevelIsSet[sw.displayName] = false
+    }
+    state.switchAlreadyTurnedOn[sw.displayName] = false
+
+}
+
 def formatPauseDuration() {
     if (pauseDurationUnit == 'Hours') {
         return "${pauseDuration} hour${pauseDuration == 1 ? '' : 's'}"
@@ -559,66 +628,14 @@ def shouldKeepSwitchOff(sw) {
 
     if (keepSomeSwitchesOffInModes && modesForSwitchesOff?.contains(location.mode) && switchesToKeepOff?.find { it.id == sw.id }) {
         logInfo("Keeping ${sw.displayName} off due to current mode: ${location.mode}")
+
         return true
     }
 
     logDebug("${sw.displayName} can be turned on")
     return false
 }
-def off() {
-    if (enableDebug) log.debug 'off function'
 
-    def anyOn = switches.any{ it -> it.currentValue('switch') == 'on' }
-
-    state.mainHandlerEventTime = now()
-    if (anyOn) {
-        if (!state.test && (state.switches == 'on' || !allowOverride)) {
-            switchesOff()
-            if (description) log.info "turning off ${switches.join(', ')} 59989e"
-            state.switches = 'off'
-        } else if (allowOverride && !state.test && state.switches == 'off' && switches.any{ it -> it.currentValue('switch') == 'on' }) {
-            if (description) log.info 'lights were turned on manually, app in override mode'
-        } else {
-            if (enableDebug) log.debug "$switches would have turned off - test succeeded!"
-        }
-    } else {
-        if (enableDebug) log.debug "$switches already off"
-    }
-
-}
-def on() {
-    logDebug('Entering on() method')
-    
-    if (exceptions()){
-        return
-    }
-
-    def currentDimLevel = getCurrentDimLevel()
-    def colorValue = useColor ? getColorValue() : null
-
-    switches.each { sw ->
-        if (shouldKeepSwitchOff(sw)) {
-            logInfo("${sw.displayName} is kept off due to mode settings")
-            sw.off()
-        } else {
-            logInfo("Turning on ${sw.displayName}")
-            if (useDim && sw.hasCommand('setLevel')) {
-                if (colorValue) {
-                    if (colorValue.containsKey('colorTemperature') && sw.hasCapability('ColorTemperature')) {
-                        sw.setColorTemperature(colorValue.colorTemperature)
-                    } else if (sw.hasCapability('ColorControl')) {
-                        sw.setColor(colorValue)
-                    }
-                }
-                sw.setLevel(currentDimLevel)
-            } else {
-                sw.on()
-            }
-        }
-    }
-
-    logInfo('Finished processing switches')
-}
 def exceptions()  {
     if (InRestrictedModeOrTime()) {
         logDebug('In restricted mode or time, exiting on() method')
@@ -626,7 +643,7 @@ def exceptions()  {
     }
 
     if (useIlluminance && illuminanceSensor.currentValue('illuminance') > illuminanceThreshold) {
-        logDebug("Current illuminance is above threshold. Not turning on lights.")
+        log.trace("Current illuminance is above threshold. Not turning on lights.")
         return true 
     }
 
@@ -770,7 +787,7 @@ private Map getColorValue() {
             return [colorTemperature: 6500, level: 100]  // Default to Daylight
     }
 }
-private int getCurrentDimLevel() {
+private int getCurrentDimLevelPerMode() {
     if (useDim) {
         if (useModeSpecificDimming) {
             def currentMode = location.mode
@@ -790,7 +807,7 @@ def switchesOff() {
 }
 def scheduleOff() {
     if (!Active()) {
-        off()
+        controlLights('turn off', switches)
     }
 }
 

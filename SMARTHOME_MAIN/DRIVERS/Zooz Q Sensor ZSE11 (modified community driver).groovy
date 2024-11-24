@@ -90,7 +90,7 @@ import groovy.transform.Field
 @Field static final String wakeUpInstructions = "To wake the device immediately, press and hold the Z-Wave button for 3 seconds."
 
 metadata {
-   definition(name: "Zooz Q ZSE11 Sensor (community driver)", namespace: "RMoRobert", author: "Robert Morris", 
+   definition(name: "Zooz Q Sensor ZSE11 (modified community driver)", namespace: "RMoRobert", author: "Robert Morris", 
    importUrl: "https://raw.githubusercontent.com/RMoRobert/Hubitat/master/drivers/zooz/zooz-zse11-q-sensor.groovy") {
       capability "Sensor"
       capability "Battery"
@@ -229,36 +229,66 @@ void zwaveEvent(hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
 }
 
 void zwaveEvent(hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport cmd) {
-   log.debug "************************************************ MOTION EVENT ******************************************************"
+   log.debug "************************************************ SensorBinaryReport"
+   log.debug "************************************************"
+   log.debug "SensorBinaryReport received: $cmd"
+   log.debug "************************************************"
    if (logEnable) log.debug "SensorBinaryReport: $cmd"
    if (cmd.sensorType == hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport.SENSOR_TYPE_MOTION) {
       if (cmd.sensorValue) {
          String descText = "${device.displayName} motion is active"
+         log.warn "sending motion active"
          sendEvent(name: "motion", value: "active", descriptionText: descText)
          if (txtEnable) log.info descText
       }
       else {
          String descText = "${device.displayName} motion is inactive"
+         log.warn "sending motion inactive"
          sendEvent(name: "motion", value: "inactive", descriptionText: descText)
          if (txtEnable) log.info descText
       }
    }
    else {
-      if (logEnable) "ignoring unexpected type of SensorBinaryReport: $cmd"
+      /*if (logEnable)*/ log.warn "ignoring unexpected type of SensorBinaryReport: $cmd"
    }
 }
 
 void zwaveEvent(hubitat.zwave.commands.notificationv3.NotificationReport cmd) {
+   log.debug "************************************************ NotificationReport"
+   log.debug "************************************************"
+   log.debug "SensorBinaryReport received: $cmd"
+   log.debug "************************************************"
    if (logEnable) log.debug "NotificationReport: $cmd"
-   if (cmd.notificationType == hubitat.zwave.commands.notificationv3.NotificationReport.NOTIFICATION_TYPE_BURGLAR
-      && (cmd.event == 3 || cmd.eventParameter[0] == 3)) {
-      if (cmd.event) {
-         sendEvent(name: "tamper", value: "detected", descriptionText: "${device.displayName} tamper is detected")
-         if (txtEnable) log.info("${device.displayName} tamper is detected")
+   if (cmd.notificationType == hubitat.zwave.commands.notificationv3.NotificationReport.NOTIFICATION_TYPE_BURGLAR) {  //0x07
+      if (cmd.event == 3 || cmd.eventParameter[0] == 3) {
+         if (cmd.event) {
+            sendEvent(name: "tamper", value: "detected", descriptionText: "${device.displayName} tamper is detected (case opened)")
+            if (txtEnable) log.info("${device.displayName} tamper is detected (case opened)")
+         }
+         else {
+            sendEvent(name: "tamper", value: "clear", descriptionText: "${device.displayName} tamper is clear")
+            if (txtEnable) log.info("${device.displayName} tamper is clear")
+         }
       }
-      else {
-         sendEvent(name: "tamper", value: "clear", descriptionText: "${device.displayName} tamper is clear")
-         if (txtEnable) log.info("${device.displayName} tamper is clear")
+      else if (cmd.event == 8 || cmd.eventParameter[0] == 8) {
+         if (cmd.event) {
+            sendEvent(name: "motion", value: "active", descriptionText: "${device.displayName} motion is active")
+            if (txtEnable) log.info("${device.displayName} motion is active")
+         }
+         else {
+            sendEvent(name: "motion", value: "inactive", descriptionText: "${device.displayName} motion is inactive")
+            if (txtEnable) log.info("${device.displayName} motion is inactive")
+         }
+      }
+      else if (cmd.event == 9 || cmd.eventParameter[0] == 9) {
+         if (cmd.event) {
+            sendEvent(name: "tamper", value: "detected", descriptionText: "${device.displayName} tamper is detected (vibration)")
+            if (txtEnable) log.info("${device.displayName} tamper is detected (vibration)")
+         }
+         else {
+            sendEvent(name: "tamper", value: "clear", descriptionText: "${device.displayName} tamper is clear")
+            if (txtEnable) log.info("${device.displayName} tamper is clear")
+         }
       }
    }
 }

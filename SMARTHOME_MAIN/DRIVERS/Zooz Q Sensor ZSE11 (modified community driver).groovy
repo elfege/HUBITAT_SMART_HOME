@@ -229,21 +229,18 @@ void zwaveEvent(hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
 }
 
 void zwaveEvent(hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport cmd) {
-   log.debug "************************************************ SensorBinaryReport"
-   log.debug "************************************************"
-   log.debug "SensorBinaryReport received: $cmd"
-   log.debug "************************************************"
+   
    if (logEnable) log.debug "SensorBinaryReport: $cmd"
    if (cmd.sensorType == hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport.SENSOR_TYPE_MOTION) {
       if (cmd.sensorValue) {
          String descText = "${device.displayName} motion is active"
-         log.warn "sending motion active"
+         // log.warn "sending motion active"
          sendEvent(name: "motion", value: "active", descriptionText: descText)
          if (txtEnable) log.info descText
       }
       else {
          String descText = "${device.displayName} motion is inactive"
-         log.warn "sending motion inactive"
+         // log.warn "sending motion inactive"
          sendEvent(name: "motion", value: "inactive", descriptionText: descText)
          if (txtEnable) log.info descText
       }
@@ -254,10 +251,7 @@ void zwaveEvent(hubitat.zwave.commands.sensorbinaryv2.SensorBinaryReport cmd) {
 }
 
 void zwaveEvent(hubitat.zwave.commands.notificationv3.NotificationReport cmd) {
-   log.debug "************************************************ NotificationReport"
-   log.debug "************************************************"
-   log.debug "SensorBinaryReport received: $cmd"
-   log.debug "************************************************"
+   
    if (logEnable) log.debug "NotificationReport: $cmd"
    if (cmd.notificationType == hubitat.zwave.commands.notificationv3.NotificationReport.NOTIFICATION_TYPE_BURGLAR) {  //0x07
       if (cmd.event == 3 || cmd.eventParameter[0] == 3) {
@@ -302,8 +296,9 @@ void zwaveEvent(hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelReport
             String strTemp = convertTemperatureIfNeeded(cmd.scaledSensorValue, unit, cmd.precision)
             BigDecimal temp = new BigDecimal(strTemp)
 
-            temp += -3  // elfege added built-in minus 2°F due to bad original sensor calibration. 
-            log.debug "temp ===========> $temp"
+            temp_sensor_value = temp
+            // temp += -3  // elfege added built-in minus 2°F due to bad original sensor calibration. 
+            // log.debug "temp ===========> $temp (sensor: $temp_sensor_value)"
 
             if (settings["tempAdjust"]) temp += (settings["tempAdjust"] as BigDecimal)
             String descText = "${device.displayName} temperature is ${temp} °${location.temperatureScale}"

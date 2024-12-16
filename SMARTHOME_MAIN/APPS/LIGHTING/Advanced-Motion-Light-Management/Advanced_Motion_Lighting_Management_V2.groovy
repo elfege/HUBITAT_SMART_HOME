@@ -544,8 +544,6 @@ def modeChangeHandler(evt) {
     unschedule(master)
     master()
 }
-
-
 def master(motionActiveEvent=false) {
     def startTime = now()
     logDebug 'master start'
@@ -574,7 +572,6 @@ def master(motionActiveEvent=false) {
 
     scheduleNextRun()
 }
-
 def pauseApp() {
     state.paused = true
     state.pauseStart = now()
@@ -619,15 +616,14 @@ def controlLights(action) {
                 sw ->
                 if (!shouldKeepSwitchOff(sw.id)) {
                     if (sw.currentValue('switch') == 'on') {
-                        logTrace "Toggling off ${sw.displayName}"
+                        logTrace "Toggling off ${getDeviceUrl(sw.id, sw.displayName)}"
                         sw.off()
-                        logDebug "Turned off: ${sw.displayName}"
                     } else {
+                        logTrace "Toggling on ${getDeviceUrl(sw.id, sw.displayName)}"
                         sw.on()
-                        logDebug "Turned on: ${sw.displayName}"
                     }
                 } else {
-                    logDebug "Skipped toggling ${sw.displayName} due to keep-off rule"
+                    logDebug "Skipped toggling ${getDeviceUrl(sw.id, sw.displayName)} due to keep-off rule"
                 }
             }
             resetStates() // toggles are user intervention bound. So reset any manual override memoization. 
@@ -639,41 +635,41 @@ def controlLights(action) {
             }
 
             allSwitches.each { sw ->
-                logDebug "switch -> $sw.displayName"
+                logDebug "switch -> ${getDeviceUrl(sw.id, sw.displayName)}"
 
                 if (isNotBothAdditionaAndRegularSwitch(sw.id)){
-                    logTrace "${sw.displayName} is not a regular motion controlled switch. Skipping"
+                    logTrace "${getDeviceUrl(sw.id, sw.displayName)} is not a regular motion controlled switch. Skipping"
                     return // this works like 'continue' in the closure
                 }
 
                 def mem = memoizeThisSwitch(sw.id)
 
-                logWarn "state.switchState: $state.switchState"
+                logDebug "state.switchState: $state.switchState"
 
                 if (!shouldKeepSwitchOff(sw.id)) {
                     if (sw.currentValue("switch") == "on"){
-                        log.trace "${sw.displayName} already on. Skipping"
+                        logTrace "${getDeviceUrl(sw.id, sw.displayName)} already on. Skipping"
                         return  // this works like 'continue' in the closure
                     }
                     if (state.switchState[sw.displayName] == "on" && mem) {
-                        log.warn "$sw.displayName has already been turned on by this app and is memoized. Skipping."
+                        log.warn "${getDeviceUrl(sw.id, sw.displayName)} has already been turned on by this app and is memoized. Skipping."
                     } else {
-                        logInfo "turning on $sw.displayName"
+                        logInfo "turning on ${getDeviceUrl(sw.id, sw.displayName)}"
                         updateSwitchMem(mem = mem, value = "on", deviceName = sw.displayName)
                         runIn(1, "setSwitch", [data: [deviceId: sw.id, value: "on"], overwrite: false])
                     }
                 } else {
                     if (sw.currentValue("switch") == "off"){
-                        log.trace "${sw.displayName} already off. Skipping"
+                        logTrace "${getDeviceUrl(sw.id, sw.displayName)} already off. Skipping"
                         return  // this works like 'continue' in the closure
                     }
                     if (state.switchState[sw.displayName] != "off" && mem) {
-                         updateSwitchMem(mem = mem, value = "off", deviceName = sw.displayName)
+                        updateSwitchMem(mem = mem, value = "off", deviceName = sw.displayName)
                         runIn(1, "setSwitch", [data: [deviceId: sw.id, value:"off"], overwrite: false])
                         handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="off")
                     }
                     else {
-                        log.warn "Skipped shouldKeepSwitchOff off for ${sw.displayName}; manually turned on"
+                        logWarn "Skipped shouldKeepSwitchOff off for ${getDeviceUrl(sw.id, sw.displayName)}; manually turned on"
                     }
                 }
             }
@@ -691,17 +687,17 @@ def controlLights(action) {
 
                 
 
-                log.debug "eval case turn off for ${sw.displayName}"
+                log.debug "eval case turn off for ${getDeviceUrl(sw.id, sw.displayName)}"
 
                 if (sw.currentValue("switch") == "off"){
-                    logTrace "${sw.displayName} already off. Skipping"
+                    logTrace "${getDeviceUrl(sw.id, sw.displayName)} already off. Skipping"
                     return  // this works like 'continue' in the closure
                 }
 
                 if (state.switchState[sw.displayName] == "off" && mem) {
-                    log.warn "$sw.displayName has already been turned off by this app and is memoized. Skipping."
+                    logWarn "${getDeviceUrl(sw.id, sw.displayName)} has already been turned off by this app and is memoized. Skipping."
                 } else {
-                    logTrace "turning off $sw.displayName in 1 second..."
+                    logTrace "turning off ${getDeviceUrl(sw.id, sw.displayName)} in 1 second..."
                     updateSwitchMem(mem = mem, value = "off", deviceName = sw.displayName)
                     runIn(1, "setSwitch", [data: [deviceId: sw.id, value:"off"], overwrite: false])
 
@@ -710,7 +706,7 @@ def controlLights(action) {
             }
             break
         default:
-            log.warn "Unknown light control action: ${action}"
+            logWarn "Unknown light control action: ${action}"
     }
 }
 
@@ -725,7 +721,7 @@ def handleLevelAndColors(deviceId, mem, cmd){
         if (colorValue) {
             if (tempValue) {
                 if (state.colorTemperature[sw.displayName] == colorValue.colorTemperature) {
-                    log.warn "$sw.displayName color temperature has already been set to ${colorValue.colorTemperature} by this app and is memoized. Skipping."
+                    logWarn "$sw.displayName color temperature has already been set to ${colorValue.colorTemperature} by this app and is memoized. Skipping."
                 } else {
                     updateTempMem(mem=mem, tempValue=colorValue.colorTemperature, deviceName = sw.displayName)
                     runIn(1, "_setColorTemperature", [data: [deviceId: sw.id, value: colorValue.colorTemperature], overwrite: false])
@@ -1094,7 +1090,7 @@ def getFunctionalSensors() {
 
     // Skip if the function was run less than 10 minutes ago
     if (nowTime - lastCheck < (10 * 60 * 1000)) {
-        logTrace "Skipping getFunctionalSensors: Last check was ${(nowTime - lastCheck) / 60000} minutes ago."
+        logDebug "Skipping getFunctionalSensors: Last check was ${(nowTime - lastCheck) / 60000} minutes ago."
 
         if (state.functionalSensors && !state.functionalSensors.isEmpty()) {
             // Display previously memoized alerts for unresponsive sensors
@@ -1273,8 +1269,8 @@ def restrictedTime() {
 def getTimeout() {
     def result = noMotionTime // default
 
-    if (enableTrace) log.trace "timeModes: $timeModes"
-    if (enableTrace) log.trace "Current mode: ${location.mode}"
+    logDebug "timeModes: $timeModes"
+    logDebug "Current mode: ${location.mode}"
 
     try {
         if (absenceTimeoutSensor) {
@@ -1395,7 +1391,7 @@ def disableTraceLog() {
 def enableInfoLog() {
     state.EnableInfoTime = now()
     app.updateSetting('enableInfo', [type: 'bool', value: true])
-    runIn(1800, disableTraceLog)
+    runIn(1800, disableInfoLog)
     logInfo 'Description logging enabled.'
 }
 def disableInfoLog() {
@@ -1409,7 +1405,10 @@ def check_logs_timer() {
         if (enableDebug && state.EnableDebugTime != null && now - state.EnableDebugTime > 1800000) {
             disableDebugLog()
         }
-        if (enableTrace && state.EnableTraceTime != null && now - state.EnableTraceTime > 1800000) {
+        if (enableDebug && state.EnableInfoTime != null && now - state.EnableInfoTime > 1800000) {
+            disableInfoLog()
+        }
+        if (enableTrace && state.EnableTraceTime != null && now - state.EnableTraceTime > 24 * 60 * 60 * 1000) {
             disableTraceLog()
         }
         // We don't automatically disable description logging
@@ -1451,14 +1450,19 @@ private void initializeLogging() {
     }
     if (enableTrace) {
         log.trace 'Trace logging enabled. Will automatically disable in 30 minutes.'
-        runIn(1800, disableTraceLog)
+        runIn(24 * 60 * 60, disableTraceLog)
     }
     if (enableInfo) {
+        runIn(1800, disableInfoLog)
         logInfo('Description logging enabled.')
     }
     if (enableWarn) {
-        logInfo('Warn logging enabled.')
+        logInfo('Warn logging enabled. Will never be disabled by this app.')
     }
+}
+def getDeviceUrl(deviceId, displayName)
+{
+    return "<a href='http://${location.hub.localIP}/device/edit/${deviceId}' target='_blank'>${displayName}</a>"
 }
 def formatText(title, textColor, bckgColor){
     return "<div style=\"width:102%;background-color:${bckgColor};color:${textColor};padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${title}</div>"

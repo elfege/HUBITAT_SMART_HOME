@@ -87,6 +87,7 @@ preferences {
             if (keepSomeSwitchesOffInModes) {
                 input 'modesForSwitchesOff', 'mode', title: 'Select modes', multiple: true, required: true
                 input 'switchesToKeepOff', 'capability.switch', title: 'Switches to keep off in selected modes', multiple: true, required: true
+                input 'memoizeSwitchesThatAreKeptOffInModes', 'bool', title: 'Allow memoization override for these specific switches', defaultValue: true, submitOnChange: true
             }
             input 'keepSomeSwitchesOffAtAllTimes', 'bool', title: 'Keep some switches off at all times?', defaultValue: false, submitOnChange: true
             if (keepSomeSwitchesOffAtAllTimes) {
@@ -141,12 +142,37 @@ preferences {
                 input 'illuminanceThreshold', 'number', title: 'Illuminance threshold (lux)', required: true, defaultValue: 50
             }
             input 'watchdog', 'bool', title: 'Enable Watchdog', defaultValue: false
+
+            paragraph formatText('Sensor Failure Handling', 'black', '#E8E8E8')
+            input 'considerActiveWhenFail', 'bool', title: 'Consider motion active when all sensors fail?', defaultValue: false, submitOnChange: true
+            if (considerActiveWhenFail) {
+                paragraph formatText('When enabled, the app will consider motion as ACTIVE if all motion sensors become unresponsive. This can help prevent lights from being stuck OFF if sensors fail, but may result in unnecessary energy usage.', 'darkslate', '#F5F5F5')
+            }
+            else {
+                paragraph formatText('When disabled, the app will consider motion as INACTIVE if all motion sensors become unresponsive. This can help prevent lights from being stuck ON if sensors fail, avoiding unnecessary energy usage.', 'darkslate', '#F5F5F5')
+            }
+            
+            input 'flashLights', 'bool', title: 'Flash lights on sensor failure?', defaultValue: false, submitOnChange: true
+            if (flashLights) {
+                input 'flasher', 'capability.switch', title: 'Select light to flash', multiple: false, required: true
+            }
+            
+            input 'notificationDevices', 'capability.notification', title: 'Select notification devices', multiple: true, submitOnChange: true
+
+            if(flasher || notificationDevices) {
+                input 'notificationModes', 'mode', title: 'Location modes when notifications can be triggered', multiple: true, required: true
+            }
         }
         section('App Control') {
             input 'update', 'button', title: 'UPDATE'
             input 'run', 'button', title: 'RUN'
             input 'reset', 'button', title: 'Reset States'
-
+            input 'checkSensors', 'button', title: 'Health Check'
+            input 'closeHealthcheck', 'button', title: 'Close Health Check'
+            
+            if (state.showHealthCheck) {
+                displayHealthCheckResults()
+            }
         }
         section('Logging') {
             input 'enableDebug', 'bool', title: 'Enable debug logging', defaultValue: false, submitOnChange: true
@@ -155,6 +181,60 @@ preferences {
             input 'enableInfo', 'bool', title: 'Enable info logging', defaultValue: true, submitOnChange: true
         }
     }
+}
+
+def displayHealthCheckResults() {
+    def motionSensorNames = motionSensors?.collect { it.displayName } ?: []
+    def functionalSensors = checkFunctionalSensors()
+    def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
+    
+    href(
+        name: "closeHealthCheck",
+        id: "healthCheck",
+        title: "Close Health Check",
+        required: false,
+        style: "button",
+        url: "${location.hub.localIP}/installedapp/configure/${app.id}/mainPage",
+        description: """
+            <div style="background: white; padding: 20px; border-radius: 5px; margin: 10px 0;">
+                <h3>Sensor Health Check Results</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;">
+                            <b>All Motion Sensors</b>
+                            <ol>
+                                ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
+                            </ol>
+                        </td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">
+                            <b>${functionalSensors ? "Functional Sensors" : "<span style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS</span>"}</b>
+                            <ol>
+                                ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
+                            </ol>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <script>
+
+            // setTimeout(() => { js_resetHealthCheck() } , 1000);
+            // function js_resetHealthCheck() {
+            //     console.log("closing health check section")
+            //     const closeHealthChk = document.getElementById("settings[closeHealthcheck]")
+            //     closeHealthChk.click()
+            // }
+            // </script>
+        """
+    )
+
+    log.debug "state.showHealthCheck: $state.showHealthCheck"
+
+    runIn(3, resetHealthCheck)
+}
+
+def resetHealthCheck(){
+    log.warn "----------------------------resetting healthcheck bool"
+    state.showHealthCheck = false
 }
 def installed() {
     logDebug "Installed with settings: ${settings}"
@@ -251,20 +331,35 @@ def appButtonHandler(btn) {
         case 'reset':
             resetStates()
             break
+        case 'checkSensors':
+            case 'checkSensors':
+            state.showHealthCheck = true
+            break
+        case 'closeHealthCheck':
+            state.showHealthCheck = false
+            break
     }
     appLabel()
 }
 def getAllSwitches() {
-    def mainSwitches = switches ?: []
-    def resumeSwitches = additionalResumeSwitches ?: []
-    def pauseSwitches = additionalPauseSwitches ?: []
-    def keepOffSwitchesModes = switchesToKeepOff ?: []
-    def keepOffSwitchesAll = switchesToKeepOffAtAllTimes ?: []
+    // Combine all switch lists, defaulting to empty lists if any are null
+    def combinedSwitches = (switches ?: []) +
+                           (additionalResumeSwitches ?: []) +
+                           (additionalPauseSwitches ?: []) +
+                           (switchesToKeepOff ?: []) +
+                           (switchesToKeepOffAtAllTimes ?: [])
 
-    allSwitches = (mainSwitches + resumeSwitches + pauseSwitches + keepOffSwitchesModes + keepOffSwitchesAll).unique { it.id }
+    // Filter out any null entries to avoid errors
+    def nonNullSwitches = combinedSwitches.findAll { it != null }
 
-    return allSwitches
+    // Deduplicate switches by their 'id' to ensure each switch is only included once
+    // This is necessary because the same switch can appear in multiple lists
+    def uniqueSwitches = nonNullSwitches.unique { it.id }
+
+    // Return the final list of unique switches
+    return uniqueSwitches
 }
+
 def hubEventHandler(evt) {
     switch (evt.name) {
         case 'systemStart':
@@ -326,8 +421,8 @@ def hubEventHandler(evt) {
 
 
 }
-def motionHandler(evt) {
 
+def motionHandler(evt) {
     if (state.paused) {
         logDebug "Motion detected, but app is paused. Ignoring."
         return
@@ -337,23 +432,36 @@ def motionHandler(evt) {
 
     state.functionalSensors = state.functionalSensors ?: [:]
 
-    state.functionalSensors[evt.displayName] = false
+    // Store status with both functional state and device ID
+    // Set to true since we just received an event from this sensor
+    state.functionalSensors[evt.device.id] = [
+        functional: true,  // set to true since receiving an event proves functionality
+        deviceId: evt.device.id,
+        displayName: evt.device.displayName
+
+    ]
 
     if (InRestrictedModeOrTime()) return
 
-    def now = now()
-    def lastMotionHandled = state.lastMotionHandled ?: 0
-    def intervalBetweenEvents = 30 // in seconds
-    def someSecondsAgo = now - intervalBetweenEvents * 1000 // N seconds in milliseconds
     
-    if (lastMotionHandled > someSecondsAgo) {
-        master()
+    
+    if(evt.value == "active") {
+        master(motionActiveEvent=true) 
     }
-
-
+    else {
+        def now = now()
+        def lastMotionHandled = state.lastMotionHandled ?: 0
+        def intervalBetweenEvents = 30 // in seconds
+        def someSecondsAgo = now - intervalBetweenEvents * 1000 // N seconds in milliseconds
+        
+        if (lastMotionHandled > someSecondsAgo) {
+            master()
+        }
+    }
+    
     state.lastMotionHandled = now
-
 }
+
 def buttonHandler(evt) {
     if (evt == null) {
         log.error 'buttonHandler received null event'
@@ -438,7 +546,7 @@ def modeChangeHandler(evt) {
 }
 
 
-def master() {
+def master(motionActiveEvent=false) {
     def startTime = now()
     logDebug 'master start'
 
@@ -455,7 +563,7 @@ def master() {
         return
     }
 
-    if (Active()) {
+    if (motionActiveEvent || Active()) {
         controlLights('turn on')
     } else {
         log.warn "...................................... INACTIVE => OFF ................................."
@@ -466,7 +574,6 @@ def master() {
 
     scheduleNextRun()
 }
-
 
 def pauseApp() {
     state.paused = true
@@ -496,6 +603,12 @@ def resumeNormalOperation() {
     appLabel()
 }
 
+def isNotBothAdditionaAndRegularSwitch(deviceId) {
+    // If a device is not in the main 'switches' list but IS in one of the additional lists,
+    // then it should not be turned on/off by motion events.
+    // Return true if it's in additional lists but not in regular
+    return ((additionalPauseSwitches ?: []) + (additionalResumeSwitches ?: [])).any { it?.id == deviceId } && !((switches ?: []).any { it?.id == deviceId })
+}
 
 def controlLights(action) {
     def allSwitches = getAllSwitches()
@@ -506,6 +619,7 @@ def controlLights(action) {
                 sw ->
                 if (!shouldKeepSwitchOff(sw.id)) {
                     if (sw.currentValue('switch') == 'on') {
+                        logTrace "Toggling off ${sw.displayName}"
                         sw.off()
                         logDebug "Turned off: ${sw.displayName}"
                     } else {
@@ -516,6 +630,7 @@ def controlLights(action) {
                     logDebug "Skipped toggling ${sw.displayName} due to keep-off rule"
                 }
             }
+            resetStates() // toggles are user intervention bound. So reset any manual override memoization. 
             break
         case 'turn on':
             if (exceptions()) {
@@ -525,6 +640,11 @@ def controlLights(action) {
 
             allSwitches.each { sw ->
                 logDebug "switch -> $sw.displayName"
+
+                if (isNotBothAdditionaAndRegularSwitch(sw.id)){
+                    logTrace "${sw.displayName} is not a regular motion controlled switch. Skipping"
+                    return // this works like 'continue' in the closure
+                }
 
                 def mem = memoizeThisSwitch(sw.id)
 
@@ -548,8 +668,8 @@ def controlLights(action) {
                         return  // this works like 'continue' in the closure
                     }
                     if (state.switchState[sw.displayName] != "off" && mem) {
+                         updateSwitchMem(mem = mem, value = "off", deviceName = sw.displayName)
                         runIn(1, "setSwitch", [data: [deviceId: sw.id, value:"off"], overwrite: false])
-
                         handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="off")
                     }
                     else {
@@ -562,7 +682,14 @@ def controlLights(action) {
             allSwitches.each {
                 sw ->
 
+                if (isNotBothAdditionaAndRegularSwitch(sw.id)){
+                    log.debug "${sw.displayName} is not a regular motion controlled switch. Skipping"  
+                    return // this works like 'continue' in the closure
+                }
+
                 def mem = memoizeThisSwitch(sw.id)
+
+                
 
                 log.debug "eval case turn off for ${sw.displayName}"
 
@@ -685,13 +812,36 @@ def _setLevel(data){
 }
 
 def memoizeThisSwitch(deviceId){
-    def memThisOne = memoizeSwitchesThatAreKeptOffAtAllTimes && switchesToKeepOffAtAllTimes?.any{ it.id == deviceId }
-    result = memoize || memThisOne
 
-    logDebug "deviceId = $deviceId"
-    def device = getDeviceById_switch(deviceId)
-    logTrace "memoizeThisSwitch returns $result for ${device.displayName}"
-    return result
+    if (memoize){
+        // always return true if user selected memoization for all
+        return true
+    }
+        
+    if(memoizeSwitchesThatAreKeptOffAtAllTimes){
+        def memThisOne = switchesToKeepOffAtAllTimes.any{ sw ->         
+            
+            if (sw.id == deviceId)
+            {
+                logInfo "${sw.displayName} (id:${sw.id}) - is memoized"
+                return true
+            } 
+        
+        }
+    }
+    if(memoizeSwitchesThatAreKeptOffInModes){
+        def memThisOne = switchesToKeepOff.any{ sw ->         
+            
+            if (sw.id == deviceId)
+            {
+                logInfo "${sw.displayName} (id:${sw.id}) - is memoized"
+                return true
+            } 
+        
+        }
+    }
+    
+    return false
 }
 
 // these are all values as set BY THE APP
@@ -741,7 +891,21 @@ def resetStates(){
     state.paused = state.paused ?: false
     state.pauseStart = state.pauseStart ?: now
 
-    state.functionalSensors = state.functionalSensors ?: [:]
+    state.functionalSensors = [:]
+    // repopulate the state
+    // Pre-populate with all known sensors
+    motionSensors.each { sensor ->
+        state.functionalSensors[sensor.id] = [
+            functional: true,  // default to true until proven otherwise
+            deviceId: sensor.id,
+            displayName: sensor.displayName
+        ]
+    }
+    checkFunctionalSensors() // update with real values
+
+    state.functionalSensors.each { it -> 
+        log.debug "${it}"
+    }
 
     state.lastMotionHandled = state.lastMotionHandled ?: now
     
@@ -759,18 +923,11 @@ def resetStates(){
     log.trace "---------- states reset ok ----------"
         
 }
-// def getDeviceById(deviceId) {
-//     logDebug "Device ID types - passed in: ${deviceId.class}, device ids in list: ${allSwitches.collect{it.id.class}}"
 
-//     def allSwitches = getAllSwitches()
-//     logDebug "allSwitches: $allSwitches"
-//     def device = allSwitches.find { it.id == deviceId }
-//     logDebug "device id $deviceId is $device"
-//     return device
-// }
 
 def getDeviceById_switch(deviceId) {
-    def device = switches.find { it.id == deviceId }
+    def allSwitches = getAllSwitches()
+    def device = allSwitches.find { it.id == deviceId }
     if (!device) {
         log.warn "Device with ID ${deviceId} not found in switches."
     }
@@ -787,25 +944,36 @@ def getDeviceById_sensor(deviceId) {
 }
 
 // TODO
+// Function to clean up switch state
 def cleanUpSwitchState() {
     cleanUpStateForDeviceType('switchState', getAllSwitches(), 'switch')
 }
 
+/**
+ * Cleans up the state map for a specific device type by ensuring all device names
+ * in the state map correspond to existing devices in the provided device list.
+ *
+ * @param stateMapKey The key in the state object (e.g., 'switchState').
+ * @param deviceList The list of current devices of the specified type.
+ * @param deviceType A string representing the device type for logging purposes.
+ */
 def cleanUpStateForDeviceType(stateMapKey, deviceList, deviceType) {
     def originalState = state."${stateMapKey}" ?: [:]
-    def validDevices = deviceList.collect { it.id }
+    def validDeviceNames = deviceList.collect { it.displayName }  // Collect device display names
     
-    // Retain only valid keys in the state map
-    state."${stateMapKey}" = originalState.findAll { key, value ->
-        def device = getDeviceById_switch(key)  // Update this to the relevant device lookup
-        if (validDevices.contains(key)) {
-            true
+    // Retain only valid keys (device names) in the state map
+    state."${stateMapKey}" = originalState.findAll { deviceName, value -> 
+        if (validDeviceNames.contains(deviceName)) {
+            true  // Retain this entry in the state map
         } else {
-            log.warn "${deviceType.capitalize()} with ID ${key} is no longer valid. Removing from state.${stateMapKey}."
-            false
+            // Log the removal and remove invalid device entry from the state map
+            log.warn "${deviceType.capitalize()} '${deviceName}' is no longer valid. Removing from state.${stateMapKey}."
+            false  // Remove this entry from the state map
         }
     }
 }
+
+
 
 def formatPauseDuration() {
     if (pauseDurationUnit == 'Hours') {
@@ -824,7 +992,45 @@ def Active() {
     logDebug "Checking if motion is active. Motion sensors: $motionSensors"
 
     def functionalSensors = getFunctionalSensors()
-    logDebug "Functional sensors: ${functionalSensors.collect { it.displayName }}"
+
+    
+
+    // log.debug "functionalSensors: <br><ul> ${functionalSensors?.each { sensor -> sensor?.displayName }.join('<br><b><li></b>') }</ul>"
+    
+    def motionSensorNames = motionSensors?.collect { it.displayName } ?: []
+    def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
+
+    if(enableTrace || !functionalSensors) {
+        log.trace """
+            functionalSensors:
+            <table>
+            <tr>
+                <td>
+                <b>All Motion Sensors</b>
+                <ol>
+                    ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
+                </ol>
+                </td>
+                <td>
+                ${functionalSensors ? "<b>Functional Sensors" : "<b style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS: motion returns TRUE by default"}</b>
+                <ol>
+                    ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
+                </ol>
+                </td>
+            </tr>
+            </table>
+        """
+    }
+    
+    if (!functionalSensors) {
+        if(considerActiveWhenFail) {
+            return true
+        } 
+        else {
+            return false
+        }
+        sendAlert()
+    }
 
     // Check current state first (faster)
     def any_active = functionalSensors.any { it.currentValue('motion') == 'active' }
@@ -848,45 +1054,126 @@ def Active() {
     log.warn "anyActiveWithinTimePeriod within the last ${timeOut} ${timeUnit} = $anyActiveWithinTimePeriod"
     return anyActiveWithinTimePeriod
 }
+
+def sendAlert() {
+    if (location.mode in notificationModes){
+        def now = now()
+        def lastAlertTime = state.lastAlertTime ?: 0
+        def oneHourInMillis = 60 * 60 * 1000
+
+        // Only send alerts once per hour
+        if (now - lastAlertTime > oneHourInMillis) {
+            // Send notification
+            if (notificationDevices) {
+                def msg = "${app.label}: All motion sensors are unresponsive!"
+                notificationDevices.deviceNotification(msg)
+                logDebug "Notification sent to ${notificationDevices}"
+            }
+
+            // Flash lights if enabled
+            if (flashLights && flasher) {
+                3.times {
+                    flasher.on()
+                    pauseExecution(500)
+                    flasher.off()
+                    pauseExecution(500)
+                }
+                logDebug "Flashed ${flasher.displayName} for alert"
+            }
+
+            state.lastAlertTime = now
+        }
+    }
+}
+
 def getFunctionalSensors() {
-    def recentPeriod = new Date(now() - (24 * 60 * 60 * 1000)) // 24 hours ago
+    def lastCheck = state.lastEventHistoryCheck ?: 0
+    def nowTime = now()
+    def functionalSensors = []  // Initialize outside conditional blocks
+    state.functionalSensors = state.functionalSensors ?: resetStates()  // Initialize state if null
 
-    state.functionalSensors = state.functionalSensors ?: [:]  // if the device is a hub mesh device, motion events history might not show
-    
-    def functionalSensors = motionSensors.findAll {
-        sensor ->
+    // Skip if the function was run less than 10 minutes ago
+    if (nowTime - lastCheck < (10 * 60 * 1000)) {
+        logTrace "Skipping getFunctionalSensors: Last check was ${(nowTime - lastCheck) / 60000} minutes ago."
 
-            // Get events for this sensor in last 24 hours
-            def events = sensor.eventsSince(recentPeriod)
+        if (state.functionalSensors && !state.functionalSensors.isEmpty()) {
+            // Display previously memoized alerts for unresponsive sensors
+            logDebug "state.functionalSensors: $state.functionalSensors"
+            state.functionalSensors.each { entry -> // single parameter receives the Map.Entry (key being the id). Structure: [deviceId: [funcitonal=true, deviceId:254, displayName: the device's name]]
+                def sensorData = entry.value
+                if (!sensorData.functional) {
+                    def device = motionSensors.find { it.id == sensorData.id }
+                    if (device) {
+                        def m = "${app.label}: ${device.displayName} appears UNRESPONSIVE -- <a href='http://${location.hub.localIP}/device/edit/${device.id}' target='_blank'>Manage Device</a>"
+                        log.warn formatText(m, "black", "#E0E0E0")
+                    } else {
+                        log.warn "<b style='color:red; font-weight:900;'>Device not found for sensor name: ${sensorData.displayName}</b>"
+                        log.warn "motionSensors:::::: ${motionSensors.join(', ')}"
+                        log.warn "state.functionalSensors: $state.functionalSensors"
+                    }
+                }
+            }
 
-        // Check if there are any 'inactive' motion events
-        def hasMotionEvents = events.any {
-            event ->
-                event.name == 'motion' && event.value == 'inactive'
-        }
-
-        if (!hasMotionEvents) {
-            def m = "${app.label}: ${sensor} appears UNRESPONSIVE -- <a href='http://${location.hub.localIP}/device/edit/${sensor.id}' target='_blank'>Manage Device</a>"
-            log.warn formatText(m, "black", "#E0E0E0")
-            state.functionalSensors[sensor.displayName] = false
-
+            // Return device objects that were previously determined to be functional
+            functionalSensors = motionSensors.findAll { sensor -> 
+                state.functionalSensors[sensor.id]?.functional == true 
+            }
         } else {
-            state.functionalSensors[sensor.displayName] = true
+            log.warn "No functional sensor to log... re-evaluating..."
+            functionalSensors = checkFunctionalSensors()
         }
-
-        // Return true if sensor has events (it's functioning as expected)
-        hasMotionEvents || state.functionalSensors[sensor.displayName]
+    }
+    // redundant else on purpose for better readability/explicit logic
+    else {
+        
+        functionalSensors = checkFunctionalSensors()
     }
 
-    log.debug "functionalSensors: $functionalSensors"
-
-    if (functionalSensors.size() == 0) {
+    if (functionalSensors.isEmpty()) {
         def m = "ALL MOTION SENSORS ARE UNRESPONSIVE IN ${app.label}"
         log.warn formatText(m, "yellow", "red")
     }
 
+    // Always return device objects (functional sensors)
     return functionalSensors
 }
+
+def checkFunctionalSensors() {
+    def nowTime = now()
+    def recentPeriod = new Date(nowTime - (24 * 60 * 60 * 1000)) // 24 hours ago
+    state.lastEventHistoryCheck = nowTime // Update the last check timestamp
+    
+    logTrace "Checking motion events since: $recentPeriod"
+
+    def functionalSensors = motionSensors.findAll { sensor ->
+        // Get events for this sensor in the last 24 hours with a higher limit
+        def events = sensor.eventsSince(recentPeriod, [max: 200]) ?: []
+        logDebug "Events for ${sensor.displayName}: ${events.collect { evt -> [name: evt.name, value: evt.value, date: evt.date] }}"
+
+        // Check if there are any 'motion' events
+        def hasMotionEvents = events.any { event -> event.name == 'motion' }
+        logDebug "Sensor ${sensor.displayName} has motion events: $hasMotionEvents"
+
+        // Store both functional status and device ID for reference
+        state.functionalSensors[sensor.id] = [
+            functional: hasMotionEvents,
+            deviceId: sensor.id,
+            displayName: sensor.displayName
+        ]
+        
+        if (!hasMotionEvents) {
+            def m = "${app.label}: ${sensor.displayName} appears UNRESPONSIVE -- <a href='http://${location.hub.localIP}/device/edit/${sensor.id}' target='_blank'>Manage Device</a>"
+            log.warn formatText(m, "black", "#E0E0E0")
+        }
+
+        hasMotionEvents
+    }
+
+    return functionalSensors
+}
+
+
+
 def scheduleNextRun() {
     def timeout = getTimeout()
     def nextRun = timeout * (timeUnit == 'minutes' ? 60 : 1)
@@ -908,6 +1195,8 @@ def shouldKeepSwitchOff(deviceId) {
 
     if (keepSomeSwitchesOffInModes && modesForSwitchesOff?.contains(location.mode) && switchesToKeepOff?.find { it.id == deviceId }) {
         logInfo "Keeping ${device.displayName} off due to current mode: ${location.mode}"
+
+
 
         return true
     }

@@ -384,9 +384,21 @@ void configure() {
       log.debug "Configuration will be applied when the device wakes up. ${wakeUpInstructions}"
    }
 
-   // added by elfege: wakeup interval 120 seconds. Default is far too long.
-   cmds << zwave.wakeUpV2.wakeUpIntervalSet(seconds: 120, nodeid: zwaveHubNodeId ?: 1).format()
-   log.debug("wakeup interval set to 120 seconds by elfege...")
+    // Use proper wake-up interval based on power source
+   // if (device.currentValue("powerSource") == "battery") {
+   //    // For battery devices, use a more conservative wake-up interval to save power
+   //    // 1 hour = 3600 seconds
+   //    cmds << zwave.wakeUpV2.wakeUpIntervalSet(seconds: 3600, nodeid: zwaveHubNodeId ?: 1).format()
+   //    log.debug("wakeup interval set to 1 hour for battery conservation")
+   // } else {
+   //    // For DC-powered devices, can use a shorter interval
+   //    cmds << zwave.wakeUpV2.wakeUpIntervalSet(seconds: 300, nodeid: zwaveHubNodeId ?: 1).format()
+   //    log.debug("wakeup interval set to 5 minutes for DC-powered device")
+   // }
+
+   // added by elfege: wakeup interval 300 seconds. Default is far too long.
+   cmds << zwave.wakeUpV2.wakeUpIntervalSet(seconds: 600, nodeid: zwaveHubNodeId ?: 1).format()
+   log.debug("wakeup interval set to 300 seconds by elfege...")
 
    // If cmds list is not empty, send the commands (elfege)
    if (!cmds.isEmpty()) {
@@ -400,7 +412,9 @@ void configure() {
 // Apply preferences changes, including updating parameters
 void updated() {
    unschedule()
-   schedule("0 */1 * * * ?", refresh) // added by elfege refresh values every minute for god sake! It's freezing in my house!!! 
+   // schedule("0 */1 * * * ?", refresh) // added by elfege refresh values every minute for god sake! It's freezing in my house!!! 
+      schedule("0 */10 * * * ?", refresh) // Changed to every 10 minutes
+
 
    log.debug "updated()"
    log.warn "Debug logging is: ${logEnable == true ? 'enabled' : 'disabled'}"

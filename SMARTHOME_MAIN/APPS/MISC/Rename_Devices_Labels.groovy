@@ -34,8 +34,8 @@ def pageSetup()
             state.toRemove = toRemove?.split(",")
             if (enabledebug) log.debug "state.toRemove = $state.toRemove"
 
-            input "setName", "bool", title: "also change the device's name (not just its label)"
-            input "setLabelFromName", "bool", title: "The device label must be the device's name"
+            input "setName", "bool", title: "also change the device's name (not just its label - EXPERIMENTAL)"
+            input "setLabelFromName", "bool", title: "Restore The device label from the device's name before removing characters"
 
             input "enabledebug", "bool", title: "Debug", submitOnChange:true
             input "enableinfo", "bool", title: "Info logs", submitOnChange:true
@@ -112,54 +112,62 @@ def isMeshDevice(device) {
         def hubMeshDisabled = device.currentValue("hubMeshDisabled")
         if (enableTrace) log.trace "Device 'hubMeshDisabled' attribute: ${hubMeshDisabled}"
         if (hubMeshDisabled == "false" || hubMeshDisabled == false) {
-            log.debug "${device.displayName} is MESH"
+            if (enabledebug) log.debug "${device.displayName} is MESH"
             return true
         }
     } catch (Exception e) {
         log.error "Error retrieving 'hubMeshDisabled' attribute for ${device.displayName}: ${e.message}"
     }
 
-    if (enableDebug) log.debug "Device ${device.displayName} is NOT identified as a Hubitat Mesh Device."
+    if (enabledebug) log.debug "Device ${device.displayName} is NOT identified as a Hubitat Mesh Device."
     return false
 }
 
 def updateLabelFromName(device){
-    if (isMeshDevice(device)) {
-        try {
-            if (enabledebug) log.debug "Setting label for ${device.displayName} to match system name: ${device.name}"
-            device.setLabel(device.name)
-        } catch (Exception e) {
-            log.error "setLabelFromName ==> ${e}"
-        }
+    try {
+        if (enabledebug) log.debug "Setting label for ${device.displayName} to match system name: ${device.name}"
+        device.setLabel(device.name)
+    } catch (Exception e) {
+        log.error "setLabelFromName ==> ${e}"
     }
 }
+
+
+
 
 def execute()
 {
     log.info "Renaming devices..."
     if (allDevices) {
+
+        log.debug "NUMBER OF DEVICES: ${allDevices.size()} (MAX: 149)"
         
-        for (int i = 0; i < allDevices.size(); i++)
-        {
-            def device = allDevices[i]
+        allDevices.each { device -> 
+        
             //if (enabledebug) log.debug "renaming $device ($device.displayName)"
             def str = device.displayName
-            def strRem = state.toRemove
+            def stringToRemove = state.toRemove
 
             // Ensure the device label is first updated with the device name
             // This weirdly restores the original MESH name (on Home 1, etc.)
             // BEWARE! device.name = the mesh name. device.typeName = the original device name on the source hub! (i.e. Senled Zigbee Dimmer, etc.)
             if (setLabelFromName) {
-                if (device.displayName.contains("TV")) {
-                    // the original name is device.typeName! Not "name" which still returns the label. 
-                    log.debug "setLabelFromName-----------> <br>typeName: ${device.typeName} <br> name: ${device.name} <br>displayName: ${device.displayName} <br>label: ${device.label}"
-                }
+                // START OF NOTES SECTION
+                // KEEP THESE NOTES FOR FUTURE REFERENCE. 
+                // the original name is device.typeName! Not "name" which still returns the label. 
+                // NAME is the actual NAME IF AND ONLY IF the device is paired to this hub. 
+                // If it's a MESH device, then its name is typeName and WE CANNOT USE THAT (it'll probably be something like "Zigbee Device thingy.. etc." unless we do some pattern 
+                // recognition, comparing with the label - which is a useless headache for now)
+                // if (enabledebug) log.debug "setLabelFromName-----------> <br>typeName: ${device.typeName} <br> name: ${device.name} <br>displayName: ${device.displayName} <br>label: ${device.label}"
+                // END OF NOTES SECTION
+
+                // we update from the name, as an option, to restore the "on Home X" values that we want to remove. Can be useful to restore original "names" (in truth: lables, when it's mesh device)
                 updateLabelFromName(device)
             }
 
 
-            state.backup = state.backup ?: [: ]
-            for (int a = 0; a < strRem.size(); a++)
+            state.backup = state.backup ?: [:]
+            for (int a = 0; a < stringToRemove.size(); a++)
             {
                 """
                 Check if the device name contains the text to be removed
@@ -170,23 +178,41 @@ def execute()
                 """
                 state.backup[device.id] = str // backup the original name
 
-                if (str.contains(strRem[a])) {
-                    if (enabledebug) log.debug "contains $toRemove"
-                    str = str - strRem[a]
-                    //if (enabledebug) log.debug "new device name is '$str'"
-                    device.setLabel(str)
-
+                if (str.contains(stringToRemove[a])) {
+                    if (enabledebug) log.debug "$str contains characters to remove"
+                    str = str - stringToRemove[a]
+                    if (enabledebug) log.debug "new device label is '$str'"
                 }
 
                 // remove trailing spaces (best for homebridge)
-                str = str.replaceAll(/\s+$/, "")
-
+                // str = str.replaceAll(/\s+$/, "")
+                def cleanedName = str.trim()
+                device.setLabel(cleanedName)
 
                 
-                
+                // Validate the change
+                def currentLabel = device.label
+                def labelTrimmed = currentLabel.trim()
+                if (currentLabel != labelTrimmed) {
+                    log.error "Trailing spaces still in LABEL for '${device.displayName}': '${currentLabel}'"
+                    return
+                }
+
+                if(setName){
+                    // just remove white spaces to the name (for now)
+                    if (isMeshDevice(device)){ // don't change a non-Mesh device's original name. 
+                        device.setName(cleanedName)
+                        log.warn "Name updated successfully for '${device.name}' to '${cleanedName}'"
+                    }
+
+                    
+                }
+
+                if (enabledebug) log.debug "'${device.displayName}' => '${str}' => then => '${cleanedName}'"
 
             }
         }
+        log.info "Done!"
     }
 
 }

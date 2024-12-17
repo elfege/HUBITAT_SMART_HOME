@@ -428,47 +428,47 @@ def off()
 
 def setThermostatSetpoint(temperature) {
     log.info "setThermostatSetpoint called with: ${temperature}"
-    state.lastRequestedSetpoint = [attribute: "thermostatSetpoint", value: temperature]
-    temperature = new BigDecimal(temperature)
     
-    // Get current mode and update appropriate setpoint
+    // Ensure we're working with a number
+    def targetTemp = new BigDecimal(temperature)
+    
+    // If the device is off, turn it on when setting temperature
     def currentMode = device.currentValue("thermostatMode")
-    switch(currentMode) {
-        case "cool":
-            setCoolingSetpoint(temperature)
-            break
-        case "heat":
-            setHeatingSetpoint(temperature)
-            break
-        case "auto":
-            // In auto mode, update both setpoints
-            setCoolingSetpoint(temperature)
-            setHeatingSetpoint(temperature)
-            break
-        default:
-            // For any other mode, default to auto
-            setThermostatMode("auto")
-            setCoolingSetpoint(temperature)
-            setHeatingSetpoint(temperature)
+    if (currentMode == "off") {
+        // Default to auto mode when turning on via temperature set
+        setThermostatMode("auto")
+    }
+    
+    // Convert and apply the temperature
+    def celsiusTemp = ensureCelsius(targetTemp)
+    def params = updateSettingParams([target_temperature: celsiusTemp])
+    if(params) {
+        // Ensure the device is on when setting temperature
+        params.power_state = true
+        apply(params)
+        
+        // Update both heating and cooling setpoints for Alexa compatibility
+        sendEvent(name: "thermostatSetpoint", value: targetTemp, unit: getUnit())
+        sendEvent(name: "coolingSetpoint", value: targetTemp, unit: getUnit())
+        sendEvent(name: "heatingSetpoint", value: targetTemp, unit: getUnit())
     }
 }
 
-def setCoolingSetpoint(temperature) {
+def setCoolingSetpoint(temperature)
+{
     logDebug("setCoolingSetpoint(${temperature})")
     temperature = ensureCelsius(temperature)
     
-    // Store the requested setpoint
-    state.lastRequestedSetpoint = [attribute: "coolingSetpoint", value: temperature]
-    
     def params = updateSettingParams([target_temperature: temperature])
-    if(params) {
+    if(params)
+    {
         apply(params)
     }
 }
 
-def setHeatingSetpoint(temperature) {
+def setHeatingSetpoint(temperature)
+{
     logDebug("setHeatingSetpoint(${temperature})")
-    state.lastRequestedSetpoint = [attribute: "heatingSetpoint", value: temperature]
     setCoolingSetpoint(temperature)
 }
 
@@ -619,6 +619,34 @@ def ensureCelsius(input) {
     return result
 }
 
+// def _updateAttributes(resp)
+// {
+//     if(!resp)
+//     {
+//         return
+//     }
+    
+//     def events = [[:]]
+//     // If the device is powered off, report thermostatMode as "off"
+//     def currentMode = resp.power_state ? translateMode(resp.operational_mode?.toInteger(), "integer") : "off"
+    
+//     events +=    [name: "coolingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "heatingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "temperature",                 value: correctTemp(resp.indoor_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "thermostatFanMode",           value: translateFanMode(resp.fan_speed?.toInteger(), "integer")]
+//     events +=    [name: "thermostatMode",              value: currentMode]
+//     events +=    [name: "thermostatOperatingState",    value: resp.power_state ? "on" : "off" ]
+//     events +=    [name: "thermostatSetpoint",          value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "outdoorTemperature",          value: correctTemp(resp.outdoor_temperature, "C"), unit: getUnit()]
+//     events +=    [name: "turboMode",                   value: resp.turbo_mode ? "on" : "off"]
+    
+//     events.each
+//     {
+//         sendEvent(it)
+//     }  
+// }
+
+// Enhance the _updateAttributes method to ensure consistent state reporting
 def _updateAttributes(resp) {
     if(!resp) {
         log.warn "no resp!"
@@ -627,34 +655,22 @@ def _updateAttributes(resp) {
     
     // If the device is powered off, report thermostatMode as "off"
     def currentMode = resp.power_state ? translateMode(resp.operational_mode?.toInteger(), "integer") : "off"
+    def currentTemp = correctTemp(resp.target_temperature, "C").toString()  // Convert to string
+    def indoorTemp = correctTemp(resp.indoor_temperature, "C").toString()   // Convert to string
+    def outdoorTemp = correctTemp(resp.outdoor_temperature, "C").toString() // Convert to string
     
-    // Only send the event for the specific setpoint that was requested by the user
-    def requestedAttribute = state.lastRequestedSetpoint?.attribute
-    def requestedValue = state.lastRequestedSetpoint?.value
+    def events = []
+    events << [name: "coolingSetpoint", value: currentTemp, unit: getUnit()]
+    events << [name: "heatingSetpoint", value: currentTemp, unit: getUnit()]
+    events << [name: "temperature", value: indoorTemp, unit: getUnit()]
+    events << [name: "thermostatFanMode", value: translateFanMode(resp.fan_speed?.toInteger(), "integer")]
+    events << [name: "thermostatMode", value: currentMode]
+    events << [name: "thermostatOperatingState", value: resp.power_state ? "on" : "off"]
+    events << [name: "thermostatSetpoint", value: currentTemp, unit: getUnit()]
+    events << [name: "outdoorTemperature", value: outdoorTemp, unit: getUnit()]
+    events << [name: "turboMode", value: resp.turbo_mode ? "on" : "off"]
     
-    if (requestedAttribute && requestedValue) {
-        // Send only the specifically requested setpoint
-        sendEvent(name: requestedAttribute, value: requestedValue, unit: getUnit())
-        // Clear the request after sending
-        state.lastRequestedSetpoint = null
-    } else {
-        // If no specific request pending, send all setpoints as usual
-        def currentTemp = correctTemp(resp.target_temperature, "C").toString()
-        sendEvent(name: "coolingSetpoint", value: currentTemp, unit: getUnit())
-        sendEvent(name: "heatingSetpoint", value: currentTemp, unit: getUnit())
-        sendEvent(name: "thermostatSetpoint", value: currentTemp, unit: getUnit())
-    }
-    
-    // Always send these non-setpoint events
-    def indoorTemp = correctTemp(resp.indoor_temperature, "C").toString()
-    def outdoorTemp = correctTemp(resp.outdoor_temperature, "C").toString()
-    
-    sendEvent(name: "temperature", value: indoorTemp, unit: getUnit())
-    sendEvent(name: "thermostatFanMode", value: translateFanMode(resp.fan_speed?.toInteger(), "integer"))
-    sendEvent(name: "thermostatMode", value: currentMode)
-    sendEvent(name: "thermostatOperatingState", value: resp.power_state ? "on" : "off")
-    sendEvent(name: "outdoorTemperature", value: outdoorTemp, unit: getUnit())
-    sendEvent(name: "turboMode", value: resp.turbo_mode ? "on" : "off")
+    events.each { sendEvent(it) }
 }
 
 def getUnit()

@@ -48,16 +48,16 @@ def MainPage() {
                 def supportedFanModes = [:] 
                 thermostats.each { thermostat -> 
                     def modesJson = thermostat.currentValue("supportedThermostatFanModes") ?: thermostat.currentValue("supportedFanSpeeds")
-                    log.debug "modesJson: $modesJson (${modesJson.class})"
+                    logDebug "modesJson: $modesJson (${modesJson.class})"
                     def modes = new groovy.json.JsonSlurper().parseText(modesJson)
-                    log.debug "Parsed fanModes: $modes (${modes.class})"    
+                    logDebug "Parsed fanModes: $modes (${modes.class})"    
                     supportedFanModes[thermostat.displayName] = modes
                     
-                    log.debug "supportedFanModes: $supportedFanModes[thermostat.displayName]"
+                    logDebug "supportedFanModes: $supportedFanModes[thermostat.displayName]"
                     
                     def defaultVal = supportedFanModes[thermostat.displayName][1]
                     
-                    log.debug "defaultVal for $thermostat.displayName: ${defaultVal}"
+                    logDebug "defaultVal for $thermostat.displayName: ${defaultVal}"
                     input "fan_mode_on${thermostat.displayName}", "enum", 
                         title: "Select the fan mode compatible with $thermostat.displayName", 
                         options: supportedFanModes[thermostat.displayName], 
@@ -109,7 +109,7 @@ def MainPage() {
     }
 }
 def installed(){
-    log.debug "Installing with settings: $settings"
+    logDebug "Installing with settings: $settings"
     initialize()
     
     state.installed = true 
@@ -119,7 +119,7 @@ def updated(){
     initialize()
 }
 def initialize(){
-    log.debug "initializing with settings: $settings"
+    logDebug "initializing with settings: $settings"
 
     unschedule()
     unsubscribe()
@@ -171,12 +171,12 @@ def appButtonHandler(btn) {
     switch (btn) {
         case "pause": 
             def paused = !state.paused
-            if (enablewarning) log.warn "paused = $paused"
+            if (enablewarning) logWarn "paused = $paused"
 
             if (paused) {
-                if (enableinfo) log.info "unsuscribing from events..."
+                logInfo "unsuscribing from events..."
                 unsubscribe()
-                if (enableinfo) log.info "unschedule()..."
+                logInfo "unschedule()..."
                 unschedule()
             }
             else {
@@ -202,7 +202,31 @@ def appButtonHandler(btn) {
     }
 }
 def setPointHandler(evt){
-    logTrace "**********-------------- $evt.device $evt.name set to ${evt.value}F" 
+    logTrace "state.boostMode: ${state.boostMode} **********-------------- $evt.device $evt.name set to ${evt.value}F" 
+
+    
+
+    // Convert boost temperatures to strings for comparison
+    def tbh = tempBoostHeat?.toString() ?: "85"
+    def tbc = tempBoostCool?.toString() ?: "65"
+    
+    // Create array of possible boost temperature formats
+    def boostTemps = [
+        tbh, tbc,
+        "${tbh}.0", "${tbc}.0",
+        tempBoostHeat as BigDecimal, tempBoostCool as BigDecimal,
+        (tempBoostHeat as BigDecimal).setScale(1), (tempBoostCool as BigDecimal).setScale(1)
+    ]
+    
+    // Check if current value is a boost temperature
+    if(evt.value in boostTemps){
+        log.warn "boostTemps -- operation in boost mode. Not updating state.thermostatsSetpointSTATES"
+        return
+    }
+    // if(state.boostMode){
+    //     log.warn "state.boostMode -- operation in boost mode. Not updating state.thermostatsSetpointSTATES"
+    //     return
+    // }
 
     // Initialize tracking maps
     state.lastEvent = state.lastEvent ?: now()
@@ -257,7 +281,7 @@ def processPendingEvents(data) {
     ]
     
     if(!(latestEvent.value in boostTemps)) {
-        log.warn "updating mem from setPointHandler for $device"
+        logWarn "updating mem from setPointHandler for $device"
         updateMem(device, "all")  // Update all setpoints since they're all the same
         
         // Update timestamps for all event types
@@ -267,7 +291,7 @@ def processPendingEvents(data) {
         
         main(calledBy="setPointHandler")
     } else {
-        log.warn "operation in boost mode. Not updating state.thermostatsSetpointSTATES"
+        logWarn "operation in boost mode. Not updating state.thermostatsSetpointSTATES"
     }
     
     // Clear pending events for this device
@@ -287,38 +311,42 @@ def processEvent(evt) {
     ]
     
     if(!(evt.value in boostTemps)) {
-        log.warn "updating mem from setPointHandler for ${evt.device}"
+        logWarn "updating mem from setPointHandler for ${evt.device}"
         updateMem(evt.device, evt.name)
         state.lastUpdatedEventName[evt.name] = now()
         main(calledBy="setPointHandler")
     } else {
-        log.warn "operation in boost mode. Not updating state.thermostatsSetpointSTATES"
+        logWarn "operation in boost mode. Not updating state.thermostatsSetpointSTATES"
     }
 }
 def ChangedModeHandler(evt){
-    log.info "Location is in ${evt.value} mode" 
+    logInfo "Location is in ${evt.value} mode" 
     main(calledBy="ChangedModeHandler")
 }
 def temperatureHandler(evt){
-    log.info "$evt.device temperature is ${evt.value}F" 
+    logInfo "$evt.device temperature is ${evt.value}F" 
     main(calledBy="temperatureHandler")
 }
 def outsideTempHandler(evt){
-    log.info "$evt.device temperature is ${evt.value}F" 
+    logInfo "$evt.device temperature is ${evt.value}F" 
     main(calledBy="outsideTempHandler")
 }
 def contactHandler(evt){
-    log.info "$evt.device is ${evt.value}" 
+    logInfo "$evt.device is ${evt.value}" 
     main(calledBy="contactHandler")
 }
 
 def main(calledBy="unknown"){
+    
+    def lapse = 5 // interval in seconds
 
     state.lastRun = state.lastRun == null ? now() : state.lastRun
 
     logDebug("state.thermostatsSetpointSTATES: <br> ${state.thermostatsSetpointSTATES}")
 
-    if (now() - state.lastRun > 30000){
+    if (now() - state.lastRun > lapse * 1000){
+
+        state.lastRun = now() 
 
         def allThermostats = getAllThermostats()
 
@@ -327,13 +355,14 @@ def main(calledBy="unknown"){
         if(contactOpen){
             if(thermostats.any{it -> it.currentValue("thermostatMode") != "off"}) {
                 def openContacts = contacts.findAll{it -> it.currentValue('contact') == 'open'}
-                log.warn "${openContacts.join(', ')} ${openContacts.size() > 1 ? 'are' : 'is'} open - turning off HVAC"
+                logWarn "${openContacts.join(', ')} ${openContacts.size() > 1 ? 'are' : 'is'} open - turning off HVAC"
                 thermostats.setThermostatMode("off")
             }
             return
         }
 
         def need = get_need()
+
 
         allThermostats.each { thermostat -> 
 
@@ -362,11 +391,12 @@ def main(calledBy="unknown"){
         
     }
     else {
-        log.warn "main ran less than 30 seconds ago. Skipping"
+        logWarn "main ran less than $lapse seconds ago. Skipping"
     }
 }
 
 def handleBoost(need){
+    logWarn "handling boost (need:$need)"
     if(boost){
         
         if(need in ["heat", "cool"]){
@@ -378,7 +408,7 @@ def handleBoost(need){
 
             thermostats.each { thermostat -> 
                 if(thermostat.currentValue(attribute) != val) {
-                    log.debug "thermostat -> $thermostat"
+                    logDebug "thermostat -> $thermostat"
                     updateMem(thermostat, "${need}ingSetpoint")
                     log.debug "CALLING RUNIN TO setThermostatsSetpoint"
                     runIn(1, "setThermostatsSetpoint",
@@ -393,13 +423,15 @@ def handleBoost(need){
                             ],
                         overwrite: false
                     ])
+
+                    return 
                 }
             }
         }
     }
-    else {
-        state.boostMode = false
-    }
+    
+    state.boostMode = false
+    
 }
 
 def updateMem(thermostat, attribute="all"){
@@ -425,7 +457,7 @@ def updateMem(thermostat, attribute="all"){
     def coolingSetpoint = currCSP in boostTempArray ? 72.0 : currCSP
     def heatingSetpoint = currHSP in boostTempArray ? 75.0 : currHSP
 
-    log.debug """
+    logDebug """
         <br> tempBoostCool: $tempBoostCool (${tempBoostCool.class})
         <br> tempBoostHeat: $tempBoostHeat (${tempBoostHeat.class})
         <br> currSP: $currSP (${currSP.class})
@@ -462,7 +494,7 @@ def updateMem(thermostat, attribute="all"){
     ]
 }
 def resetMem(){
-    log.info "Resetting states..."
+    logInfo "Resetting states..."
     state.thermostatsSetpointSTATES = [:]
     initializeStates() // repopulate
     log.trace "Done."
@@ -492,16 +524,18 @@ def setThermostatsMode(data){
     
         
     if(device){
+
+        def fan_mode = settings["fan_mode_on${device.displayName}"] ?: "false"
         
-        def mode = attribute == "thermostatFanMode" ? "on" : need
+        def mode = attribute == "thermostatFanMode" ? fan_mode : need
         if (device.currentValue(attribute) != mode){
             
             device."${cmd}"(mode)
-            logTrace "${device.displayName} ${attribute} set to ${need}"
+            logTrace "${device.displayName} ${attribute} set to ${mode}"
 
             if (attribute == "thermostatFanMode") {  
-                def fan_mode = settings["fan_mode_on${device.displayName}"] ?: "false"
-                log.warn "fan mode required for $device.displayName: $fan_mode"              
+                
+                logWarn "fan mode required for $device.displayName: $fan_mode"              
                 if (!fan_mode) {
                     log.error "ERROR: fan mode not set!"
                     return
@@ -511,6 +545,8 @@ def setThermostatsMode(data){
                 logTrace "reverting fan to auto"
                 device.setThermostatFanMode("auto")
             }
+
+            handleBoost(mode)
         }
         else {
             logTrace "${device.displayName} ${attribute} <b>ALREADY</b> set to ${need}"
@@ -521,11 +557,11 @@ def setThermostatsMode(data){
         return 
     }
 
-    handleBoost(need)
+    
 }
 def setThermostatsSetpoint(data){
 
-    log.debug "setThermostatsSetpoint called by ${data.calledBy}"
+    logDebug "setThermostatsSetpoint called by ${data.calledBy}"
 
     // need: The required HVAC operation mode
     // Example: "heat" or "cool"
@@ -576,7 +612,7 @@ def setThermostatsSetpoint(data){
         }
     }
     else{
-        log.debug "cmd:$cmd"
+        logDebug "cmd:$cmd"
     }
     
 }
@@ -602,13 +638,13 @@ def setTurbo(required){
     for(t in allThermostats){
         def turboMode = required ? "on" : "off"
         if(t.hasAttribute("turboMode") && t.hasCommand("controlTurboMode")){
-            log.info "$t has turboMode and controlTurboMode"
+            logInfo "$t has turboMode and controlTurboMode"
             if(t.currentValue("turboMode") != turboMode){
-                logTrace "turning $turboMode turbo..."
+                logTrace "turbo $turboMode"
                 t.controlTurboMode(turboMode)
             }
             else {
-                log.info "turboMode already set to '${turboMode}' for $t"
+                logTrace "turboMode already set to '${turboMode}' for $t"
             }
         }
     }
@@ -616,7 +652,7 @@ def setTurbo(required){
 
 def get_need(){
 
-    log.debug "state.thermostatsSetpointSTATES: ${state.thermostatsSetpointSTATES}"
+    logTrace "state.thermostatsSetpointSTATES: ${state.thermostatsSetpointSTATES}"
 
     def allThermostats = getAllThermostats()
     def off_mode = fan_only ? "fan_only" : set_to_auto_instead_of_off ? "auto" : "off"
@@ -625,7 +661,7 @@ def get_need(){
 
     allThermostats.each { thermostat -> 
 
-        log.debug "-> processing $thermostat "
+        logDebug "-> processing $thermostat "
 
         def thermStates = state.thermostatsSetpointSTATES[thermostat.displayName]
         def targetTemp = thermStates.thermostatSetpoint
@@ -642,7 +678,7 @@ def get_need(){
 
         // Early returns for restricted conditions
         if(currentMode in restricted){
-            log.debug "Currently in restricted mode: $currentMode - no action needed"
+            logDebug "Currently in restricted mode: $currentMode - no action needed"
             return null
         }
 
@@ -680,43 +716,51 @@ def get_need(){
         // Decision logic
         if (indoorToSetpointDiff > coolDiff) {
             if (currentOutdoorTemp >= currentIndoorTemp || highAmplitude) {
-                log.debug "Indoor temperature too high, ${highAmplitude ? 'amplitude too high' : 'outdoor is warmer'} - mechanical cooling needed"
-                results += changeMode("cool", delayBetweenModes, timeSinceLastChange)
+                logTrace "Indoor temperature too high, ${highAmplitude ? 'amplitude too high' : 'outdoor is warmer'} - mechanical cooling needed"
+                results += changeMode("cool", delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
                 state.boostMode = false
             } else {
-                log.debug "Indoor temperature high but outdoor is cooler - natural cooling possible"
-                results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange)
+                logTrace "Indoor temperature high but outdoor is cooler - natural cooling possible"
+                results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
                 state.boostMode = false
             }
         } 
         else if (indoorToSetpointDiff < heatDiff) {
             
             if (currentOutdoorTemp <= currentIndoorTemp || lowAmplitude) {
-                log.debug "Indoor temperature too low, ${lowAmplitude ? 'amplitude too high' : 'outdoor is colder'} - heating needed"
-                results += changeMode("heat", delayBetweenModes, timeSinceLastChange)
+                logTrace "Indoor temperature too low, ${lowAmplitude ? 'amplitude too high' : 'outdoor is colder'} - heating needed"
+                results += changeMode("heat", delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
                 state.boostMode = boost ? true : false
             } else {
-                log.debug "Indoor temperature low but outdoor is warmer - natural heating possible"
-                results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange)
+                logTrace "Indoor temperature low but outdoor is warmer - natural heating possible"
+                results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
                 state.boostMode = boost ? true : false
             }
         }
         else {
-            log.debug "No extreme conditions detected - setting to ${off_mode}"
-            results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange)
+            logTrace "No extreme conditions detected - setting to ${off_mode}"
+            results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
         }
     }
 
+    log.debug "results: $results"
     if (results){
         def cools = results.findAll{it -> it == "cool"}
         def heats = results.findAll{it -> it == "heat"}
+
+        log.debug "cools.size(): ${cools.size()}"
+        log.debug "heats.size(): ${heats.size()}"
+
         if (cools.size() > heats.size()){
+            log.debug "cools win"
             final_result = "cool"
         }
-        if (heats.size() > cools.size()){
+        else if (heats.size() > cools.size()){
+            log.debug "heats win"
             final_result = "heat"
         }
         else {
+            log.debug "nor cool nor heat win..."
             final_result =  off_mode
         }
         
@@ -729,25 +773,35 @@ def get_need(){
     logTrace "need returns: $final_result"
     return final_result
 }
+
+
 // Helper function to update mode with delay check
-def changeMode(String newMode, delayBetweenModes, timeSinceLastChange) {
+def changeMode(String newMode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime) {
     // Only heat and cool are active HVAC modes that need delays
-    def isActiveMode = { mode -> mode in ["heat", "cool"] && !highAmplitude && !lowAmplitude}
+    
     // Only apply delay when switching between heat and cool or high/low amplitude compared to target temp
-    if (isActiveMode(newMode) && isActiveMode(state.lastMode) && newMode != state.lastMode && timeSinceLastChange <= delayBetweenModes) {
-        log.debug "Waiting for delay between heating/cooling modes (${(delayBetweenModes - timeSinceLastChange)/1000/60} minutes remaining)"
+    if (isActiveMode(newMode, highAmplitude, lowAmplitude) &&
+     isActiveMode(state.lastMode, highAmplitude, lowAmplitude) && 
+     newMode != state.lastMode && 
+     timeSinceLastChange <= delayBetweenModes) {
+        logTrace "Waiting for delay between heating/cooling modes (${(delayBetweenModes - timeSinceLastChange)/1000/60} minutes remaining)"
         return "auto" // if not ready to switch modes, set to auto
     }
 
     // Update timestamp only when changing between active modes
-    if (isActiveMode(newMode) || isActiveMode(state.lastMode)) {
+    if (isActiveMode(newMode, highAmplitude, lowAmplitude) || isActiveMode(state.lastMode, highAmplitude, lowAmplitude)) {
         state.lastModeChangeTime = currentTime
     }
   
     state.lastMode = newMode
 
-   
+    logWarn "changeMode returns $newMode"
     return newMode
+}
+def isActiveMode(mode, highAmplitude, lowAmplitude){
+    def result = mode in ["heat", "cool"] && !highAmplitude && !lowAmplitude
+    logTrace "isActiveMode ? $result"
+    return result    
 }
 
 def get_indoor_temperature() {
@@ -780,7 +834,7 @@ def get_indoor_temperature() {
             avgTemp.setScale(1, BigDecimal.ROUND_HALF_UP) : 
             new BigDecimal(avgTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
     } else {
-        log.warn "No valid temperature readings available from sensors. Using $thermostat"
+        logWarn "No valid temperature readings available from sensors. Using $thermostat"
         try {
             def temp = thermostat.currentValue("temperature")
             return (temp instanceof BigDecimal) ? 

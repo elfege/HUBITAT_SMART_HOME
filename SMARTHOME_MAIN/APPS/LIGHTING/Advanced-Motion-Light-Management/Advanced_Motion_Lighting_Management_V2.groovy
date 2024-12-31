@@ -194,36 +194,20 @@ def displayHealthCheckResults() {
         title: "Close Health Check",
         required: false,
         style: "button",
-        url: "${location.hub.localIP}/installedapp/configure/${app.id}/mainPage",
+        url: "#", //${location.hub.localIP}/installedapp/configure/${app.id}/mainPage",
+        // onclick: "location.reload()",
         description: """
-            <div style="background: white; padding: 20px; border-radius: 5px; margin: 10px 0;">
-                <h3>Sensor Health Check Results</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;">
-                            <b>All Motion Sensors</b>
-                            <ol>
-                                ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
-                            </ol>
-                        </td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">
-                            <b>${functionalSensors ? "Functional Sensors" : "<span style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS</span>"}</b>
-                            <ol>
-                                ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
-                            </ol>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-            <script>
+            ${generateHtmlTable()}
 
-            // setTimeout(() => { js_resetHealthCheck() } , 1000);
-            // function js_resetHealthCheck() {
-            //     console.log("closing health check section")
-            //     const closeHealthChk = document.getElementById("settings[closeHealthcheck]")
-            //     closeHealthChk.click()
-            // }
-            // </script>
+            <script>
+            setTimeout(() => { js_resetHealthCheck() } , 60000);
+            function js_resetHealthCheck() {
+                console.log("closing health check section")
+                const closeHealthChk = document.getElementById("settings[closeHealthcheck]")
+                closeHealthChk.click()
+                setTimeout(() => { location.reload() } , 1000)
+            }
+            </script>
         """
     )
 
@@ -303,6 +287,8 @@ def initialize() {
     state.paused = false
     state.pauseStart = null
 
+    
+
     // Initialize debug and trace timing
     initializeLogging()
 
@@ -333,6 +319,7 @@ def appButtonHandler(btn) {
             break
         case 'checkSensors':
             case 'checkSensors':
+            getFunctionalSensors(btnCmd=true)
             state.showHealthCheck = true
             break
         case 'closeHealthCheck':
@@ -564,13 +551,13 @@ def master(motionActiveEvent=false) {
     if (motionActiveEvent || Active()) {
         controlLights('turn on')
     } else {
-        log.warn "...................................... INACTIVE => OFF ................................."
+        logDebug "...................................... INACTIVE => OFF ................................."
         controlLights('turn off')
     }
 
-    logDebug "---end of master loop. Duration = ${now() - startTime} milliseconds"
-
     scheduleNextRun()
+
+    logDebug "---end of master loop. Duration = ${now() - startTime} milliseconds"
 }
 def pauseApp() {
     state.paused = true
@@ -635,7 +622,7 @@ def controlLights(action) {
             }
 
             allSwitches.each { sw ->
-                logDebug "switch -> ${getDeviceUrl(sw.id, sw.displayName)}"
+                logTrace "switch -> ${getDeviceUrl(sw.id, sw.displayName)}"
 
                 if (isNotBothAdditionaAndRegularSwitch(sw.id)){
                     logTrace "${getDeviceUrl(sw.id, sw.displayName)} is not a regular motion controlled switch. Skipping"
@@ -657,7 +644,9 @@ def controlLights(action) {
                         logInfo "turning on ${getDeviceUrl(sw.id, sw.displayName)}"
                         updateSwitchMem(mem = mem, value = "on", deviceName = sw.displayName)
                         runIn(1, "setSwitch", [data: [deviceId: sw.id, value: "on"], overwrite: false])
+                        
                     }
+                    handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="on")
                 } else {
                     if (sw.currentValue("switch") == "off"){
                         logTrace "${getDeviceUrl(sw.id, sw.displayName)} already off. Skipping"
@@ -666,11 +655,11 @@ def controlLights(action) {
                     if (state.switchState[sw.displayName] != "off" && mem) {
                         updateSwitchMem(mem = mem, value = "off", deviceName = sw.displayName)
                         runIn(1, "setSwitch", [data: [deviceId: sw.id, value:"off"], overwrite: false])
-                        handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="off")
                     }
                     else {
                         logWarn "Skipped shouldKeepSwitchOff off for ${getDeviceUrl(sw.id, sw.displayName)}; manually turned on"
                     }
+                    handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="off")
                 }
             }
             break
@@ -764,6 +753,8 @@ def setSwitch(data) {
     } else {
         logError "No deviceId provided to turnOnSwitch."
     }
+
+    
 }
 def _setColorTemperature(data){
     if (data && data.deviceId && data.value) {
@@ -916,6 +907,8 @@ def resetStates(){
 
     state.lastCheckTimer = state.lastCheckTimer ?: now
 
+    state.locationUrl = "http://${location.hub.localIP}/device/edit"
+
     log.trace "---------- states reset ok ----------"
         
 }
@@ -988,8 +981,6 @@ def Active() {
     logDebug "Checking if motion is active. Motion sensors: $motionSensors"
 
     def functionalSensors = getFunctionalSensors()
-
-    
 
     // log.debug "functionalSensors: <br><ul> ${functionalSensors?.each { sensor -> sensor?.displayName }.join('<br><b><li></b>') }</ul>"
     
@@ -1082,31 +1073,50 @@ def sendAlert() {
     }
 }
 
-def getFunctionalSensors() {
+
+def getFunctionalSensors(btnCmd=false) {
     def lastCheck = state.lastEventHistoryCheck ?: 0
     def nowTime = now()
-    def functionalSensors = []  // Initialize outside conditional blocks
-    state.functionalSensors = state.functionalSensors ?: resetStates()  // Initialize state if null
+    def functionalSensors = []  // Initialize local array
+    state.functionalSensors = state.functionalSensors ?: resetStates()  // Initialize global state array if null
+    state.locationUrl = state.locationUrl ?: resetStates()
 
-    // Skip if the function was run less than 10 minutes ago
-    if (nowTime - lastCheck < (10 * 60 * 1000)) {
+    // Skip if the function was run less than 10 minutes ago, unless it's a btnCmd (from btn handler)
+    if (btnCmd || nowTime - lastCheck < (10 * 60 * 1000)) {
         logDebug "Skipping getFunctionalSensors: Last check was ${(nowTime - lastCheck) / 60000} minutes ago."
 
+       
+
+        
         if (state.functionalSensors && !state.functionalSensors.isEmpty()) {
             // Display previously memoized alerts for unresponsive sensors
             logDebug "state.functionalSensors: $state.functionalSensors"
-            state.functionalSensors.each { entry -> // single parameter receives the Map.Entry (key being the id). Structure: [deviceId: [funcitonal=true, deviceId:254, displayName: the device's name]]
-                def sensorData = entry.value
-                if (!sensorData.functional) {
-                    def device = motionSensors.find { it.id == sensorData.id }
-                    if (device) {
-                        def m = "${app.label}: ${device.displayName} appears UNRESPONSIVE -- <a href='http://${location.hub.localIP}/device/edit/${device.id}' target='_blank'>Manage Device</a>"
+            
+            def iterated = false
+            state.functionalSensors.collect { it -> 
+                /* 
+                Structure:
+                    [
+                        deviceId:   [
+                                        funcitonal=true,
+                                        deviceId:254,
+                                        displayName: the device's name
+                                    ]
+                    ]
+
+                */
+                def device = it.value
+          
+
+                if (!device.functional) {
+                    
+                        def m = "${app.label}: ${device.displayName} appears UNRESPONSIVE -- <a href='${state.locationUrl}/${device.deviceId}' target='_blank'>Manage Device</a>"
                         log.warn formatText(m, "black", "#E0E0E0")
-                    } else {
-                        log.warn "<b style='color:red; font-weight:900;'>Device not found for sensor name: ${sensorData.displayName}</b>"
-                        log.warn "motionSensors:::::: ${motionSensors.join(', ')}"
-                        log.warn "state.functionalSensors: $state.functionalSensors"
+                
+                    if(!iterated){
+                        if (enableDebug || btnCmd)  log.info generateHtmlTable()
                     }
+                    iterated = true // avoid showing the table over each iteration
                 }
             }
 
@@ -1132,6 +1142,79 @@ def getFunctionalSensors() {
 
     // Always return device objects (functional sensors)
     return functionalSensors
+}
+
+def generateHtmlTable(){
+    def list_functional = """              
+        <ol>
+            ${state.functionalSensors.collect{ sensorState -> 
+                sensorState.value.functional ? 
+                    "<li><a href='${state.locationUrl}/${sensorState.value.deviceId}' target='_blank'>${sensorState.value.displayName}</a></li>" : 
+                    "" 
+            }.join()}
+        </ol>
+    """
+    
+    def list_not_functional = """
+        <ol>
+            ${state.functionalSensors.collect{ sensorState -> 
+                !sensorState.value.functional ? 
+                    "<li><a href='${state.locationUrl}/${sensorState.value.deviceId}' target='_blank'>${sensorState.value.displayName}</a></li>" : 
+                    "" 
+            }.join()}
+        </ol>
+    """
+    def table = """
+        <style>
+            .tablediv {
+                background: white; 
+                padding: 20px;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
+            table {
+                font-family: arial, sans-serif;
+                border-collapse: collapse;
+                width: 100%;
+            }
+
+            td {
+                border: 1px solid rgb(105, 29, 29);
+                text-align: left;
+                padding: 8px;
+            }
+
+            th {
+                border: 1px solid rgb(15, 14, 14);
+                text-align: center;
+                padding: 8px;
+            }
+
+            .not_functioning {
+                color: red;
+                font-weight: 900;
+            }
+            .functioning {
+                color: green;
+                font-weight: 900;
+            }
+        </style>
+
+        <div class=tablediv>
+            <table>
+                <tr>
+                    <th class="not_functioning" >UNRESPONSIVE SENSORS</th>
+                    <th class="functioning" >FUNCTIONAL SENSORS</th>
+                </tr>
+                <tr>
+                    <td>${list_not_functional}</td>
+                    <td>${list_functional}</td>
+                </tr>
+            </table>
+        </div>
+    """
+
+    return table
 }
 
 def checkFunctionalSensors() {
@@ -1173,6 +1256,11 @@ def checkFunctionalSensors() {
 def scheduleNextRun() {
     def timeout = getTimeout()
     def nextRun = timeout * (timeUnit == 'minutes' ? 60 : 1)
+
+    // ensure nextRun is never lower than 2 minutes
+    def minInterv = 2 * 60 * 1000
+    nextRun = nextRun >= minInterv ?: minInterv
+
     runIn(nextRun, master)
     logDebug "Next master() run scheduled in ${nextRun} seconds"
 }

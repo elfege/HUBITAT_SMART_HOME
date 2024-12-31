@@ -687,17 +687,18 @@ def translateMode(value, inputType) {
                 case 2: return "cool"
                 case 3: return "cool"  // Map 'dry' to 'cool' for Alexa
                 case 4: return "heat"
-                case 5: return "auto"  // Map 'fan_only' to 'auto' for Alexa
-                default: return "off"
+                case 5: return "fan_only"  // Map 'fan_only' to 'off' for Alexa
+                default: return "unknown"
             }
             
         case "string":
             switch(value.toLowerCase()) {
                 case "auto": return 1
                 case "cool": return 2
+                case "dry":  return 3
                 case "heat": return 4
-                case "off": return 0
-                default: return 1  // Default to auto mode
+                case "fan_only": return 5
+                default: return "auto"
             }
         
         default:

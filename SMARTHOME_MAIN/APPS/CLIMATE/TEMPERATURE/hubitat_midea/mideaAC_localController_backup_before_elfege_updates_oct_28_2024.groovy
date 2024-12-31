@@ -60,8 +60,8 @@ preferences
         input name: "ipAddress", type: "text", title: "IP address", required: true
         input name: "port", type: "number", title: "port", required: true, defaultValue: 6444
         input name: "id", type: "number", title: "id", required: true
-        input name: "token", type: "text", title: "token", required: false
-        input name: "key", type: "text", title: "key", required: false        
+        input name: "token", type: "text", title: "token", required: true
+        input name: "key", type: "text", title: "key", required: true        
     }
     section
     {
@@ -104,8 +104,7 @@ def supportedFanSpeedsList()
 
 def supportedThermoModesList()
 {
-        // return ["auto", "cool", "dry", "fan_only", "heat", "off"]    
-    return ["auto", "cool", "heat", "off"]  // Remove modes Alexa doesn't understand
+    return ["auto", "cool", "dry", "fan_only", "heat", "off"]    
 }
 
 def initialize()
@@ -560,76 +559,29 @@ def ensureCelsius(input)
     return (degC) ? new BigDecimal(input) : fahrenheitToCelsius(new BigDecimal(input))
 }
 
-def _updateAttributes(resp) {
-    if(!resp) {
+def _updateAttributes(resp)
+{
+    if(!resp)
+    {
         return
     }
     
-    log.debug "Raw response from device: ${resp}"
+    def events = [[:]]
     
-    try {
-        // Process temperatures with explicit casting
-        def currentTemp = 0.0
-        def targetTemp = 0.0
-        
-        // Handle indoor temperature
-        if (resp.indoor_temperature != null) {
-            currentTemp = new BigDecimal(resp.indoor_temperature.toString()).setScale(1, BigDecimal.ROUND_HALF_UP)
-            if (!degC) {
-                currentTemp = new BigDecimal(celsiusToFahrenheit(currentTemp)).setScale(1, BigDecimal.ROUND_HALF_UP)
-            }
-        }
-        
-        // Handle target temperature
-        if (resp.target_temperature != null) {
-            targetTemp = new BigDecimal(resp.target_temperature.toString()).setScale(1, BigDecimal.ROUND_HALF_UP)
-            if (!degC) {
-                targetTemp = new BigDecimal(celsiusToFahrenheit(targetTemp)).setScale(1, BigDecimal.ROUND_HALF_UP)
-            }
-        }
-        
-        // Send events with explicit number values
-        sendEvent(name: "temperature", value: currentTemp.doubleValue(), unit: getUnit())
-        sendEvent(name: "coolingSetpoint", value: targetTemp.doubleValue(), unit: getUnit())
-        sendEvent(name: "heatingSetpoint", value: targetTemp.doubleValue(), unit: getUnit())
-        sendEvent(name: "thermostatSetpoint", value: targetTemp.doubleValue(), unit: getUnit())
-        
-        // Handle modes
-        def currentMode = resp.power_state ? translateMode(resp.operational_mode?.toInteger() ?: 1, "integer") : "off"
-        sendEvent(name: "thermostatMode", value: currentMode ?: "off")
-        
-        def fanMode = translateFanMode(resp.fan_speed?.toInteger() ?: 102, "integer")
-        sendEvent(name: "thermostatFanMode", value: fanMode ?: "auto")
-        
-        sendEvent(name: "thermostatOperatingState", value: resp.power_state ? "on" : "off")
-        
-        // Handle outdoor temperature if present
-        if (resp.outdoor_temperature != null) {
-            def outdoorTemp = new BigDecimal(resp.outdoor_temperature.toString()).setScale(1, BigDecimal.ROUND_HALF_UP)
-            if (!degC) {
-                outdoorTemp = new BigDecimal(celsiusToFahrenheit(outdoorTemp)).setScale(1, BigDecimal.ROUND_HALF_UP)
-            }
-            sendEvent(name: "outdoorTemperature", value: outdoorTemp.doubleValue(), unit: getUnit())
-        }
-        
-        if (resp.turbo_mode != null) {
-            sendEvent(name: "turboMode", value: resp.turbo_mode ? "on" : "off")
-        }
-        
-    } catch (Exception e) {
-        log.error "Error in _updateAttributes: ${e.message}", e
-        log.debug "Stack trace: ${e.getStackTrace()}"
-    }
-}
-
-private Double celsiusToFahrenheit(value) {
-    def dValue = value instanceof BigDecimal ? value.doubleValue() : new BigDecimal(value.toString()).doubleValue()
-    return ((dValue * 1.8) + 32)
-}
-
-private Double fahrenheitToCelsius(value) {
-    def dValue = value instanceof BigDecimal ? value.doubleValue() : new BigDecimal(value.toString()).doubleValue()
-    return ((dValue - 32) / 1.8)
+    events +=    [name: "coolingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+    events +=    [name: "heatingSetpoint",             value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+    events +=    [name: "temperature",                 value: correctTemp(resp.indoor_temperature, "C"), unit: getUnit()]
+    events +=    [name: "thermostatFanMode",           value: translateFanMode(resp.fan_speed?.toInteger(), "integer")]
+    events +=    [name: "thermostatMode",              value: translateMode(resp.operational_mode?.toInteger(), "integer")]
+    events +=    [name: "thermostatOperatingState",    value: resp.power_state ? "on" : "off" ]
+    events +=    [name: "thermostatSetpoint",          value: correctTemp(resp.target_temperature, "C"), unit: getUnit()]
+    events +=    [name: "outdoorTemperature",          value: correctTemp(resp.outdoor_temperature, "C"), unit: getUnit()]
+    events +=    [name: "turboMode",                   value: resp.turbo_mode ? "on" : "off"]
+    
+    events.each
+    {
+        sendEvent(it)
+    }  
 }
 
 def getUnit()
@@ -637,82 +589,67 @@ def getUnit()
     return (degC) ? "°C" : "°F"
 }
 
-def translateMode(value, inputType) {
-    try {
-        if (value == null) {
-            return inputType == "integer" ? "off" : 0
-        }
+def translateMode(value, inputType)
+{
+    switch(inputType)
+    {
+        case "integer":
+            switch(value.toInteger())
+            {
+                case 1: return "auto"
+                case 2: return "cool"
+                case 3: return "dry"
+                case 4: return "heat"
+                case 5: return "fan_only"
+                default: return "unknown"
+            }
 
-        switch(inputType) {
-            case "integer":
-                def mode = value instanceof Integer ? value : value.toInteger()
-                switch(mode) {
-                    case 1: return "auto"
-                    case 2: return "cool"
-                    case 3: return "cool"  // Map 'dry' to 'cool'
-                    case 4: return "heat"
-                    case 5: return "auto"  // Map 'fan_only' to 'auto'
-                    default: return "off"
-                }
-
-            case "string":
-                def strValue = value.toString().trim()
-                if (strValue.isEmpty()) return 1
-                switch(strValue.toLowerCase()) {
-                    case "auto": return 1
-                    case "cool": return 2
-                    case "heat": return 4
-                    case "off": return 0
-                    default: return 1
-                }
-            
-            default:
-                return inputType == "integer" ? "off" : 0
-        }
-    } catch (Exception e) {
-        log.warn "Error translating mode: ${e.message}"
-        return inputType == "integer" ? "off" : 0
+        case "string":
+            switch(value)
+            {
+                case "auto": return 1
+                case "cool": return 2
+                case "dry":  return 3
+                case "heat": return 4
+                case "fan_only": return 5
+                default: return
+            }
+        
+        default:
+            return 
     }
 }
 
-def translateFanMode(value, inputType) {
-    try {
-        if (value == null) {
-            return inputType == "integer" ? "auto" : 102
-        }
+def translateFanMode(value, inputType)
+{
+    switch(inputType)
+    {
+        case "integer":
+            switch(value.toInteger())
+            {
+                case 102: return "auto"
+                case 100: return "full"
+                case 80: return "high"
+                case 60: return "medium"
+                case 40: return "low"
+                case 20: return "silent"
+                default: return "unknown"
+            }
 
-        switch(inputType) {
-            case "integer":
-                def speed = value instanceof Integer ? value : value.toInteger()
-                switch(speed) {
-                    case 102: return "auto"
-                    case 100: return "full"
-                    case 80: return "high"
-                    case 60: return "medium"
-                    case 40: return "low"
-                    case 20: return "silent"
-                    default: return "auto"
-                }
-
-            case "string":
-                def strValue = value.toString().trim()
-                if (strValue.isEmpty()) return 102
-                switch(strValue.toLowerCase()) {
-                    case "auto": return 102
-                    case "full": return 100
-                    case "high": return 80
-                    case "medium": return 60
-                    case "low": return 40
-                    case "silent": return 20
-                    default: return 102
-                }
-            
-            default:
-                return inputType == "integer" ? "auto" : 102
-        }
-    } catch (Exception e) {
-        log.warn "Error translating fan mode: ${e.message}"
-        return inputType == "integer" ? "auto" : 102
+        case "string":
+            switch(value)
+            {
+                case "auto": return 102
+                case "full": return 100
+                case "high": return 80
+                case "medium": return 60
+                case "low": return 40
+                case "silent": return 20
+                default: return
+            }
+        
+        default:
+            return
     }
 }
 

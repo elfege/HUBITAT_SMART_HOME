@@ -699,44 +699,50 @@ def controlLights(action) {
     }
 }
 
-def handleLevelAndColors(deviceId, mem, cmd){
-    def sw = getDeviceById_switch(deviceId)
+def handleLevelAndColors(deviceId, mem, cmd) {   
     
     if (useDim) {
-        def level = sw.currentValue('level') != currentDimLevelMode && sw.hasCommand('setLevel') ? cmd == "off" ? "" : getCurrentDimLevelPerMode() : null
-        def colorValue = useColor && sw.hasCapability('ColorControl') ? cmd == "off" ? "" : getColorValue() : null
-        def tempValue =  colorValue ? colorValue.containsKey('colorTemperature') && sw.hasCapability('ColorTemperature') ? cmd == "off" ? "" : colorValue.colorTemperature : null : null
+        def sw = getDeviceById_switch(deviceId)
+        def currentLevel = sw.currentValue('level')
 
-        if (colorValue) {
-            if (tempValue) {
-                if (state.colorTemperature[sw.displayName] == colorValue.colorTemperature) {
-                    logWarn "$sw.displayName color temperature has already been set to ${colorValue.colorTemperature} by this app and is memoized. Skipping."
-                } else {
-                    updateTempMem(mem=mem, tempValue=colorValue.colorTemperature, deviceName = sw.displayName)
-                    runIn(1, "_setColorTemperature", [data: [deviceId: sw.id, value: colorValue.colorTemperature], overwrite: false])
-                    
-                }
-            } 
-            else if (colorValue) {
-                if (state.color[sw.displayName] == colorValue) {
-                    log.warn "$sw.displayName color has already been set to $colorValue by this app and is memoized. Skipping."
-                } else {
-                    updateColorMem(mem=mem, colorValue=colorValue, deviceName = sw.displayName)
-                    runIn(1, "_setColor", [data: [deviceId: sw.id, value: colorValue], overwrite: false])
+        def targetLevel = cmd == "off" ? 0 : getCurrentDimLevelPerMode()
 
+        logTrace """<b>
+        <br> ${sw.displayName} current level is: ${currentLevel}
+        <br> Current location mode is: ${location.mode}
+        <br> targetLevel is: ${targetLevel} 
+        </b>
+        """
+        
+        // Only change level if it's different from current
+        if (currentLevel != targetLevel) {
+            if (cmd == "off") {
+                logDebug "${sw.displayName}: Turning off"
+                updateLevelMem(mem=mem, value=0, deviceName=sw.displayName)
+                runIn(1, "_setLevel", [data: [deviceId: sw.id, value: 0], overwrite: false])
+            } else if (sw.hasCommand('setLevel')) {
+                logDebug "${sw.displayName}: Setting level to ${targetLevel}%"
+                updateLevelMem(mem=mem, value=targetLevel, deviceName=sw.displayName)
+                runIn(1, "_setLevel", [data: [deviceId: sw.id, value: targetLevel], overwrite: false])
+            }
+        } else {
+            logDebug "${sw.displayName}: Current level ${currentLevel}% matches target level, no change needed"
+        }
+
+        // Handle colors if enabled
+        if (useColor && sw.hasCapability('ColorControl')) {
+            def colorValue = cmd == "off" ? null : getColorValue()
+            if (colorValue) {
+                if (colorValue.containsKey('colorTemperature') && sw.hasCapability('ColorTemperature')) {
+                    handleColorTemperature(sw, colorValue.colorTemperature, mem)
+                } else {
+                    handleColor(sw, colorValue, mem)
                 }
             }
         }
-        if (level) {
-            if (state.dimLevel[sw.displayName] == level && consistentState) {
-                log.warn "$sw.displayName level already been set to ${level}% by this app. Skipping."
-            }
-            else {
-                updateLevelMem(mem=mem, value=level, deviceName=sw.displayName)
-                runIn(1, "_setLevel", [data: [deviceId: sw.id, value: level], overwrite: false])
-                
-            }
-        }
+    }
+    else {
+        log.debug "useDim =$useDim"
     }
 }
 
@@ -756,6 +762,12 @@ def setSwitch(data) {
 
     
 }
+private void handleColorTemperature(device, temperature, mem) {
+    if (state.colorTemperature[device.displayName] != temperature) {
+        updateTempMem(mem=mem, tempValue=temperature, deviceName=device.displayName)
+        runIn(1, "_setColorTemperature", [data: [deviceId: device.id, value: temperature], overwrite: false])
+    }
+}
 def _setColorTemperature(data){
     if (data && data.deviceId && data.value) {
         def device = getDeviceById_switch(data.deviceId)
@@ -768,6 +780,12 @@ def _setColorTemperature(data){
         }
     } else {
         logError "No deviceId provided to _setColorTemperature."
+    }
+}
+private void handleColor(device, colorValue, mem) {
+    if (state.color[device.displayName] != colorValue) {
+        updateColorMem(mem=mem, colorValue=colorValue, deviceName=device.displayName)
+        runIn(1, "_setColor", [data: [deviceId: device.id, value: colorValue], overwrite: false])
     }
 }
 def _setColor(data){
@@ -1257,11 +1275,13 @@ def scheduleNextRun() {
     def timeout = getTimeout()
     def nextRun = timeout * (timeUnit == 'minutes' ? 60 : 1)
 
-    // ensure nextRun is never lower than 2 minutes
-    def minInterv = 2 * 60 * 1000
-    nextRun = nextRun >= minInterv ?: minInterv
+    // ensure nextRun is never lower than 5 minutes
+    def minInterv = 300
+    if (nextRun < minInterv) {
+        nextRun = minInterv
+    }
 
-    runIn(nextRun, master)
+    runIn(nextRun.toInteger(), 'master')
     logDebug "Next master() run scheduled in ${nextRun} seconds"
 }
 def shouldKeepSwitchOff(deviceId) {
@@ -1438,16 +1458,30 @@ private int getCurrentDimLevelPerMode() {
     if (useDim) {
         if (useModeSpecificDimming) {
             def currentMode = location.mode
-            def modeSpecificLevel = settings["dimLevel_${currentMode}"]
-            if (modeSpecificLevel != null) {
-                logDebug "Using mode-specific dim level for ${currentMode}: ${modeSpecificLevel}"
-                return modeSpecificLevel
+            // Find the mode object that matches current mode name
+            def modeObject = location.modes.find { it.name == currentMode }
+            if (modeObject) {
+                def modeSpecificLevel = settings["dimLevel_${modeObject.id}"]
+                if (modeSpecificLevel != null) {
+                    logDebug "Using mode-specific dim level for ${currentMode}: ${modeSpecificLevel}"
+                    return modeSpecificLevel.toInteger()
+                } else {
+                    logDebug "No specific dim level found for mode ${currentMode}, using default"
+                }
+            } else {
+                logWarn "Could not find mode object for ${currentMode}"
             }
         }
         logDebug "Using default dim level: ${defaultDimLevel}"
-        return defaultDimLevel
+        return defaultDimLevel.toInteger()
     }
     return 100  // If dimming is not used, return full brightness
+}
+private String getModeSpecificDimSettingKey() {
+    // Helper method to get the current mode's specific dimming level setting key
+    def currentMode = location.mode
+    def modeObject = location.modes.find { it.name == currentMode }
+    return modeObject ? "dimLevel_${modeObject.id}" : null
 }
 def scheduleOff() {
     if (!Active()) {

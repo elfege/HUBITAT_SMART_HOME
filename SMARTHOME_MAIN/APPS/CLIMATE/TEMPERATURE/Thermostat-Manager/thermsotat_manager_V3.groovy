@@ -1783,57 +1783,127 @@ def validateComfortCapabilities() {
         ]
     ]
 
-    def comfCapTiers = comfortCapabilitiesTiers()
+    // Collect all potential devices that might have humidity sensing
+    def allDevices = []
     
-    // All available devices
-    def allDevices = (tempSensors ?: []) + (thermostats ?: []) + (motionSensors ?: [])
+    // Add motion sensors
+    if (motionSensors) {
+        allDevices.addAll(motionSensors)
+        logDebug "Added ${motionSensors.size()} motion sensors to validation check"
+    }
     
-    // Check required capabilities
-    comfCapTiers.required.each { requirement ->
-        def capableDevices = allDevices.findAll { device ->
-            device.hasCapability(requirement.capability)
+    // Add temperature sensors
+    if (tempSensors) {
+        allDevices.addAll(tempSensors)
+        logDebug "Added ${tempSensors.size()} temperature sensors to validation check"
+    }
+    
+    // Add thermostats
+    if (thermostats) {
+        allDevices.addAll(thermostats)
+        logDebug "Added ${thermostats.size()} thermostats to validation check"
+    }
+    
+    // Check for humidity capability
+    def humidityCapableDevices = allDevices.findAll { device ->
+        def capabilityFound = false
+        def attributeFound = false
+        
+        // Method 1: Direct capability check
+        try {
+            capabilityFound = device.hasCapability ? device.hasCapability("RelativeHumidityMeasurement") : false
+        } catch (Exception e) {
+            logDebug "Error checking hasCapability for ${device.displayName}: ${e.message}"
         }
         
-        if (capableDevices) {
-            validationResults.isRequired = true
-            validationResults.availableSensors << [
-                capability: requirement.capability,
-                devices: capableDevices.collect { it.displayName }
-            ]
-        } else {
-            validationResults.missingSensors << requirement
+        // Method 2: Attribute check
+        try {
+            attributeFound = device.hasAttribute ? device.hasAttribute("humidity") : false
+            // Also check if device currently has a humidity value
+            if (!attributeFound && device.currentValue("humidity") != null) {
+                attributeFound = true
+            }
+        } catch (Exception e) {
+            logDebug "Error checking attributes for ${device.displayName}: ${e.message}"
         }
+        
+        // Method 3: Check supported capabilities
+        def metadataFound = false
+        try {
+            def deviceCapabilities = device.capabilities?.collect { it.toString().toLowerCase() } ?: []
+            if (deviceCapabilities.any { it.contains("relativehumiditymeasurement") || it.contains("humidity") }) {
+                metadataFound = true
+            }
+        } catch (Exception e) {
+            logDebug "Error checking capabilities for ${device.displayName}: ${e.message}"
+        }
+        
+        logDebug "${device.displayName}: capabilityFound=${capabilityFound}, attributeFound=${attributeFound}, metadataFound=${metadataFound}}"
+        
+        return capabilityFound || attributeFound || metadataFound
+    }
+    
+    if (humidityCapableDevices) {
+        validationResults.isRequired = true
+        validationResults.availableSensors << [
+            capability: "RelativeHumidityMeasurement",
+            devices: humidityCapableDevices.collect { it.displayName }
+        ]
+        
+        logDebug "Found ${humidityCapableDevices.size()} humidity-capable devices: ${humidityCapableDevices.collect{it.displayName}.join(', ')}"
+    } else {
+        validationResults.missingSensors << [
+            capability: "RelativeHumidityMeasurement",
+            source: ["tempSensors", "thermostats", "motionSensors"],
+            purpose: "Essential for comfort management"
+        ]
+        logDebug "No humidity-capable devices found"
     }
     
     // Check enhanced capabilities
-    comfCapTiers.enhanced.each { enhancement ->
+    def enhancedCapabilities = [
+        [
+            type: "solar",
+            capability: "illuminanceMeasurement",
+            purpose: "Solar gain detection"
+        ],
+        [
+            type: "solar",
+            capability: "ultravioletIndex",
+            purpose: "Advanced solar impact analysis"
+        ]
+    ]
+    
+    enhancedCapabilities.each { enhancement ->
         def capableDevices = allDevices.findAll { device ->
-            device.hasCapability(enhancement.capability)
+            device.hasCapability ? device.hasCapability(enhancement.capability) : false
         }
         
         if (capableDevices) {
             validationResults.enhancedFeatures << [
-                type: enhancement.enhancementType,
+                type: enhancement.type,
                 capability: enhancement.capability,
                 devices: capableDevices.collect { it.displayName }
             ]
+            logDebug "Found ${capableDevices.size()} devices with ${enhancement.capability}"
         }
     }
     
     // Analyze motion capability
     if (motionSensors) {
-        // Check if we have enough motion history to do frequency analysis
         def now = new Date()
         def recentPeriod = new Date(now.time - (30 * 60 * 1000)) // Last 30 minutes
         
         def hasFrequencyData = motionSensors.any { sensor ->
             def events = sensor.eventsSince(recentPeriod)
-            events && events.size() > 5 // Arbitrary threshold for meaningful data
+            events && events.size() > 5
         }
         
         validationResults.motionAnalysis.hasFrequencyData = hasFrequencyData
+        logDebug "Motion analysis status: hasFrequencyData=${hasFrequencyData}"
     }
     
+    logInfo "Validation Results: Required capabilities ${validationResults.isRequired ? 'present' : 'missing'}"
     return validationResults
 }
 def analyzeOccupancyHeat() {
@@ -2571,10 +2641,7 @@ def getComfortMetrics() {
     return [
         [
             name: "Natural Cooling Efficiency",
-            value: "${(naturalCooling.events ? 
-                new BigDecimal(naturalCooling.events.collect{it.coolingRate}.average())
-                    .setScale(1, BigDecimal.ROUND_HALF_UP) : 
-                0.0)}°/hr",
+            value: "${(naturalCooling.events ? new BigDecimal(naturalCooling.events.collect{it.coolingRate}.average()).setScale(1, BigDecimal.ROUND_HALF_UP) : 0.0)}°/hr",
             trend: "↑ 5% this week"
         ],
         [
@@ -2584,11 +2651,540 @@ def getComfortMetrics() {
         ],
         [
             name: "Comfort Score",
-            value: "${(new BigDecimal(calculateComfortScore() * 100)
-                .setScale(0, BigDecimal.ROUND_HALF_UP))}%",
+            value: "${(new BigDecimal(calculateComfortScore() * 100).setScale(0, BigDecimal.ROUND_HALF_UP))}%",
             trend: "↑ 3% improvement"
         ]
     ]
+}
+def calculateEnergySavings() {
+    /**
+    * calculateEnergySavings()
+    * Calculates energy savings from natural temperature management
+    * 
+    * Process Flow:
+    * ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+    * │  Get Natural  │────>│   Calculate   │────>│   Compute     │
+    * │Events (7 days)│     │Energy per Event│     │Total Savings %│
+    * └───────────────┘     └───────────────┘     └───────────────┘
+    *         │                     │                     │
+    *    Events List          kWh Savings           Percentage
+    * 
+    * @return BigDecimal Percentage of energy saved compared to baseline
+    * 
+    * Calculation Method:
+    * 1. Collect natural cooling/heating events from past week
+    * 2. For each event:
+    *    - Convert duration to hours
+    *    - Calculate kWh saved (vs. mechanical HVAC)
+    *    - Adjust for effectiveness
+    * 3. Compare to baseline (24/7 HVAC operation)
+    * 
+    * Example Return:
+    * 23.5 (meaning 23.5% energy saved)
+    * 
+    * @see trackEnvironmentalFactors() for event logging
+    * @see getComfortMetrics() for usage in UI
+    */
+    // Initialize return value as BigDecimal
+    def savings = new BigDecimal("0.0")
+    
+    try {
+        // Get the last 7 days of natural cooling/heating events
+        def sevenDaysAgo = new Date(now() - (7 * 24 * 60 * 60 * 1000))
+        
+        // Get all natural management events
+        def naturalEvents = (state.thermalBehavior.naturalCooling.events + 
+                           state.thermalBehavior.naturalHeating.events)
+                          .findAll { event ->
+            def eventDate = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", event.timestamp)
+            eventDate.after(sevenDaysAgo)
+        }
+        
+        if (!naturalEvents) {
+            return savings // Return 0.0 if no events
+        }
+        
+        // Estimate energy saved per natural cooling/heating event
+        // Based on typical HVAC energy consumption rates
+        def totalEnergySaved = naturalEvents.collect { event ->
+            // Convert event duration from seconds to hours
+            def durationHours = event.duration / 3600
+            
+            // Estimate kWh saved based on typical HVAC consumption
+            // Assuming average 3kW consumption for HVAC
+            def kwhSaved = new BigDecimal("3.0") * new BigDecimal(durationHours)
+            
+            // Adjust based on effectiveness (cooling/heating rate achieved)
+            def effectiveness = new BigDecimal(event.coolingRate).abs() / new BigDecimal("2.0") // normalized to typical rate
+            effectiveness = effectiveness > new BigDecimal("1.0") ? new BigDecimal("1.0") : effectiveness
+            
+            return kwhSaved * effectiveness
+        }.sum() ?: new BigDecimal("0.0")
+        
+        // Calculate percentage savings
+        // Assuming 24/7 HVAC operation as baseline
+        def totalPossibleUsage = new BigDecimal("72.0") // 3kW * 24h
+        savings = (totalEnergySaved / totalPossibleUsage) * new BigDecimal("100.0")
+        
+    } catch (Exception e) {
+        log.error "Error calculating energy savings: ${e.message}"
+        return new BigDecimal("0.0")
+    }
+    
+    return savings
+}
+
+def calculateComfortScore() {
+        /**
+    * calculateComfortScore()
+    * Evaluates overall comfort management effectiveness
+    * 
+    * Scoring Components:
+    * ┌─────────────────┐
+    * │  Comfort Score  │
+    * └────────┬────────┘
+    *     ┌────┴────┬────────┐
+    * ┌────┴───┐ ┌──┴───┐ ┌──┴───┐
+    * │ Temp   │ │System│ │Stable│
+    * │Maintain│ │ Resp │ │Temps │
+    * └────┬───┘ └──┬───┘ └──┬───┘
+    *   0.4*x    0.3*y    0.3*z
+    * 
+    * @return BigDecimal Score between 0 and 1
+    * 
+    * Scoring Factors:
+    * - Temperature Maintenance (40%)
+    *   - How well target temperature is maintained
+    * - System Response (30%)
+    *   - How quickly system responds to changes
+    * - Temperature Stability (30%)
+    *   - How consistent temperatures remain
+    * 
+    * Example Returns:
+    * 0.85 - Excellent comfort management
+    * 0.60 - Average performance
+    * 0.30 - Needs improvement
+    * 
+    * @see analyzeOccupancyHeat() for occupancy impact
+    * @see analyzeSolarGain() for environmental factors
+    */
+    def score = new BigDecimal("0.0")
+    
+    try {
+        // Get recent temperature events
+        def events = state.thermalBehavior.naturalCooling.events + 
+                    state.thermalBehavior.naturalHeating.events
+        
+        if (!events) {
+            return new BigDecimal("0.8") // Default score if no events
+        }
+        
+        // Factors that influence comfort score
+        def factors = [
+            temperatureDeviation: new BigDecimal("0.4"),  // Weight for temp maintenance
+            responseTime: new BigDecimal("0.3"),          // Weight for system response
+            consistency: new BigDecimal("0.3")            // Weight for stable comfort
+        ]
+        
+        // Calculate temperature maintenance score
+        def targetTemp = thermostatController.currentValue("thermostatSetpoint") as BigDecimal
+        def tempDeviations = events.collect { event ->
+            def startDiff = (new BigDecimal(event.startTemp) - targetTemp).abs()
+            def endDiff = (new BigDecimal(event.endTemp) - targetTemp).abs()
+            return [startDiff, endDiff]
+        }.flatten()
+        
+        def avgDeviation = tempDeviations.sum() / tempDeviations.size()
+        def tempScore = new BigDecimal("1.0") - (avgDeviation / new BigDecimal("10.0"))
+        tempScore = tempScore < new BigDecimal("0.0") ? new BigDecimal("0.0") : tempScore
+        
+        // Calculate response time score
+        def avgDuration = new BigDecimal(events.collect { it.duration }.average())
+        def responseScore = new BigDecimal("1.0") - (avgDuration / (4 * 3600)) // Normalized to 4 hours
+        responseScore = responseScore < new BigDecimal("0.0") ? new BigDecimal("0.0") : responseScore
+        
+        // Calculate consistency score
+        def coolingRates = events.collect { new BigDecimal(it.coolingRate) }
+        def avgRate = coolingRates.sum() / coolingRates.size()
+        def rateVariance = coolingRates.collect { (it - avgRate).pow(2) }.sum() / coolingRates.size()
+        def consistencyScore = new BigDecimal("1.0") - (rateVariance / new BigDecimal("4.0"))
+        consistencyScore = consistencyScore < new BigDecimal("0.0") ? new BigDecimal("0.0") : consistencyScore
+        
+        // Calculate weighted final score
+        score = (tempScore * factors.temperatureDeviation) +
+                (responseScore * factors.responseTime) +
+                (consistencyScore * factors.consistency)
+                
+        // Ensure score is between 0 and 1
+        score = score > new BigDecimal("1.0") ? new BigDecimal("1.0") : score
+        score = score < new BigDecimal("0.0") ? new BigDecimal("0.0") : score
+        
+    } catch (Exception e) {
+        log.error "Error calculating comfort score: ${e.message}"
+        return new BigDecimal("0.8") // Return default score on error
+    }
+    
+    return score
+}
+def getSuccessRateChart() {
+    /**
+    * getSuccessRateChart()
+    * Generates HTML visualization of temperature management success rates
+    * 
+    * Data Flow:
+    * ┌──────────┐    ┌──────────┐    ┌──────────┐
+    * │Collect   │───>│Transform │───>│Generate  │
+    * │Rate Data │    │  to %    │    │HTML/CSS  │
+    * └──────────┘    └──────────┘    └──────────┘
+    * 
+    * Chart Structure:
+    *     Success %
+    * 100│   █
+    *    │ █ █ █
+    *  50│ █ █ █ █
+    *    │ █ █ █ █ █
+    *   0└─────────────
+    *     C5 C10 H5 H10
+    *     Temperature Δ
+    * 
+    * @return String HTML/CSS for bar chart visualization
+    * 
+    * Visualization Features:
+    * - Color-coded bars (blue=cooling, green=heating)
+    * - Tooltips with detailed information
+    * - Responsive design
+    * - Graceful fallback for missing data
+    * 
+    * @see getComfortVisualization() for complete UI
+    */
+    def bars = []
+    try {
+        // Get success rates for different temperature deltas
+        def coolingRates = state.thermalBehavior.naturalCooling.performanceByDelta
+        def heatingRates = state.thermalBehavior.naturalHeating.performanceByDelta
+        
+        // Combine and sort performance data
+        def allRates = [:]
+        coolingRates.each { delta, metrics ->
+            allRates["C${delta}"] = metrics.successRate * 100
+        }
+        heatingRates.each { delta, metrics ->
+            allRates["H${delta}"] = metrics.successRate * 100
+        }
+        
+        // Generate bars for each rate
+        allRates.sort().each { label, rate ->
+            def height = rate ?: 0
+            def color = label.startsWith('C') ? '#2196F3' : '#4CAF50'
+            def title = label.startsWith('C') ? 'Cooling' : 'Heating'
+            title += " ${label.substring(1)}°F"
+            
+            bars << """
+                <div class="chart-bar" 
+                     style="height: ${height}%; background: ${color};"
+                     title="${title}: ${height.round(1)}% success">
+                </div>
+            """
+        }
+    } catch (Exception e) {
+        log.error "Error generating success rate chart: ${e.message}"
+        // Return a single empty bar if there's an error
+        bars << '<div class="chart-bar" style="height: 0%"></div>'
+    }
+    
+    return bars.join("\n")
+}
+
+def getEnvironmentalPatterns() {
+    /**
+    * getEnvironmentalPatterns()
+    * Generates visualization of environmental impact patterns
+    * 
+    * Data Organization:
+    * ┌─────────────────┐
+    * │Environmental    │
+    * │Patterns UI     │
+    * └─┬──────┬───────┘
+    *   │      │       │
+    * ┌─┴──┐ ┌─┴──┐ ┌─┴──┐
+    * │Season│Solar│Occup│
+    * │Stats │Heat │Heat │
+    * └─────┘└─────┘└────┘
+    * 
+    * @return String HTML markup for pattern visualization
+    * 
+    * Components:
+    * - Seasonal temperature patterns
+    *   - Average temperatures
+    *   - Temperature ranges
+    * - Solar gain impact
+    *   - Average daily gain
+    *   - Peak hours
+    * - Occupancy patterns
+    *   - Heat contribution
+    *   - Usage patterns
+    * 
+    * @see trackEnvironmentalFactors() for data collection
+    * @see getDetailedAnalytics() for detailed view
+    */
+    def patterns = []
+    try {
+        def envFactors = state.thermalBehavior.environmentalFactors
+        
+        // Add seasonal patterns
+        def currentSeason = getSeason()
+        def seasonalData = envFactors.seasonalPatterns[currentSeason]
+        if (seasonalData) {
+            patterns << """
+                <div class="metric-card">
+                    <h4>Seasonal Patterns (${currentSeason.capitalize()})</h4>
+                    <div>Average: ${seasonalData.avgTemp.round(1)}°F</div>
+                    <div>Range: ${seasonalData.tempRange.min.round(1)}°F - 
+                               ${seasonalData.tempRange.max.round(1)}°F</div>
+                </div>
+            """
+        }
+        
+        // Add solar impact patterns
+        def solarData = envFactors.solarGainPatterns
+        if (solarData) {
+            def avgGain = solarData.collect { timeBlock, data -> 
+                data.solarGainWatts ?: 0 
+            }.average()
+            
+            patterns << """
+                <div class="metric-card">
+                    <h4>Solar Impact</h4>
+                    <div>Average Gain: ${avgGain.round(1)} watts</div>
+                </div>
+            """
+        }
+        
+        // Add occupancy patterns
+        def occupancyData = envFactors.occupancyPatterns
+        if (occupancyData) {
+            def avgHeat = occupancyData.collect { timeBlock, data ->
+                data.heatOutput ?: 0
+            }.average()
+            
+            patterns << """
+                <div class="metric-card">
+                    <h4>Occupancy Impact</h4>
+                    <div>Average Heat: ${avgHeat.round(1)} watts</div>
+                </div>
+            """
+        }
+        
+    } catch (Exception e) {
+        log.error "Error generating environmental patterns: ${e.message}"
+        patterns << """
+            <div class="metric-card">
+                <h4>Environmental Patterns</h4>
+                <div>Insufficient data</div>
+            </div>
+        """
+    }
+    
+    return patterns.join("\n")
+}
+
+def getDetailedAnalytics() {
+    /**
+    * getDetailedAnalytics()
+    * Generates comprehensive performance analytics visualization
+    * 
+    * Analytics Structure:
+    * ┌────────────────────┐
+    * │Detailed Analytics  │
+    * └┬──────────┬───────┘
+    *  │          │
+    * ┌┴────┐   ┌─┴───┐
+    * │Perf.│   │Success│
+    * │Stats│   │Rates │
+    * └─────┘   └──────┘
+    * 
+    * @return String HTML markup for analytics display
+    * 
+    * Components:
+    * 1. Performance Metrics
+    *    - Total events
+    *    - Average rates
+    *    - System efficiency
+    * 2. Success Rates
+    *    - By temperature delta
+    *    - By mode (heating/cooling)
+    *    - Historical trends
+    * 
+    * @see calculateComfortScore() for scoring
+    * @see calculateEnergySavings() for efficiency
+    */
+    try {
+        def analytics = []
+        def data = state.thermalBehavior
+        
+        // Performance metrics
+        def totalEvents = (data.naturalCooling.events + data.naturalHeating.events).size()
+        def avgCoolingRate = data.naturalCooling.events ? 
+            data.naturalCooling.events.collect{it.coolingRate}.average() : 0
+        def avgHeatingRate = data.naturalHeating.events ?
+            data.naturalHeating.events.collect{it.coolingRate}.average() : 0
+            
+        analytics << """
+            <div class="detailed-analytics" style="margin-top: 20px;">
+                <h4>Performance Metrics</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">Total Events</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${totalEvents}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">Avg Cooling Rate</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${avgCoolingRate.round(2)}°/hr</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">Avg Heating Rate</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${avgHeatingRate.round(2)}°/hr</td>
+                    </tr>
+                </table>
+            </div>
+        """
+        
+        // Success rates by temperature delta
+        def successRates = []
+        data.naturalCooling.performanceByDelta.each { delta, metrics ->
+            successRates << """
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;">Cooling ${delta}°F</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">
+                        ${(metrics.successRate * 100).round(1)}%
+                    </td>
+                </tr>
+            """
+        }
+        data.naturalHeating.performanceByDelta.each { delta, metrics ->
+            successRates << """
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;">Heating ${delta}°F</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">
+                        ${(metrics.successRate * 100).round(1)}%
+                    </td>
+                </tr>
+            """
+        }
+        
+        if (successRates) {
+            analytics << """
+                <div style="margin-top: 20px;">
+                    <h4>Success Rates by Temperature Delta</h4>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        ${successRates.join("\n")}
+                    </table>
+                </div>
+            """
+        }
+        
+        return analytics.join("\n")
+        
+    } catch (Exception e) {
+        log.error "Error generating detailed analytics: ${e.message}"
+        return "<div>Error generating detailed analytics</div>"
+    }
+}
+def calculateTrendIndicator(currentValue, historicalValues) {
+    /**
+    * calculateTrendIndicator()
+    * Calculates trend direction and magnitude for metrics
+    * 
+    * Trend Calculation:
+    * ┌──────────┐   ┌──────────┐   ┌──────────┐
+    * │Historical│   │ Compare  │   │ Generate │
+    * │ Values   │──>│  to Avg  │──>│Indicator │
+    * └──────────┘   └──────────┘   └──────────┘
+    * 
+    * @param currentValue Current metric value
+    * @param historicalValues List of previous values
+    * @return Map with direction (↑,→,↓) and percentage
+    * 
+    * Trend Analysis:
+    * - Upward trend (↑): Current > Historical avg
+    * - Neutral (→): Current ≈ Historical avg
+    * - Downward (↓): Current < Historical avg
+    * 
+    * Example Return:
+    * [direction: "↑", percentage: "5.2"]
+    * 
+    * @see getComfortMetrics() for trend display
+    */
+    try {
+        if (!historicalValues || historicalValues.size() < 2) {
+            return [direction: "→", percentage: "0"]
+        }
+        
+        // Convert inputs to BigDecimal
+        currentValue = new BigDecimal(currentValue)
+        def avgHistorical = new BigDecimal(historicalValues.sum()) / new BigDecimal(historicalValues.size())
+        
+        // Calculate percentage change
+        def change = ((currentValue - avgHistorical) / avgHistorical) * new BigDecimal("100")
+        
+        // Determine direction
+        def direction = "→"
+        if (change > new BigDecimal("0")) {
+            direction = "↑"
+        } else if (change < new BigDecimal("0")) {
+            direction = "↓"
+        }
+        
+        return [
+            direction: direction,
+            percentage: "${change.abs().setScale(1, BigDecimal.ROUND_HALF_UP)}"
+        ]
+    } catch (Exception e) {
+        log.error "Error calculating trend: ${e.message}"
+        return [direction: "→", percentage: "0"]
+    }
+}
+
+def calculateMovingAverage(List values, int window) {
+    /**
+    * calculateMovingAverage()
+    * Calculates moving average for smoothing time series data
+    * 
+    * Processing Steps:
+    * ┌─────────┐   ┌─────────┐   ┌─────────┐
+    * │Window   │   │Sum      │   │Average  │
+    * │Selection│──>│Values   │──>│Calc     │
+    * └─────────┘   └─────────┘   └─────────┘
+    * 
+    * @param values List of numerical values
+    * @param window Size of moving average window
+    * @return List of moving averages
+    * 
+    * Example:
+    * Input: [1,2,3,4,5], window=3
+    * Output: [2.00,3.00,4.00]
+    * 
+    * Method:
+    * - Slides window over data points
+    * - Calculates average within window
+    * - Uses BigDecimal for precision
+    * 
+    * @see getDetailedAnalytics() for trend smoothing
+    */
+    if (!values || window <= 0 || window > values.size()) {
+        return []
+    }
+    
+    def result = []
+    for (int i = window - 1; i < values.size(); i++) {
+        def sum = new BigDecimal("0")
+        for (int j = 0; j < window; j++) {
+            sum += new BigDecimal(values[i - j].toString())
+        }
+        result << (sum / new BigDecimal(window)).setScale(2, BigDecimal.ROUND_HALF_UP)
+    }
+    
+    return result
 }
 def initialize_intelligence_states(){
     // From trackEnvironmentalFactors()

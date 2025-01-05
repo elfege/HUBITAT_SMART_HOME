@@ -1,0 +1,84 @@
+fix(capabilities): Enhance humidity capability detection
+feat(comfort): Add intelligent comfort management system (BETA)
+feat(comfort): Add intelligent comfort management system (BETA)
+feat(thermostat): Comprehensive improvements, bug fixes, and enhancements
+feat(thermostat): Comprehensive improvements, bug fixes, and enhancements
+Fixed bug and added memoization for all switches
+Fixed bug and added memoization for all switches
+fixed bad groovy syntax in resetresetStates method causing state.paused to always return false
+bug fixes in SMARTHOME_MAIN/Untitled-1.txt
+- Improved Motion Lighting Management V2 override reliability and consistent operation. - Renamed Zooz Q Sensor ZSE11 community driver to Zooz Q Sensor ZSE11 (modified community driver) to better reflect modifications and better version control - Fixed Zooz Q Sensor ZSE11 (modified community driver) BinarySensor and Notification Event handlers that were massacred by my last modifications... resulting in no motion events being reported whatsoever... not sure how I got there! lol
+added memoization of switch states, colors and color temperatures to allow for user/other apps override in Advanced_Motion_Lighing_Management_V2.groovy
+backup
+removed .git from midea-msmart directory
+cleanup
+more cleanup
+several updates to apps and drivers
+Improved Advanced Motion Lighting Management V2's responsiveness to events with a better balance between computing power saving and efficiency
+Commit
+ Improve remote backup functionality and UI responsiveness
+- fixed currentMode.id error line 474 in Advanced Motion Lighting Management V2 - multiple improvements and bug fixes in Thermostat Manager - Watchdog enhancement: added possibility to control an EzOutlet2 network switch to power cycle a hub when the remote hub is locked (upon failed api call to /hub/reboot) - instead of calling /api/rebootHub as it seems to no longer work (even with proper management token, for some reason).
+- fixed currentMode.id error line 474 in Advanced Motion Lighting Management V2 - multiple improvements and bug fixes in Thermostat Manager - Watchdog enhancement: added possibility to control an EzOutlet2 network switch to power cycle a hub when the remote hub is locked (upon failed api call to /hub/reboot) - instead of calling /api/rebootHub as it seems to no longer work (even with proper management token, for some reason).
+Improve remote hub communication and reboot process
+Add support for rebooting multiple additional remote hubs
+Implement debounce mechanism for master function
+Implement debounce mechanism for master function
+Implement debounce mechanism for master function
+Update Advanced Motion Lighting Management to Version 2.0
+Update Advanced Motion Lighting Management to Version 2.0
+### Thermostat Manager: #### Added dev_mode functionalities for better dev and debugging #### Improved ignoreMode logic around dual thermostats functionality
+### Thermostat Manager: #### Added dev_mode functionalities for better dev and debugging #### Improved ignoreMode logic around dual thermostats functionality
+Improved sensors health management and bug fixes
+### Overall improvements and bug fixes in Thermostat_Manager and some drivers
+several bug fixes in the refactored Thermostat Manager app
+fixed scripts
+bk
+Introduced a logarithmic factor for the wait time between needs (cool/heat) to improve responsiveness and avoid overreactions to minor temperature fluctuations
+Introduced a logarithmic factor for the wait time between needs (cool/heat) to improve responsiveness and avoid overreactions to minor temperature fluctuations
+Introduced a logarithmic factor for the wait time between needs (cool/heat) to improve responsiveness and avoid overreactions to minor temperature fluctuations
+Fixed a bug where under certain conditions a thermosat would not report its current state properly
+many improvements in time efficiency and stack overflow prevention
+many improvements in time efficiency and stack overflow prevention
+many improvements in time efficiency and stack overflow prevention
+bug fixes and new features in Thermostat Manager
+Added createFile() fileExists() methods for upcoming development allowing to create one data file per app's instance.
+minor bug fix
+bug fix in the new learn function that was missing its parameter when called from event handler
+Finally some true ML for Thermostat Manager
+Added ML to Thermostat Manager!
+updated thermostat manager with better euristics
+bk
+Added New Feature in Watchdog app that allows to test for Z-wave failures
+fixed logic error in Thermostat Management around Windows Management
+Fixed several critical bugs around timers in Thermosat Manager
+Fixed several critical bugs around timers in Thermosat Manager
+several improvements in battery management app as well as thermostat manageer.
+several improvements in battery management app as well as thermostat manageer.
+update for WATCHDOG CSP: now reboots when either Zigbee or Zwave networks go offline
+bug fix in thermostat manager and other minor fixes in advanced motion lighting
+power consumption tile and bug fixes
+minor updates and bug fixes
+Fixed bugs related to pause&resume with button evts in motion lighting app
+Updates for TILES - design, performance and new capabilities. More to come soon!
+mutliple design improvements
+restored locks management
+Readme.md
+Create README.md
+ES2017 refactor
+ES2017 refactor
+token management
+elfegeTILES 2.0 ES2015 refactored
+elfegeTILES 2.0 ES2015 refactored
+Delete drafts.groovy
+restored original file for A.I. Therm.
+typ name
+add main folder
+tree again...
+Removed folder from repository
+Removed folder from repository
+first commit
+first commit
+first commit
+first commit
+first commit
+tree remaster

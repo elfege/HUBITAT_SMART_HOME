@@ -1,327 +1,403 @@
+/* Root Variables */
 :root {
-    --tileSize: 16rem;
-    --tileHeight: 4rem;
-    --onColor: rgb(203, 203, 74);
-    --offColor: rgb(58, 54, 54);
-    --offColorSlider: rgb(119, 112, 112);
-    --spanDimmerOff: white;
-    --spanDimmerOn: yellow;
-    --baseBackground:url(/images/landscape.jpg);
-    --thermostatsBackground:url(/images/temperature.jpg);
-    --locksBackground:url(/images/locks.jpg);
-
+  --tileSize: 16rem;
+  --tileHeight: 4rem;
+  --onColor: rgb(203, 203, 74);
+  --offColor: rgb(58, 54, 54);
+  --offColorSlider: rgb(119, 112, 112);
+  --spanDimmerOff: white;
+  --spanDimmerOn: yellow;
+  --baseBackground: url(/images/img1.jpg);
+  --thermostatsBackground: url(/images/temperature.jpg);
+  --locksBackground: url(/images/locks.jpg);
 }
 
-body {
-    /* background-image: url("/images/green_wallpaper.jpg"); */
-    /* background: url(/images/landscape.jpg) no-repeat center center fixed; */
-    /* -webkit-background-size: cover;
-    -moz-background-size: cover;
-    -o-background-size: cover;
-    background-size: cover;
-    background-size :100vw 100vh;
-    background-attachment:fixed; */
+/* Import Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Play:wght@700&display=swap");
 
-    /* background: -moz-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
-    background: -webkit-linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
-    background: linear-gradient(45deg, rgba(2, 0, 36, 1) 0%, rgba(95, 108, 117, 1) 53%, rgba(0, 212, 255, 1) 99%);
-    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr="#020024", endColorstr="#00d4ff", GradientType=1); */
-}
-
+/* Basic Layout */
 .navBar {
-    background-color: transparent !important;
+  background-color: transparent !important;
 }
 
 .navButton {
-    width: 160px !important;
-    opacity: .8;
-    font-weight: 700;
-
+  width: 160px !important;
+  opacity: 0.8;
+  font-weight: 700;
 }
 
-
+/* Tiles Styling */
 .tiles {
-    border: none;
-    /* width: var(--tileSize); */
-
-    position: relative;
-    margin: 2px;
-    width: var(--tileSize);
-    height: var(--tileHeight);
-    font-size: small;
-    font-weight: 700;
-    word-wrap: break-word;
-    /* float: left; */
-
-
-    border-radius: 1rem;
-    opacity: 0.75;
-
+  border: none;
+  position: relative;
+  margin: 2px;
+  width: var(--tileSize);
+  height: var(--tileHeight);
+  font-size: small;
+  font-weight: 700;
+  word-wrap: break-word;
+  border-radius: 1rem;
+  opacity: 0.75;
 }
 
-@media screen and (max-width: 500px) {
-    .tiles {
-        border: none;
-        /* width: var(--tileSize); */
-
-        position: relative;
-        margin: 2px;
-        width: 48%;
-        height: var(--tileHeight);
-        font-size: small;
-        font-weight: 700;
-        word-wrap: break-word;
-        /* float: left; */
-
-
-        border-radius: 1rem;
-        opacity: 0.95;
-
-    }
-
-    .off:hover {}
-
-    .on:hover {}
-}
-
-/* devices states as data attributes*/
+/* Device States */
 .off {
-    background-color: var(--offColor) !important;
-    color: var(--onColor) !important;
+  background-color: var(--offColor) !important;
+  color: var(--onColor) !important;
 }
 
 .on {
-    background-color: var(--onColor) !important;
-    color: var(--offColor) !important;
+  background-color: var(--onColor) !important;
+  color: var(--offColor) !important;
 }
 
-
-@media not screen and (max-width: 500px) {
-    .off:hover {
-        background-color: var(--onColor) !important;
-        color: var(--offColor) !important;
-    }
-
-    .on:hover {
-        background-color: var(--offColor) !important;
-        color: var(--onColor) !important;
-    }
-}
-
-
-
+/* Titles and Badges */
 .titles {
-    color: whitesmoke;
+  color: whitesmoke;
 }
-
-
 
 .badge:hover {
-    background-color: rgb(171, 112, 22);
-    color: black;
+  background-color: rgb(171, 112, 22);
+  color: black;
 }
 
+/* Dimmer Span */
 .spanDimmer {
-    font-size:.5rem;
-    font-weight: 600;
-    color: aliceblue;
-    background-color: rgb(111, 102, 102);
-    padding:3px 3px 3px 3px;
-
+  font-size: 0.5rem;
+  font-weight: 600;
+  color: aliceblue;
+  background-color: rgb(111, 102, 102);
+  padding: 3px;
 }
 
-.spanThermostat {
-    font-size:2rem;
-    font-weight: 600;
-    color: aliceblue;
-    /* background-color: rgb(111, 102, 102); */
-    padding:3px 3px 3px 3px;
-
-}
-
+/* Overlay */
 #overlay {
-    position: fixed;
-    display: none;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 2;
-    cursor: pointer;
+  position: fixed;
+  display: none;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  cursor: pointer;
 }
-
 
 #OverlayText {
-    background-color: antiquewhite;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    font-size: 10px;
-    color: rgb(16, 9, 9);
-    transform: translate(-50%, -50%);
-    -ms-transform: translate(-50%, -50%);
-    padding-top: 50px;
-    padding-right: 50px;
-    padding-bottom: 50px;
-    padding-left: 50px;
+  background-color: antiquewhite;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 10px;
+  color: rgb(16, 9, 9);
+  transform: translate(-50%, -50%);
+  padding: 50px;
 }
 
-
-@import url("https://fonts.googleapis.com/css2?family=Play:wght@700&display=swap");
-.thermostatWrap {
+/* Thermostat Container */
+#thermostats {
   display: flex;
-  flex-direction: column;
-  position: relative;
-  align-items: center;
-  gap: 5vmin;
+  flex-wrap: wrap;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  width: 100%;
 }
-.thermostatWrap .thermostat {
-  width: 50vmin;
-  height: 50vmin;
+
+.thermostat {
+  width: clamp(200px, 40vmin, 300px);
+  height: clamp(200px, 40vmin, 300px);
   border-radius: 50%;
-  box-shadow: -3px -1px 20px 20px rgba(255, 255, 255, 0.03), 20px 13px 50px 5px black;
+  box-shadow: -3px -1px 20px 20px rgba(255, 255, 255, 0.03),
+    20px 13px 50px 5px black;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   background: linear-gradient(146deg, #00000094, #ffffff03);
+  margin: 0 auto;
+  overflow: visible; /* Allow overflow for the slider handle */
+  z-index: 1; /* Ensure the container maintains proper stacking context */
 }
-.thermostatWrap .thermostat::before {
-  content: "";
-  display: block;
-  position: absolute;
-  z-index: 1;
-  width: 95%;
-  height: 95%;
-  border-radius: 50%;
-}
-.thermostatWrap .thermostat::after {
-  content: "";
-  display: block;
-  position: absolute;
-  z-index: 0;
-  width: 90%;
-  height: 90%;
-  border-radius: 50%;
-  background: #000;
-}
-.thermostatWrap .temperature {
-  font-family: "Play", sans-serif;
-  font-size: max(11vmin, 1.5rem);
-  font-weight: 700;
-  color: #ccc;
-  height: 80%;
-  width: 80%;
-  display: grid;
-  place-items: center;
-  position: relative;
-  z-index: 1;
-}
-.thermostatWrap .temperature::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  border-radius: 50%;
-  z-index: -1;
-  box-shadow: inset 0 0 11px 0px #fbfbfb24;
-  -webkit-mask-image: radial-gradient(transparent 55%, black 0);
-          mask-image: radial-gradient(transparent 55%, black 0);
-  transform: scaleX(-1);
-  background: conic-gradient(#ffffff22, #506eff, #2bc016, #f1c40f, #ba1200 var(--radius, 0%), #ffffff22 var(--radius, 0%) 100%);
-}
-.thermostatWrap .temperature::after {
-  content: "";
-  position: absolute;
-  top: 4.5vmin;
-  bottom: 4.5vmin;
-  left: 4.5vmin;
-  right: 4.5vmin;
-  border-radius: 50%;
-  z-index: 1;
-  display: block;
-  box-shadow: 0 0 13px 0px #ffffff5c;
-}
-.thermostatWrap .sliderWrapper {
+
+/* Thermostat Wrapper */
+.thermostatWrap {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0px 1px 4px 0 rgba(0, 0, 0, 0.3);
-  padding: 1rem;
-  border-radius: 60px;
-  border: 1px solid #ffffff0d;
-  width: 70%;
-}
-.thermostatWrap .tempSlider,
-.thermostatWrap .tempSlider::-webkit-slider-runnable-track {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  background-color: #ffffff24;
-  background: linear-gradient(to right, #506eff, #2bc016, #f1c40f, #ba1200);
-  height: 2px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 20px;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 1rem;
-  box-shadow: inset 0px 1px 1px 0px rgba(0, 0, 0, 0.5);
-  -webkit-transition: 0.2s;
-  transition: 0.2s;
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s ease;
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
 }
-.thermostatWrap .tempSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 6vmin;
-  height: 4vmin;
-  border-radius: 0.2rem;
-  border: 1px solid #777;
-  border-color: #444 #000 #000 #444;
-  background: linear-gradient(to right bottom, #222 0%, #000 100%);
-  margin-top: 1px;
+
+.thermostatWrap:hover {
+  transform: translateY(-5px);
+}
+
+/* Thermostat Display */
+
+/* Round Slider Customization */
+.thermostat .rs-control {
+  position: relative !important;
+  width: 85% !important;
+  /* Reduced further from 90% */
+  height: 85% !important;
+  /* Reduced further from 90% */
+  margin: auto !important;
+}
+
+.thermostat .rs-container {
+  position: relative !important;
+}
+
+.thermostat .rs-range-color {
+  background-color: #2bc016;
+}
+
+.thermostat .rs-path-color {
+  background-color: #ffffff22;
+}
+
+.thermostat .rs-handle {
+  background-color: #ffffff;
+  padding: 7px;
+  border: 2px solid #2bc016;
   cursor: pointer;
-  transform: translateY(-50%);
-  -webkit-transition: 0.2s;
-  transition: 0.2s;
-}
-.thermostatWrap .tempSlider::-webkit-slider-thumb:hover {
-  box-shadow: inset 0px 0px 15px 0px rgba(255, 255, 255, 0.1);
-}
-.thermostatWrap .tempSlider::-webkit-slider-thumb:hover:active {
-  border-color: #555;
 }
 
+.thermostat .rs-handle.rs-move {
+  background-color: #2bc016;
+  border: 2px solid #ffffff;
+}
+
+.thermostat .rs-tooltip {
+  font-family: "Play", sans-serif;
+  font-size: 2rem;
+  color: #ffffff;
+  top: 45% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  position: absolute;
+  text-align: center;
+}
+
+.thermostat .current-temp {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 0.5rem;
+}
+
+.thermostat .rs-tooltip::after {
+  content: none !important;
+}
+
+.spanThermostat {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: aliceblue;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+/* Thermostats Modes */
+
+/* Add these styles to tiles.css */
+
+.thermostat-modes {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.thermostat-mode-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+}
+
+.thermostat-mode-btn.active {
+  opacity: 1;
+  transform: scale(1.05);
+  border: 1px solid white;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+}
+
+.mode-auto {
+  background-color: #4A90E2;
+  border-color: #357ABD;
+}
+
+.mode-heat {
+  background-color: #E74C3C;
+  border-color: #C0392B;
+}
+
+.mode-cool {
+  background-color: #3498DB;
+  border-color: #2980B9;
+}
+
+.mode-fan_only {
+  background-color: #95A5A6;
+  border-color: #7F8C8D;
+}
+
+.mode-fan_auto {
+  background-color: #7F8C8D;
+  border-color: #666;
+}
+
+/* Mobile Styles */
+
+@media screen and (max-width: 768px) {
+  #thermostats {
+    grid-template-columns: 1fr;
+    padding: 0.5rem;
+  }
+
+  .thermostatWrap {
+    padding: 1rem;
+    gap: 1rem;
+    max-width: 300px;
+    /* Limit maximum width on mobile */
+  }
+
+  .thermostat {
+    width: 250px;
+    height: 250px;
+    margin: 0 auto;
+  }
+
+  .thermostatWrap .thermostat {
+    width: 250px;
+    height: 250px;
+  }
+
+  .spanThermostat {
+    font-size: 1.25rem;
+  }
+
+  /* Ensure the round slider remains centered on mobile */
+  .thermostat .rs-control {
+    width: 100% !important;
+    height: 100% !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  /* Adjust handle positioning for better touch interaction */
+  .thermostat .rs-handle {
+    width: 20px !important;
+    height: 20px !important;
+    margin: -10px 0 0 -10px !important;
+  }
+
+  /* Thermostat tooltip positioning and styling */
+  .thermostat .rs-tooltip {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 100% !important;
+    text-align: center !important;
+    font-family: "Play", sans-serif;
+    pointer-events: none;
+    background: none !important;
+    border: none !important;
+  }
+
+  .thermostat .rs-tooltip-text {
+    font-size: 2rem;
+    color: #ffffff;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Additional class for current temperature display */
+  .thermostat .current-temp {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    left: 50%;
+    transform: translateX(-50%);
+    top: calc(50% + 1.5rem);
+  }
+
+  /* Ensure tooltip stays centered during interaction */
+  .thermostat .rs-tooltip.rs-hover,
+  .thermostat .rs-tooltip.rs-edit {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+  }
+
+  /* Remove any transition effects that might affect positioning */
+  .thermostat .rs-tooltip,
+  .thermostat .rs-tooltip * {
+    transition: none !important;
+  }
+
+  /* Ensure the container maintains proper stacking context */
+  .thermostat {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Thermostat Modal */
+  .modal {
+    --bs-modal-width: 95%;
+  }
+  
+  .modal-content {
+    background-color: transparent;
+    border: none;
+  }
+  
+  /* mode buttons */
+
+  .thermostat-modes {
+    gap: 0.25rem;
+  }
+
+  .thermostat-mode-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .tiles {
+    width: 48%;
+    height: var(--tileHeight);
+    opacity: 0.95;
+  }
+
+  .off:hover {
+    background-color: var(--onColor) !important;
+    color: var(--offColor) !important;
+  }
+
+  .on:hover {
+    background-color: var(--offColor) !important;
+    color: var(--onColor) !important;
+  }
+}
 
 
-
-
-
-
-
-
-/* cursor's color when active */
-/* .rs-handle.rs-focus {
-    background-color: rgb(240, 241, 232);
-} */
-
-
-
-/* ROUND SLIDER SOURCE AND DOC
-
-https://roundsliderui.com/document.html#how-to-install 
-
-The roundSlider has the following public classes, which user can overwrite these classes to apply their custom styles or themes.
-
-.rs-path-color : This class applies the background color for the slider path.
-.rs-range-color : This class applies the background color for the slider range.
-.rs-bg-color : This class applies the background color for the slider control.
-.rs-border : This class applies the border color for the slider control.
-.rs-border.rs-inner : This class applies the styles for inner border alone.
-.rs-border.rs-outer : This class applies the styles for outer border alone.
-.rs-handle : This class added for the slider handles. We can set the handle styles here.
-.rs-first .rs-handle : Mentions the first handle of the slider.
-.rs-second .rs-handle : Mentions the second handle of the slider. This is available at the range slider only.
-.rs-handle.rs-focus : When the slider handle was focused, at that time the focus class added for the corresponding handle.
-.rs-animation .rs-transition : This class applies the CSS3 animation related styles.
-*/

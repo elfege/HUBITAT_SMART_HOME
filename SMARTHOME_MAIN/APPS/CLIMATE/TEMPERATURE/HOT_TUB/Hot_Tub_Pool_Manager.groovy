@@ -187,6 +187,10 @@ preferences {
  * Runs when the app is first installed.
  * Calls the initialize() method to set up the app.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def installed() {
     if (enabledebug) log.debug "Installed with settings: ${settings}"
     state.installed = true
@@ -197,6 +201,10 @@ def installed() {
  * Runs every time user settings are updated.
  * Unsubscribes from all events and reinitializes the app.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def updated() {
     if (enabledebug) log.debug "Updated with settings: ${settings}"
     unsubscribe()
@@ -208,6 +216,10 @@ def updated() {
  * Initializes the app by setting up event subscriptions and scheduling.
  * This method is called after installation and every update.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def initialize() {
     if (enabledebug) log.debug "Initializing Hot Tub Manager"
     state.powerConsumption = [: ]  // Initialize as an empty map
@@ -360,6 +372,10 @@ def resetTestMode(){
  * Handles app button events.
  * @param btn The button event object
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def appButtonHandler(btn) {
     switch (btn) {
         case "runButton":
@@ -419,6 +435,10 @@ def manualSwapPumps() {
 /**
  * Executes the action for the Run button.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def runButtonAction() {
     if (enableinfo) log.info "Manually running system check"
     main("runButtonAction")
@@ -427,6 +447,10 @@ def runButtonAction() {
 /*
  * Executes the action for the Pause/Unpause button.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def pauseUnpauseAction() {
     // Toggle the pause mode
     boolean newPauseMode = !pauseMode
@@ -437,6 +461,10 @@ def pauseUnpauseAction() {
 /**
  * Executes the action for the Emergency Off button.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def emergencyOffAction() {
     if (enablewarning) log.warn "Emergency Off activated. Shutting down all systems."
     disableSystem()
@@ -449,6 +477,10 @@ def emergencyOffAction() {
  * Immediately disables the system if water level is low.
  * @param evt The event object containing the new water level state
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def waterLevelHandler(evt) {
     if (enabledebug) log.debug "Water level changed to: '${evt.value}'"
 
@@ -478,6 +510,10 @@ def waterLevelHandler(evt) {
  * Checks the water level after a 10-second delay.
  * If the water level is still low, it disables the system.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def checkWaterLevel() {
     if (enabledebug) log.debug "Checking water level"
     if (waterLevelSensor.currentValue("water") != "dry") {
@@ -494,6 +530,10 @@ def checkWaterLevel() {
  * Handles changes in the water temperature.
  * @param evt The event object containing the new temperature reading
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def temperatureHandler(evt) {
     if (enabledebug) log.debug "Water temperature changed to: ${evt.value}°F"
     handleLabel([label: evt.value, append: true, temperature: true])
@@ -504,6 +544,10 @@ def temperatureHandler(evt) {
  * Handles changes in heater power consumption.
  * @param evt The event object containing the new power consumption reading
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def powerHandler(evt) {
     state.lastPowerEvent = state.lastPowerEvent == null ? now() : state.lastPowerEvent
     interval = 40
@@ -624,6 +668,10 @@ def checkPowerAfterDisable() {
  * Checks the current system state and updates it accordingly.
  * This method is the core logic of the app, managing temperature control and safety.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def checkAndUpdateSystem() {
     if (enabledebug) log.debug "Checking and updating system state"
     main("checkAndUpdateSystem")
@@ -633,6 +681,10 @@ def checkAndUpdateSystem() {
  * Main function to evaluate all conditions and take appropriate actions.
  * This function is called by the run button and scheduled updates.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def main(calledby = 'Unknown') {
 
     def currentTemp = waterTempSensor.currentValue("temperature")
@@ -793,6 +845,10 @@ def resetStateRefilling(){
  * Enables the hot tub system.
  * This method is called when the water level returns to normal.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def enableSystem() {
     if (enableinfo) log.info "Enabling hot tub system"
     state.systemDisabled = false
@@ -803,6 +859,10 @@ def enableSystem() {
  * Disables the entire hot tub system.
  * This method is called when a critical issue (like low water level) is detected.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 // Modify the disableSystem function
 def disableSystem() {
     if (enablewarning) log.warn "Disabling hot tub system"
@@ -862,10 +922,18 @@ def checkDeviceStates() {
  * Enables the heaters based on the current configuration.
  * If heater alternation is enabled, it switches between main and secondary heaters.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 /**
  * Enables the heaters based on the current configuration.
  * If heater alternation is enabled, it switches between main and secondary heaters only when necessary.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def enableHeaters() {
 
     if (dry()) {
@@ -949,6 +1017,10 @@ def wet(){
 /**
  * Disables all heaters.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def disableHeaters() {
     if (enableinfo) log.info "Disabling all heaters"
     mainHeater.off()
@@ -970,6 +1042,10 @@ def disablePumps(){
 /**
  * Manages the operation of pumps based on the current configuration.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def managePumps() {
     if (dry()) {
         return
@@ -1011,6 +1087,10 @@ def managePumps() {
 /**
  * Swaps the active heater when alternating heaters.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def swapHeaters() {
     if (enabledebug) log.debug "Time to swap heaters"
     enableHeaters()
@@ -1019,6 +1099,10 @@ def swapHeaters() {
 /**
  * Swaps the active pump when alternating pumps.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def swapPumps() {
     if (enabledebug) log.debug "Time to swap pumps"
     managePumps()
@@ -1049,6 +1133,10 @@ def sendNotification(message, critical = false) {
 /**
  * Polls the devices to update their status.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def Poll() {
     if (enabledebug) log.debug "Polling devices"
     
@@ -1076,6 +1164,10 @@ def Poll() {
 /**
  * Polls power meters to update their status.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def poll_power_meters() {
     state.lastPoll = state.lastPoll == null ? now() : state.lastPoll
 
@@ -1115,6 +1207,10 @@ def poll_power_meters() {
 /**
  * Disables debug logging after a delay.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def disable_logging() {
     if (enablewarning) log.warn "Debug logging disabled..."
     app.updateSetting("enabledebug", [type: "bool", value: false])
@@ -1123,6 +1219,10 @@ def disable_logging() {
 /**
  * Disables info logging after a delay.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def disable_description() {
     if (enablewarning) log.warn "Info logging disabled..."
     app.updateSetting("enableinfo", [type: "bool", value: false])
@@ -1131,6 +1231,10 @@ def disable_description() {
 /**
  * Disables warning logging after a delay.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def disable_warnings() {
     if (enablewarning) log.warn "Warning logging disabled..."
     app.updateSetting("enablewarning", [type: "bool", value: false])
@@ -1139,6 +1243,10 @@ def disable_warnings() {
 /**
  * Disables trace logging after a delay.
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def disable_trace() {
     if (enablewarning) log.warn "Trace logging disabled..."
     app.updateSetting("enabletrace", [type: "bool", value: false])
@@ -1151,6 +1259,10 @@ def disable_trace() {
  * @param bckgColor The background color
  * @return Formatted HTML string
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def format_text(title, textColor, bckgColor) {
     return [
         "<div style='width:80%;",
@@ -1169,6 +1281,10 @@ def format_text(title, textColor, bckgColor) {
  * @param title The title to format
  * @return Formatted HTML string
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def format_title(title) {
     return [
         "<div style=",

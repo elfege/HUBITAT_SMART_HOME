@@ -282,7 +282,8 @@
         }, _updateTooltipPos: function () {
             var t, e, i, s = this.options, a = s.circleShape, n = {
 
-            }; s.showTooltip && 0 !== a.indexOf("quarter") && ((t = this.tooltip).is(":visible") ? (t.removeClass("rs-center").addClass("rs-reset"), e = -t.outerHeight() / 2, i = -t.outerWidth() / 2, t.removeClass("rs-reset"), "full" == a || "pie" == a || 0 === a.indexOf("custom") ? n = {
+            };
+            s.showTooltip && 0 !== a.indexOf("quarter") && ((t = this.tooltip).is(":visible") ? (t.addClass("rs-center"), e = -t.outerHeight() / 2, i = -t.outerWidth() / 2, "full" == a || "pie" == a || 0 === a.indexOf("custom") ? n = {
                 "margin-top": e, "margin-left": i
             } : "half-top" == a || "half-bottom" == a ? n = {
                 "margin-left": i
@@ -292,7 +293,7 @@
         }, _getTooltipValue: function (t) {
             var e = this.options.value; if (this._rangeSlider) {
                 var i = e.split(","); return t ? i[0] + " - " + i[1] : this._tooltipValue(i[0], 1) + " - " + this._tooltipValue(i[1], 2)
-            } return t ? e : this._tooltipValue(e)+"%"
+            } return t ? e : this._tooltipValue(e) + "%"
         }, _tooltipValue: function (t, e) {
             var i = this._raise("tooltipFormat", {
                 value: t, handle: this._handleArgs(e)

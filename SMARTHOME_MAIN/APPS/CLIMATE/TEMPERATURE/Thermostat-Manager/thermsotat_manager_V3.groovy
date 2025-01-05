@@ -1,3 +1,23 @@
+/** 
+ * Last Updated: 2025-01-05
+ */
+/**
+ * Thermostat Manager V3
+ *
+ * License: Non-Commercial Use Only
+ * This software is licensed under the Thermostat Manager Non-Commercial License.
+ * You are free to use, copy, modify, and distribute this software for non-commercial purposes only.
+ * For more details, see the LICENSE file included in this repository or contact the author.
+ *
+ * Author: Elfege Leylavergne
+ * Version: 
+*/
+
+import java.text.SimpleDateFormat
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+import groovy.transform.Field
+
 definition(
     name: "Thermostat Manager V3",
     namespace: "elfege",
@@ -163,45 +183,61 @@ def MainPage() {
         }
 
         section("Comfort Intelligence") {
-            try {
-                getComfortManagementSection()
-            } catch (Exception e) {
-                log.error "Error in Comfort Intelligence section: $e"
-                initialize_intelligence_states()
+            def use_ai_descr = useAI ? "Disable AI management (not destructive)" : "Enable AI management (beta)"
+            input "useAI", "bool", title:"$use_ai_descr", submitOnChange: true
+            if (useAI){
+                try {
+                    getComfortManagementSection()
+                } catch (Exception e) {
+                    log.error "Error in Comfort Intelligence section: $e"
+                    initialize_intelligence_states()
+                }
             }
         }
 
-        section("Comfort Analytics") {
-            try {
-                paragraph getComfortVisualization()
-                
-                def currentSeason = getSeason()
-                def seasonalPatterns = state.thermalBehavior?.environmentalFactors?.seasonalPatterns?."${currentSeason}"
-                
-                if (seasonalPatterns) {
-                    paragraph formatText(
-                        """Current Season: ${currentSeason.capitalize()}
-                        Average Temperature: ${seasonalPatterns.avgTemp.round(1)}°F
-                        Temperature Range: ${seasonalPatterns.tempRange.min.round(1)}°F - ${seasonalPatterns.tempRange.max.round(1)}°F""",
-                        "#1B5E20",
-                        "#E8F5E9"
-                    )
+                section("Comfort Analytics") {
+            if (useAI) {
+                try {
+                    input "toggleKPIs", "button", 
+                        title: "${state.showKPIs ? 'Close KPIs' : 'Show KPIs'}", 
+                        submitOnChange: true
+                        
+                    if (state.showKPIs) {
+                        try {
+                            paragraph getComfortKPIDashboard()
+                        } catch (Exception e) {
+                            log.error "Error generating KPI dashboard: $e"
+                            paragraph formatText("Error generating KPI dashboard. Check logs for details.", "white", "red")
+                        }
+                    }
+                    
+                    input "toggleAnalytics", "button", 
+                        title: "${state.showAnalytics ? 'Hide Analytics' : 'Show Analytics'}", 
+                        submitOnChange: true
+                        
+                    if (state.showAnalytics) {
+                        try {
+                            paragraph getComfortVisualization()
+                            
+                            input "showDetailedAnalytics", "bool", 
+                                title: "Show Detailed Analytics", 
+                                defaultValue: false, 
+                                submitOnChange: true
+                            
+                            if (showDetailedAnalytics) {
+                                paragraph getDetailedAnalytics()
+                            }
+                        } catch (Exception e) {
+                            log.error "Error generating analytics visualization: $e"
+                            paragraph formatText("Error generating analytics. Check logs for details.", "white", "red")
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error "Error in Comfort Analytics section: $e"
+                    initialize_intelligence_states()
                 }
-                
-                input(
-                    "showDetailedAnalytics",
-                    "bool",
-                    title: "Show Detailed Analytics",
-                    defaultValue: false,
-                    submitOnChange: true
-                )
-                
-                if (showDetailedAnalytics) {
-                    paragraph getDetailedAnalytics()
-                }
-            } catch (Exception e) {
-                log.error "Error in Comfort Analytics section: $e"
-                initialize_intelligence_states()
+            } else {
+                paragraph "Enable AI to see analytics"
             }
         }
 
@@ -213,17 +249,24 @@ def MainPage() {
                 input "update", "button", title: "Update", submitOnChange:true
                 input "pause", "button", title: "${state.paused ? 'Resume' : 'Pause'}", submitOnChange:true
                 input "run", "button", title: "Test Run", submitOnChange: true
-                input "reset", "button", title: "Reset Memoized States", submitOnChange: true
+                input "reset_therm_memoizations", "button", title: "Reset Thermostats Memoized States", submitOnChange: true
                 if(lightSignal){
                     input "flash", "button", title: "Test light signal", submitOnChange: true
                 }
-                input "reset_intelligence", "button", title: "Reset Intelligence Learnings (!)", submitOnChange: true
-                if(state.confirm_reset_intelligence){
+                input "prompt_reset_intelligence", "button", title: "Reset Intelligence Learnings (!)", submitOnChange: true
+                if(state.prompt_reset_intelligence){
                     // TODO: add backup logic (to a file) and RESTORE logic (from file). 
                     paragraph formatText("ARE YOU SURE? This will potentially destroy months of accumulated learnings! This action is irreversible!", "white", "red")
                     
-                    input "reset_intelligence", "button", title: "Destroy", submitOnChange: true
-                    input "cancel_reset_intelligence", "button", title: "Destroy", submitOnChange: true
+                    input "reset_intelligence", "button", title: "Yes, melt the T2", submitOnChange: true
+                    input "cancel_reset_intelligence", "button", title: "Cancel, let the apocalypse come!", submitOnChange: true
+                }
+                // backup/restore controls
+                input "backup_intelligence", "button", title: "Backup Intelligence Data", submitOnChange: true
+                input "restore_intelligence", "button", title: "Restore From Backup", submitOnChange: true
+                if(state.showRestoreOptions) {
+                    paragraph "Select backup file to restore from:"
+                    input "backupFile", "string", title: "Backup file name", submitOnChange: true
                 }
             }
         }
@@ -302,7 +345,7 @@ def initializeBoostTempArray(){
     state.boostTempArray = boostTempArray
 }
 def initializeStates(){
-    // initialize setpoints memoization
+    // Initialize setpoints memoization
     state.thermostatsSetpointSTATES = state.thermostatsSetpointSTATES == null ? [:] : state.thermostatsSetpointSTATES
 
     if (state.thermostatsSetpointSTATES == [:]){
@@ -319,7 +362,117 @@ def initializeStates(){
         logInfo "state.thermostatsSetpointSTATES (after population): $state.thermostatsSetpointSTATES"
     }
 
+    // UI-related states
+    state.showKPIs = state.showKPIs ?: false
+    state.showAnalytics = state.showAnalytics ?: false
+    
+    // Device temperature tracking
+    state.deviceTemperatures = state.deviceTemperatures ?: [:]
+
+    // Logging-related states
+    state.EnableDebugTime = state.EnableDebugTime ?: 0
+    state.EnableTraceTime = state.EnableTraceTime ?: 0
+    state.EnableInfoTime = state.EnableInfoTime ?: 0
+    state.EnableWarnTime = state.EnableWarnTime ?: 0
+    state.lastCheckTimer = state.lastCheckTimer ?: now()
+
+    // Pause-related states
+    state.paused = state.paused ?: false
+    state.pauseStart = state.pauseStart ?: 0
+    state.pauseDueToButtonEvent = state.pauseDueToButtonEvent ?: false
+
+    // Night mode states
+    state.nightModeActive = state.nightModeActive ?: false
+    state.nightModeActivationTime = state.nightModeActivationTime ?: 0
+
+    // Boost mode states
+    state.boostMode = state.boostMode ?: false
+    state.boostTempArray = state.boostTempArray ?: []
+
+    // Last operation tracking
+    state.lastRun = state.lastRun ?: now()
+    state.lastNeed = state.lastNeed ?: "heat"
+    state.lastModeChangeTime = state.lastModeChangeTime ?: now()
+    state.lastMode = state.lastMode ?: state.lastNeed
+    state.lastMotionHandled = state.lastMotionHandled ?: 0
+    state.lasActivetMotionHandled = state.lasActivetMotionHandled ?: 0
+
+    // Functional sensors tracking
+    state.functionalSensors = state.functionalSensors ?: [:]
+
+    // Virtual thermostat states
+    state.read_about_therm_controller = state.read_about_therm_controller ?: false
+    state.vir_therm_created = state.vir_therm_created ?: false
+    state.showVirThermLocationInput = state.showVirThermLocationInput ?: false
+    
+    // Confirmation states
+    state.prompt_reset_intelligence = state.prompt_reset_intelligence ?: false
+
+    // Location URL for device management
+    state.locationUrl = "http://${location.hub.localIP}/device/edit"
 }
+def updateMem(thermostat, attribute="all"){
+
+    logDebug "--------------- Updating memoization state for $thermostat"
+
+    
+
+    //ensure it doesn't initialize with boost values if this was called during a boosting operation
+    // Convert current values to BigDecimal with scale 1
+    def currSP = (thermostat.currentValue("thermostatSetpoint") as BigDecimal).setScale(1)
+    def currCSP = (thermostat.currentValue("coolingSetpoint") as BigDecimal).setScale(1)
+    def currHSP = (thermostat.currentValue("heatingSetpoint") as BigDecimal).setScale(1)
+
+
+    
+    // TODO: update to call isBoostTemp() instead (no need for conversion above then)
+    def thermostatSetpoint = currSP in state.boostTempArray ? 74.0 : currSP
+    def coolingSetpoint = currCSP in state.boostTempArray ? 74.0 : currCSP
+    def heatingSetpoint = currHSP in state.boostTempArray ? 74.0 : currHSP
+
+    logDebug """
+        <br> tempBoostCool: $tempBoostCool (${tempBoostCool.class})
+        <br> tempBoostHeat: $tempBoostHeat (${tempBoostHeat.class})
+        <br> currSP: $currSP (${currSP.class})
+        <br> currHSP: $currHSP (${currHSP.class})
+        <br> currCSP: $currCSP (${currCSP.class})
+        <br> state.boostTempArray: $state.boostTempArray
+        <br> currSP in boostTempArray ? ${currSP in boostTempArray}
+        <br> currHSP in boostTempArray ? ${currHSP in boostTempArray}
+        <br> currCSP in boostTempArray ? ${currCSP in boostTempArray}
+        """
+
+    
+    def previousSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.thermostatSetpoint ?: currSP
+    def previousCSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.coolingSetpoint ?: currCSP
+    def previousHSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.heatingSetpoint ?: currHSP
+
+    thermostatSetpoint = attribute in ["thermostatSetpoint", "all"] ? thermostatSetpoint : previousSP
+    coolingSetpoint = attribute in ["coolingSetpoint", "all"] ? coolingSetpoint : previousCSP    
+    heatingSetpoint = attribute in ["heatingSetpoint", "all"] ? heatingSetpoint : previousHSP
+
+    if (attribute != "all") {
+    logTrace """Selective update for $attribute:
+        <br> ${attribute == "thermostatSetpoint" ? "Updating" : "Preserving memoized"} thermostatSetpoint: $thermostatSetpoint
+        <br> ${attribute == "coolingSetpoint" ? "Updating" : "Preserving memoized"} cooling setpoint: $coolingSetpoint
+        <br> ${attribute == "heatingSetpoint" ? "Updating" : "Preserving memoized"} heating setpoint: $heatingSetpoint
+        """
+    }
+
+    state.thermostatsSetpointSTATES[thermostat.displayName] = [
+        thermostatSetpoint: thermostatSetpoint,
+        coolingSetpoint: coolingSetpoint,
+        heatingSetpoint: heatingSetpoint 
+    ]
+}
+def resetMem(){
+    logInfo "Resetting states..."
+    state.thermostatsSetpointSTATES = [:]
+    initializeStates() // repopulates
+    logTrace "Done."
+
+}
+
 def appButtonHandler(btn) {
 
     switch (btn) {
@@ -350,17 +503,17 @@ def appButtonHandler(btn) {
         case "run":
             master([calledBy:"appButtonHandler", motionActiveEvent: false])
             break
-        case "reset":
+        case "reset_therm_memoizations":
             resetMem()
             break
-        case "confirm_reset_intelligence":
-            state.confirm_reset_intelligence = true
+        case "prompt_reset_intelligence":
+            state.prompt_reset_intelligence = true
             break
         case "reset_intelligence":
             initialize_intelligence_states()
             break
         case "cancel_reset_intelligence": 
-            state.confirm_reset_intelligence = false
+            state.prompt_reset_intelligence = false
             break
         case "read":
             state.read_about_therm_controller = !state.read_about_therm_controller
@@ -374,7 +527,29 @@ def appButtonHandler(btn) {
             }
         case "flash": 
             flashTheLight()
-            break 
+            break
+        case "toggleKPIs":
+            state.showKPIs = !state.showKPIs
+            break
+            
+        case "toggleAnalytics":
+            state.showAnalytics = !state.showAnalytics
+            break
+        case "backup_intelligence":
+            def fileName = backupIntelligenceData()
+            if (fileName) {
+                paragraph "Data backed up to: ${fileName}"
+            }
+            break
+        case "restore_intelligence":
+            state.showRestoreOptions = true
+            break
+        case "reset_intelligence":
+            if (backup_before_reset) {
+                backupIntelligenceData()
+            }
+            initialize_intelligence_states()
+            break
     }
 }
 
@@ -382,6 +557,10 @@ def getThermControllerParagraph() {
     def prgrph = """
         <style>
             /* Reset styles for entire container */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
             #therm-controller * {
                 margin: 0 !important;
                 padding: 0 !important;
@@ -390,6 +569,10 @@ def getThermControllerParagraph() {
             }
             
             /* Column styling */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
             #therm-controller > div {
                 flex: 1;
                 border: 1px solid #dee2e6;
@@ -400,6 +583,10 @@ def getThermControllerParagraph() {
             }
             
             /* Headers */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
             #therm-controller .column-header {
                 font-weight: bold;
                 color: #2c3e50;
@@ -408,6 +595,10 @@ def getThermControllerParagraph() {
             }
             
             /* Content text */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
             #therm-controller .content-text {
                 font-size: 12px;
                 margin-top: 4px !important;
@@ -415,6 +606,10 @@ def getThermControllerParagraph() {
             }
             
             /* Lists */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
             #therm-controller ul {
                 list-style-position: inside;
                 padding-left: 8px !important;
@@ -430,6 +625,10 @@ def getThermControllerParagraph() {
             }
             
             /* Emphasis text */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
             #therm-controller .emphasis {
                 font-style: italic;
                 margin-top: 8px !important;
@@ -541,6 +740,10 @@ def findExistingVirTherm() {
  * }
  * def thermostat = createVirtualThermostat() // Creates "Temperature Living-Room" thermostat
  */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def createVirtualThermostat() {
     logWarn "Creating Virtual Thermostat..."
 
@@ -621,6 +824,7 @@ def createVirtualThermostat() {
 }
 
 def isBoostTemp(value) {
+    if(restriction().data.restricted_mode) return
     if (!state.boostTempArray) {
         initializeBoostTempArray()
     }
@@ -641,6 +845,7 @@ def isBoostTemp(value) {
 }
 
 def setPointHandler(evt){
+    if(restriction().data.restricted_mode) return
     logTrace "state.boostMode: ${state.boostMode} **********-------------- $evt.device $evt.name set to ${evt.value}F" 
 
 
@@ -655,6 +860,7 @@ def setPointHandler(evt){
 }
 
 def pushableButtonHandler(evt){
+    if(restriction().data.restricted_mode) return
     logInfo "BUTTON EVT $evt.device $evt.name $evt.value"
 
     def nightModeActive = state.nightModeActive ?: false 
@@ -687,6 +893,7 @@ def stopFlashing() {
 }
 
 def motionHandler(evt) {
+    if(restriction().data.restricted_mode) return
     if (state.paused) {
         logDebug "Motion detected, but app is paused. Ignoring."
         return
@@ -723,8 +930,9 @@ def motionHandler(evt) {
         master([calledBy:"motionHandler", motionActiveEvent: false])
 
         state.lastMotionHandled = now
+        
     }
-    else if(evt.value == "active" && lastMotionHandled > someSecondsAgoActiveEvents) {
+    else if(lastMotionHandled > someSecondsAgoActiveEvents) {
         
         master([calledBy:"motionHandler", motionActiveEvent: true])
         state.lasActivetMotionHandled = now
@@ -734,67 +942,88 @@ def motionHandler(evt) {
 }
 
 def ChangedModeHandler(evt){
+    if(restriction(motionActiveEvent).data.restricted_mode) return
     logInfo "Location is in ${evt.value} mode" 
     master([calledBy:"ChangedModeHandler", motionActiveEvent: false])
 }
 def temperatureHandler(evt){
-    logInfo "$evt.device temperature is ${evt.value}F" 
-    master([calledBy:"temperatureHandler", motionActiveEvent: false])
+    if(restriction(motionActiveEvent).data.restricted_mode) return
+    // Initialize state for tracking device temperatures if not exists
+    state.deviceTemperatures = state.deviceTemperatures ?: [:]
+
+    log.debug "state.deviceTemperatures: $state.deviceTemperatures"
+    
+    // Convert deviceId to string to ensure consistent key type
+    def deviceId = evt.deviceId.toString()
+    def currentTemp = evt.value.toFloat()
+    def previousTemp = state.deviceTemperatures[deviceId] ?: currentTemp
+    
+    logInfo "$evt.device temperature is ${currentTemp}F"
+    log.debug "Previous temp for device $deviceId was: $previousTemp"
+    
+    // Calculate absolute temperature difference
+    def tempDifference = Math.abs(currentTemp - previousTemp)
+        
+    // Only call master if temperature change is ≥ 0.5°F
+    if (tempDifference >= 0.5) {
+        logInfo "Temperature change of ${tempDifference.round(1)}°F detected for ${evt.device}. Triggering master()"
+        // Update the temperature used for comparison only after deciding to call master()
+        state.deviceTemperatures[deviceId] = currentTemp
+        master([calledBy:"temperatureHandler", motionActiveEvent: false])
+    } else {
+        logTrace "Temperature change of ${tempDifference}°F is less than threshold. Skipping master() call."
+    }
 }
 def outsideTempHandler(evt){
+    if(restriction().data.restricted_mode) return
     logInfo "$evt.device temperature is ${evt.value}F" 
     master([calledBy:"outsideTempHandler", motionActiveEvent: false])
 
 }
 def contactHandler(evt){
+    if(restriction().data.restricted_mode) return
     logInfo "$evt.device is ${evt.value}" 
     master([calledBy:"contactHandler", motionActiveEvent: false])
 }
 
 def master(data){
 
-    log.debug "isInNightMode(): ${isInNightMode()}"
+    if(restriction().data.restricted_mode) return
 
-    logDebug "MASTER CALLED - Stack trace: ${new Exception().getStackTrace()}"
-    log.debug data
-    
     def lapse = 5 // interval in seconds
-
     state.lastRun = state.lastRun == null ? now() : state.lastRun
-
-    logWarn("state.thermostatsSetpointSTATES: <br> ${state.thermostatsSetpointSTATES}")
 
     if (now() - state.lastRun > lapse * 1000){
 
-        state.lastRun = now()         
+        log.trace "isInNightMode(): ${isInNightMode()}"
+        log.debug "master: $data"
 
         handleThermosats(data.motionActiveEvent)
-        
-    }
-    else {
-        logWarn "master ran less than $lapse seconds ago. Skipping"
-        return
-    }
 
+        state.lastRun = now()
     
 
-    if(data.calledBy in ["master", "initialiaze", "appButtonHandler"]) {
-        unschedule("master") // Cancel any existing scheduled runs
-        runIn(
-                120, 
-                "master", 
-                    [
-                        data: [
-                            calledBy: "master",
-                            motionActiveEvent: false
-                        ],
-                        overwrite: true  // Making the default behavior explicit for clarity
-                    ]
+        if(data.calledBy in ["master", "initialiaze", "appButtonHandler"]) {
+            unschedule("master") // Cancel any existing scheduled runs
+            runIn(
+                    120, 
+                    "master", 
+                        [
+                            data: [
+                                calledBy: "master",
+                                motionActiveEvent: false
+                            ],
+                            overwrite: true  // Making the default behavior explicit for clarity
+                        ]
 
-            )
+                )
+        }
+        check_logs_timer()
+        logDebug "master eval executed successfully. called by: $calledBy"
     }
-    check_logs_timer()
-    logDebug "master eval executed successfully. called by: $calledBy"
+    else {
+        logTrace "master ran less than $lapse seconds ago. Skipping"
+    }
 }
 
 def handleThermosats(motionActiveEvent=false, off=false){
@@ -816,38 +1045,37 @@ def handleThermosats(motionActiveEvent=false, off=false){
 
         setThermostatsMode([deviceId: thermostat.id, need: need])
 
-        if (need == "off") return 
+        if (!(need in ["heat", "cool"])) return 
 
         if (boost) {
-            if (need in ["heat", "cool"]) {
 
-                logWarn "handling boost (need:$need)"
+            logWarn "handling boost (need:$need)"
 
-                state.boostMode = true
+            state.boostMode = true
+            
+            // def targetTemp = need == "heat" ? tempBoostHeat : tempBoostCool
+            def targetTemp = getTargetTemp(true, need)
+            def attribute = "${need}ingSetpoint"
+
+
+            if (thermostat.currentValue(attribute) != val) {
+                logDebug "thermostat -> $thermostat"
+                updateMem(thermostat, "${need}ingSetpoint")
+                logDebug "runIn(1, 'setThermostatsSetpoint'...)"
+                runIn(1, "setThermostatsSetpoint",
+                    [
+                        data: [
+                            deviceId: thermostat.id,
+                            need: need,
+                            attribute: attribute,
+                            value: targetTemp,
+                            turboRequired: true,
+                            calledBy: "handleThermosats"
+                        ],
+                        overwrite: false
+                    ])
                 
-                def targetTemp = need == "heat" ? tempBoostHeat : tempBoostCool
-                def attribute = "${need}ingSetpoint"
-
-
-                if (thermostat.currentValue(attribute) != val) {
-                    logDebug "thermostat -> $thermostat"
-                    updateMem(thermostat, "${need}ingSetpoint")
-                    logDebug "runIn(1, 'setThermostatsSetpoint'...)"
-                    runIn(1, "setThermostatsSetpoint",
-                        [
-                            data: [
-                                deviceId: thermostat.id,
-                                need: need,
-                                attribute: attribute,
-                                value: targetTemp,
-                                turboRequired: true,
-                                calledBy: "handleThermosats"
-                            ],
-                            overwrite: false
-                        ])
-                    
-                    return // works like "continue"; exits the current iteration
-                }
+                return // works like "continue"; exits the current iteration
             }
         }
 
@@ -875,67 +1103,7 @@ def handleThermosats(motionActiveEvent=false, off=false){
     }
 }
 
-def updateMem(thermostat, attribute="all"){
 
-    logDebug "--------------- Updating memoization state for $thermostat"
-
-    
-
-    //ensure it doesn't initialize with boost values if this was called during a boosting operation
-    // Convert current values to BigDecimal with scale 1
-    def currSP = (thermostat.currentValue("thermostatSetpoint") as BigDecimal).setScale(1)
-    def currCSP = (thermostat.currentValue("coolingSetpoint") as BigDecimal).setScale(1)
-    def currHSP = (thermostat.currentValue("heatingSetpoint") as BigDecimal).setScale(1)
-
-
-    
-    // TODO: update to call isBoostTemp() instead (no need for conversion above then)
-    def thermostatSetpoint = currSP in state.boostTempArray ? 74.0 : currSP
-    def coolingSetpoint = currCSP in state.boostTempArray ? 74.0 : currCSP
-    def heatingSetpoint = currHSP in state.boostTempArray ? 74.0 : currHSP
-
-    logDebug """
-        <br> tempBoostCool: $tempBoostCool (${tempBoostCool.class})
-        <br> tempBoostHeat: $tempBoostHeat (${tempBoostHeat.class})
-        <br> currSP: $currSP (${currSP.class})
-        <br> currHSP: $currHSP (${currHSP.class})
-        <br> currCSP: $currCSP (${currCSP.class})
-        <br> state.boostTempArray: $state.boostTempArray
-        <br> currSP in boostTempArray ? ${currSP in boostTempArray}
-        <br> currHSP in boostTempArray ? ${currHSP in boostTempArray}
-        <br> currCSP in boostTempArray ? ${currCSP in boostTempArray}
-        """
-
-    
-    def previousSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.thermostatSetpoint ?: currSP
-    def previousCSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.coolingSetpoint ?: currCSP
-    def previousHSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.heatingSetpoint ?: currHSP
-
-    thermostatSetpoint = attribute in ["thermostatSetpoint", "all"] ? thermostatSetpoint : previousSP
-    coolingSetpoint = attribute in ["coolingSetpoint", "all"] ? coolingSetpoint : previousCSP    
-    heatingSetpoint = attribute in ["heatingSetpoint", "all"] ? heatingSetpoint : previousHSP
-
-    if (attribute != "all") {
-    logTrace """Selective update for $attribute:
-        <br> ${attribute == "thermostatSetpoint" ? "Updating" : "Preserving memoized"} thermostatSetpoint: $thermostatSetpoint
-        <br> ${attribute == "coolingSetpoint" ? "Updating" : "Preserving memoized"} cooling setpoint: $coolingSetpoint
-        <br> ${attribute == "heatingSetpoint" ? "Updating" : "Preserving memoized"} heating setpoint: $heatingSetpoint
-        """
-    }
-
-    state.thermostatsSetpointSTATES[thermostat.displayName] = [
-        thermostatSetpoint: thermostatSetpoint,
-        coolingSetpoint: coolingSetpoint,
-        heatingSetpoint: heatingSetpoint 
-    ]
-}
-def resetMem(){
-    logInfo "Resetting states..."
-    state.thermostatsSetpointSTATES = [:]
-    initializeStates() // repopulates
-    logTrace "Done."
-
-}
 def setThermostatsMode(data){
 
     logDebug "setThermostatsMode: $data"
@@ -1226,7 +1394,11 @@ def getTimeout() {
     logDebug "getTimeout() returns $result ${timeUnit}"
     return result
 }
-
+def getFanMode() {
+    // Returns current fan mode from thermostat(s)
+    def allThermostats = getAllThermostats()
+    return allThermostats[0].currentValue("thermostatFanMode")
+}
 def isInNightMode() {
     // Initialize states if null
     state.nightModeActivationTime = state.nightModeActivationTime ?: now()
@@ -1268,25 +1440,29 @@ def motionIsActive() {
     def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
 
     if(enableTrace || !functionalSensors) {
-        logTrace """
-            functionalSensors:
-            <table>
-            <tr>
-                <td>
-                <b>All Motion Sensors</b>
-                <ol>
-                    ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
-                </ol>
-                </td>
-                <td>
-                ${functionalSensors ? "<b>Functional Sensors" : "<b style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS: motion returns TRUE by default"}</b>
-                <ol>
-                    ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
-                </ol>
-                </td>
-            </tr>
-            </table>
-        """
+        state.lastFuncSensorsLog = state.lastFuncSensorsLog ? state.lastFuncSensorsLog : now()
+        if (now() - state.lastFuncSensorsLog > 60 * 1000){
+            state.lastFuncSensorsLog = now() 
+            logTrace """
+                functionalSensors:
+                <table>
+                <tr>
+                    <td>
+                    <b>All Motion Sensors</b>
+                    <ol>
+                        ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
+                    </ol>
+                    </td>
+                    <td>
+                    ${functionalSensors ? "<b>Functional Sensors" : "<b style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS: motion returns TRUE by default"}</b>
+                    <ol>
+                        ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
+                    </ol>
+                    </td>
+                </tr>
+                </table>
+            """
+        }
     }
     
     if (!functionalSensors) {
@@ -1413,6 +1589,7 @@ def get_indoor_temperature() {
     
     // If temperature sensors are configured, use them
     if (tempSensors) {
+        log.debug "calculating inside temp from tempSensors: <br><ul><li>${tempSensors.join("<li>")} </ul>"
         tempSensors.each { sensor ->
             if (sensor.currentTemperature != null) {
                 temps << sensor.currentTemperature
@@ -1421,7 +1598,6 @@ def get_indoor_temperature() {
     }
     
     // If no valid temperatures from sensors or no sensors configured,
-    // use thermostat temperatures as fallback
     if (temps.size() == 0 && thermostats) {
         thermostats.each { thermostat ->
             if (thermostat.currentTemperature != null) {
@@ -1557,67 +1733,163 @@ private void initializeLogging() {
     }
 }
 
+private void logConditions(Map params = [:]) {
+    logTrace """
+    <div style='border:1px solid gray;'>
+        <br><b><u>Comfort Intelligence Analysis:</u></b>
+        <ol>
+            ${params.keySet().collect { key -> 
+                "<li><b>${key.replaceAll(/([A-Z])/, ' $1').capitalize()}:</b> ${params[key]}</li>"
+            }.join('\n')}
+        </ol>
+    </div>
+    """
+}
+
+def getTargetTemp(Boolean boostAllowed = false, String need = null) {
+    // If it's a boost command, use boost temperatures
+    if (boostAllowed && need) {
+         if (!(need in ["heat", "cool"])) {
+            log.warn "Invalid need for boost mode: ${need}. Defaulting to 74°."
+            return 74
+        }
+        return need == "heat" ? tempBoostHeat : tempBoostCool
+    }
+    
+    // Get the virtual thermostat's setpoint
+    def candidateTemp = thermostatController?.currentValue("thermostatSetpoint") ?: 74
+    
+    // Validate temperature
+    try {
+        // Convert to numeric and ensure it's a valid temperature
+        def temp = new BigDecimal(candidateTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
+        
+        // Check for extremely out-of-bounds temperatures
+        if (temp < 40 || temp > 90) {
+            log.warn formatText("Extremely out-of-bounds temperature detected: ${temp}°. Defaulting to 74°.", "white", "red")
+            return 74
+        }
+        
+        return temp
+    } catch (Exception e) {
+        log.error "Error processing temperature: ${candidateTemp}. Error: ${e.message}"
+        return 74 // safe default
+    }
+}
+
+def restriction(motionActiveEvent=false){
+    if(location.mode in restricted){
+        logTrace "Currently in restricted mode: $location.mode"
+        return [
+        data: [
+                set_to_off : false,
+                off_mode : null,
+                restricted_mode : true
+            ]
+        ]
+    }
+    def off_mode = fan_only ? "fan_only" : set_to_auto_instead_of_off ? "auto" : "off"
+
+    // avoid calling motionIsActive() if it's already executed from the motion events handler.  
+    def motion = motionActiveEvent ? true : motionIsActive()
+    if(!motion){
+        log.warn "No motion. get_need shall return $off_mode"
+        return [
+        data: [
+                set_to_off : true,
+                off_mode : off_mode,
+                restricted_mode : false
+            ]
+        ]
+    }
+
+    return [
+        data: [
+                set_to_off : false,
+                off_mode : off_mode,
+                restricted_mode : false
+            ]
+        ]
+}
 
 /* *********************************** INTELLIGENCE *********************************** */
 
 
+/** 
+ * Last Updated: 2025-01-05
+ */
+
 def get_need(motionActiveEvent=false) {
     /**
-    * get_need()
-    * Primary decision-making function for temperature management
-    * @param motionActiveEvent Boolean indicating if this was triggered by a motion event
-    * @return String HVAC mode ('cool', 'heat', 'fan_only', or 'off')
-    * 
-    * Evaluates current conditions and determines optimal HVAC mode by:
-    * 1. Validating required sensor capabilities
-    * 2. Analyzing occupancy heat and solar gain
-    * 3. Calculating comfort ranges based on humidity
-    * 4. Assessing natural cooling/heating potential
-    * Falls back to basic algorithm if required capabilities are missing
-    * 
-    * @param motionActiveEvent Boolean indicating if triggered by motion event
-    * @return String HVAC mode ('cool', 'heat', 'fan_only', or 'off')
-    * 
-    * Decision Flow:
-    * ┌─────────────────┐
-    * │ Validate Sensors├──No──→┌──────────────┐
-    * └────────┬────────┘       │Fallback Logic│
-    *          │                └──────────────┘
-    *          Yes
-    *          ↓
-    * ┌─────────────────┐
-    * │ Analyze Inputs  │←──────────────┐
-    * └────────┬────────┘               │
-    *          │                        │
-    *          ↓                        │
-    * ┌─────────────────┐      ┌───────────────┐
-    * │ Check Natural   ├─No──→│Mechanical HVAC│
-    * │ Cooling/Heating │      └───────────────┘
-    * └────────┬────────┘
-    *          │
-    *          Yes
-    *          ↓
-    * ┌─────────────────┐
-    * │  Fan or Off     │
-    * └─────────────────┘
-    * 
-    * Related Functions:
-    * - validateComfortCapabilities() - Initial capability check
-    * - analyzeOccupancyHeat() - Occupancy heat contribution
-    * - analyzeSolarGain() - Solar heat impact
-    * - getPredictedPerformance() - Natural cooling/heating viability
-    * 
-    * Example Return States:
-    * {
-    *   'cool': When mechanical cooling needed
-    *   'heat': When mechanical heating needed
-    *   'fan_only': When natural management possible with fan
-    *   'off': When natural management possible without fan
-    * }
-    * 
-    * @see fallback_need_eval() for basic algorithm
+        * get_need()
+        * Primary decision-making function for temperature management
+        * @param motionActiveEvent Boolean indicating if this was triggered by a motion event
+        * @return String HVAC mode ('cool', 'heat', 'fan_only', or 'off')
+        * 
+        * Evaluates current conditions and determines optimal HVAC mode by:
+        * 1. Validating required sensor capabilities
+        * 2. Analyzing occupancy heat and solar gain
+        * 3. Calculating comfort ranges based on humidity
+        * 4. Assessing natural cooling/heating potential
+        * Falls back to basic algorithm if required capabilities are missing
+        * 
+        * @param motionActiveEvent Boolean indicating if triggered by motion event
+        * @return String HVAC mode ('cool', 'heat', 'fan_only', or 'off')
+        * 
+        * Decision Flow:
+        * ┌─────────────────┐
+        * │ Validate Sensors├──No──→┌──────────────┐
+        * └────────┬────────┘       │Fallback Logic│
+        *          │                └──────────────┘
+        *          Yes
+        *          ↓
+        * ┌─────────────────┐
+        * │ Analyze Inputs  │←──────────────┐
+        * └────────┬────────┘               │
+        *          │                        │
+        *          ↓                        │
+        * ┌─────────────────┐      ┌───────────────┐
+        * │ Check Natural   ├─No──→│Mechanical HVAC│
+        * │ Cooling/Heating │      └───────────────┘
+        * └────────┬────────┘
+        *          │
+        *          Yes
+        *          ↓
+        * ┌─────────────────┐
+        * │  Fan or Off     │
+        * └─────────────────┘
+        * 
+        * Related Functions:
+        * - validateComfortCapabilities() - Initial capability check
+        * - analyzeOccupancyHeat() - Occupancy heat contribution
+        * - analyzeSolarGain() - Solar heat impact
+        * - getPredictedPerformance() - Natural cooling/heating viability
+        * 
+        * Example Return States:
+        * {
+        *   'cool': When mechanical cooling needed
+        *   'heat': When mechanical heating needed
+        *   'fan_only': When natural management possible with fan
+        *   'off': When natural management possible without fan
+        * }
+        * 
+        * @see fallback_need_eval() for basic algorithm
     */
+
+    /** 
+    * Last Updated: 2025-01-05
+    */
+
+    def restrict = restriction(motionActiveEvent)
+    if(restrict.data.restricted_mode) return
+    def off_mode = restrict.data.off_mode    
+    if(restrict.data.set_to_off) return off_mode 
+
+    if (!useAI) return fallback_need_eval(motionActiveEvent)
+    
+
     try {
+
         def validation = validateComfortCapabilities()
         
         if (!validation.isRequired) {
@@ -1639,7 +1911,7 @@ def get_need(motionActiveEvent=false) {
         
         // Calculate comfort zone based on temperature and humidity
         def comfortRange = calculateComfortRange(humidity)
-        def targetTemp = thermostatController.currentValue("thermostatSetpoint")
+        def targetTemp = getTargetTemp()
         
         // Determine if natural temperature management is possible
         def naturalCoolingPotential = assessNaturalCoolingPotential(
@@ -1655,21 +1927,95 @@ def get_need(motionActiveEvent=false) {
             totalHeatLoad,
             humidity
         )
-        
-        // Decision logic
+
+        logConditions(
+            targetTemp: targetTemp, 
+            swing: swing, 
+            indoorTemp: currentIndoorTemp, 
+            outdoorTemp: currentOutdoorTemp,
+            occupancyHeatLoad: occupancyHeat.heatOutput,
+            solarGain: solarGain.solarGainWatts,
+            totalHeatLoad: totalHeatLoad,
+            comfortRangeUpper: comfortRange.upperBound,
+            comfortRangeLower: comfortRange.lowerBound,
+            coolingPotentialFeasible: naturalCoolingPotential.feasible,
+            coolingPotentialConfidence: naturalCoolingPotential.confidence,
+            heatingPotentialFeasible: naturalHeatingPotential.feasible,
+            heatingPotentialConfidence: naturalHeatingPotential.confidence,
+            humidity: humidity
+        )
+
         if (currentIndoorTemp > (targetTemp + comfortRange.upperBound)) {
             if (naturalCoolingPotential.feasible) {
+                
                 return fan_only ? "fan_only" : "off"
             }
             return "cool"
+        }
+        
+        /** 
+        * Decision logic:
+        *
+        * Tracks the start of natural cooling/heating periods
+        * Records complete events with actual duration and temperature changes
+        * Finalizes events when:
+        *   - Switching to mechanical HVAC
+        *   - Reaching target temperature
+        *   - Changing modes
+        */ 
+        if (currentIndoorTemp > (targetTemp + comfortRange.upperBound)) {
+            if (naturalCoolingPotential.feasible) {
+                if (!state.currentThermalEvent) {
+                    // Start new cooling event
+                    recordThermalEvent([
+                        type: 'naturalCooling',
+                        startTemp: currentIndoorTemp,
+                        outdoorTemp: currentOutdoorTemp,
+                        fanMode: getFanMode(),
+                        humidity: humidity,
+                        timeOfDay: new Date().format('HH:mm'),
+                        isNewEvent: true
+                    ])
+                }
+                return fan_only ? "fan_only" : "off"
+            } else {
+                // If switching to mechanical cooling, finalize any ongoing event
+                if (state.currentThermalEvent) {
+                    recordThermalEvent([
+                        endTemp: currentIndoorTemp,
+                        isNewEvent: false
+                    ])
+                }
+                return "cool"
+            }
         } else if (currentIndoorTemp < (targetTemp - comfortRange.lowerBound)) {
             if (naturalHeatingPotential.feasible) {
+                if (!state.currentThermalEvent) {
+                    // Start new heating event
+                    recordThermalEvent([
+                        type: 'naturalHeating',
+                        startTemp: currentIndoorTemp,
+                        outdoorTemp: currentOutdoorTemp,
+                        fanMode: getFanMode(),
+                        humidity: humidity,
+                        timeOfDay: new Date().format('HH:mm'),
+                        isNewEvent: true
+                    ])
+                }
                 return fan_only ? "fan_only" : "off"
+            } else {
+                // If switching to mechanical heating, finalize any ongoing event
+                if (state.currentThermalEvent) {
+                    recordThermalEvent([
+                        endTemp: currentIndoorTemp,
+                        isNewEvent: false
+                    ])
+                }
+                return "heat"
             }
-            return "heat"
         }
     } catch (Exception e){
-        log.error "Exception in get_need() => $e"
+        log.error "Exception in get_need() => $e (app is FALLING BACK TO LEGACY ALGORITHM)"
         return fallback_need_eval(motionActiveEvent)
     }
     
@@ -1771,6 +2117,10 @@ def validateComfortCapabilities() {
     * 
     * Used to determine if smart comfort management can be enabled and what features are available
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def validationResults = [
         isRequired: false,
         enhancedFeatures: [],
@@ -1938,6 +2288,11 @@ def analyzeOccupancyHeat() {
     * @see trackEnvironmentalFactors() for pattern logging
     * @see getPredictedPerformance() for usage in predictions
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
+    
     if (!motionSensors) return [heatOutput: 0, confidence: 0]
     
     def now = new Date()
@@ -1945,8 +2300,8 @@ def analyzeOccupancyHeat() {
     def startTime = new Date(now.time - (interval * 60 * 1000))
     
     def eventCounts = [:]
-    def WATTS_PER_PERSON = 200 // As requested
-    def EVENTS_PER_PERSON = 3  // Estimated events per minute per person
+    def WATTS_PER_PERSON = 200
+    def EVENTS_PER_PERSON = 3
     
     motionSensors.each { sensor ->
         def events = sensor.eventsSince(startTime)?.findAll { it.name == "motion" && it.value == "active" }
@@ -1957,17 +2312,17 @@ def analyzeOccupancyHeat() {
     
     if (eventCounts.isEmpty()) return [heatOutput: 0, confidence: 1.0]
     
-    // Calculate events per minute
-    def totalEvents = eventCounts.values().sum()
+    // Calculate events per minute using safeAverage
+    def totalEvents = eventCounts.values().sum() ?: 0
     def eventsPerMinute = totalEvents / interval
     
     // Estimate number of people
     def estimatedPeople = Math.round(eventsPerMinute / EVENTS_PER_PERSON)
     def totalHeatOutput = estimatedPeople * WATTS_PER_PERSON
     
-    // Calculate confidence based on consistency of readings
-    def confidence = 0.8 // Base confidence
-    if (eventsPerMinute < 1) confidence *= 0.5 // Less confident with few events
+    // Calculate confidence
+    def confidence = 0.8
+    if (eventsPerMinute < 1) confidence *= 0.5
     
     return [heatOutput: totalHeatOutput, confidence: confidence]
 }
@@ -1982,6 +2337,10 @@ def analyzeSolarGain() {
     * 
     * Combines illuminance and UV index data to estimate solar heat impact
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def comfCapTiers = comfortCapabilitiesTiers()
     def allSensors = (tempSensors ?: []) + (motionSensors ?: [])
     def result = [
@@ -2001,16 +2360,16 @@ def analyzeSolarGain() {
     def avgUV = 0
     
     if (illuminanceSensors) {
-        avgIlluminance = illuminanceSensors.collect { 
+        avgIlluminance = safeAverage(illuminanceSensors.collect { 
             it.currentValue("illuminance") ?: 0 
-        }.average()
+        })
         result.hasData = true
     }
     
     if (uvSensors) {
-        avgUV = uvSensors.collect { 
+        avgUV = safeAverage(uvSensors.collect { 
             it.currentValue("ultravioletIndex") ?: 0 
-        }.average()
+        })
         result.hasData = true
         result.confidence += 0.2
     }
@@ -2047,35 +2406,59 @@ def recordThermalEvent(params) {
     * 
     * Maintains history of temperature management attempts and their outcomes
     */
-    // Initialize if not exists
-    state.thermalBehavior = state.thermalBehavior ?: [
-        roomId: app.id,
-        naturalCooling: [events: [], performanceByDelta: [:]], 
-        naturalHeating: [events: [], performanceByDelta: [:]],
-        environmentalFactors: [:]
-    ]
+/** 
+ * Last Updated: 2025-01-05
+ */
+
+    logDebug "Recording thermal event with params: $params"
+    
+    def now = now()
+    
+    if (params.isNewEvent) {
+        // Start new thermal event
+        state.currentThermalEvent = [
+            type: params.type,
+            startTemp: params.startTemp,
+            startTime: now,
+            outdoorTemp: params.outdoorTemp,
+            fanMode: params.fanMode,
+            humidity: params.humidity,
+            timeOfDay: params.timeOfDay
+        ]
+        logDebug "Started new thermal event: ${state.currentThermalEvent}"
+        return
+    }
+    
+    // If we get here, we're finalizing an event
+    if (!state.currentThermalEvent) {
+        logDebug "No thermal event to finalize"
+        return
+    }
+
+    def duration = (now - state.currentThermalEvent.startTime) / 1000 // Convert to seconds
     
     def event = [
         timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ"),
-        startTemp: params.startTemp,
+        startTemp: state.currentThermalEvent.startTemp,
         endTemp: params.endTemp,
-        outdoorTemp: params.outdoorTemp,
-        duration: params.duration,
-        coolingRate: (params.startTemp - params.endTemp) / (params.duration / 3600), // degrees per hour
+        outdoorTemp: state.currentThermalEvent.outdoorTemp,
+        duration: duration,
+        coolingRate: state.currentThermalEvent.startTemp == params.endTemp ? 0 : 
+            (state.currentThermalEvent.startTemp - params.endTemp) / (duration / 3600), // degrees per hour
         conditions: [
-            fanMode: params.fanMode,
-            humidity: params.humidity,
-            timeOfDay: params.timeOfDay,
+            fanMode: state.currentThermalEvent.fanMode,
+            humidity: state.currentThermalEvent.humidity,
+            timeOfDay: state.currentThermalEvent.timeOfDay,
             season: getSeason()
         ]
     ]
     
-    // Determine the delta bracket (in 5-degree increments)
-    def tempDelta = Math.abs(params.startTemp - params.outdoorTemp)
+    // Determine the delta bracket
+    def tempDelta = Math.abs(state.currentThermalEvent.startTemp - state.currentThermalEvent.outdoorTemp)
     def deltaBracket = "${Math.floor(tempDelta/5)*5}-${Math.floor(tempDelta/5)*5 + 5}"
     
-    // Store event in appropriate category
-    def category = params.type // 'naturalCooling' or 'naturalHeating'
+    // Store event
+    def category = state.currentThermalEvent.type
     state.thermalBehavior[category].events << event
     
     // Keep only last 30 events
@@ -2083,8 +2466,12 @@ def recordThermalEvent(params) {
         state.thermalBehavior[category].events = state.thermalBehavior[category].events[-30..-1]
     }
     
-    // Update performance metrics for this delta bracket
     updatePerformanceMetrics(category, deltaBracket, event)
+    
+    // Clear current event
+    state.currentThermalEvent = null
+    
+    logDebug "Finalized thermal event: $event"
 }
 def updatePerformanceMetrics(category, deltaBracket, event) {
     /**
@@ -2096,6 +2483,10 @@ def updatePerformanceMetrics(category, deltaBracket, event) {
     * 
     * Maintains running averages of cooling/heating rates and success rates
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def metrics = state.thermalBehavior[category].performanceByDelta[deltaBracket] ?: [
         avgCoolingRate: 0,
         successRate: 0,
@@ -2126,6 +2517,10 @@ def getPredictedPerformance(targetTemp, currentTemp, outdoorTemp) {
     * 
     * Uses historical performance data to predict effectiveness of natural cooling/heating
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def tempDelta = Math.abs(currentTemp - outdoorTemp)
     def deltaBracket = "${Math.floor(tempDelta/5)*5}-${Math.floor(tempDelta/5)*5 + 5}"
     def category = currentTemp > targetTemp ? 'naturalCooling' : 'naturalHeating'
@@ -2147,18 +2542,33 @@ def getPredictedPerformance(targetTemp, currentTemp, outdoorTemp) {
     ]
 }
 def assessNaturalCoolingPotential(currentTemp, outdoorTemp, heatLoad, humidity) {
-    def prediction = getPredictedPerformance(
-        thermostatController.currentValue("thermostatSetpoint"),
-        currentTemp,
-        outdoorTemp
-    )
+    def targetTemp = thermostatController.currentValue("thermostatSetpoint")
+    def prediction = getPredictedPerformance(targetTemp, currentTemp, outdoorTemp)
     
-    // Start tracking if we decide to try natural cooling
+    // Check if we recently switched modes
+    def currentTime = now()
+    def timeSinceLastMode = currentTime - (state.lastModeChangeTime ?: 0)
+    def delayBetweenModes = 15 * 60 * 1000 // 15 minutes in milliseconds
+    
+    // Don't allow cooling if outdoor temp is too low (dynamic threshold based on history)
+    def outdoorTempTooLowForAC = getOutdoorTempTooLowForAC()
+    if (outdoorTemp < outdoorTempTooLowForAC) {
+        logTrace "Outdoor temperature ${outdoorTemp}°F is below minimum ${outdoorTempTooLowForAC}°F for cooling"
+        return [feasible: true, confidence: 0.9] // High confidence in natural cooling
+    }
+    
+    // If we recently changed modes, prefer natural methods
+    if (timeSinceLastMode < delayBetweenModes) {
+        logTrace "Recent mode change (${timeSinceLastMode/1000/60} minutes ago). Preferring natural cooling."
+        return [feasible: true, confidence: 0.7]
+    }
+
+    // Use historical performance data to determine feasibility
     if (prediction.predictedSuccess > 0.7 && prediction.confidence > 0.5) {
         recordThermalEvent([
             type: 'naturalCooling',
             startTemp: currentTemp,
-            endTemp: currentTemp, // Will be updated when we change modes
+            endTemp: currentTemp,
             outdoorTemp: outdoorTemp,
             duration: 0,
             fanMode: getFanMode(),
@@ -2170,6 +2580,94 @@ def assessNaturalCoolingPotential(currentTemp, outdoorTemp, heatLoad, humidity) 
     }
     
     return [feasible: false, confidence: prediction.confidence]
+}
+
+
+def assessNaturalHeatingPotential(currentTemp, outdoorTemp, heatLoad, humidity) {
+    def targetTemp = thermostatController.currentValue("thermostatSetpoint")
+    def prediction = getPredictedPerformance(targetTemp, currentTemp, outdoorTemp)
+    
+    // Check if we recently switched modes
+    def currentTime = now()
+    def timeSinceLastMode = currentTime - (state.lastModeChangeTime ?: 0)
+    def delayBetweenModes = 15 * 60 * 1000
+    
+    // Don't allow heating if outdoor temp is too high (dynamic threshold)
+    def outdoorTempTooHighForHeat = getOutdoorTempTooHighForHeat()
+    if (outdoorTemp > outdoorTempTooHighForHeat) {
+        logTrace "Outdoor temperature ${outdoorTemp}°F is above maximum ${outdoorTempTooHighForHeat}°F for heating"
+        return [feasible: true, confidence: 0.9] // High confidence in natural heating
+    }
+    
+    // If we recently changed modes, prefer natural methods
+    if (timeSinceLastMode < delayBetweenModes) {
+        logTrace "Recent mode change (${timeSinceLastMode/1000/60} minutes ago). Preferring natural heating."
+        return [feasible: true, confidence: 0.7]
+    }
+
+    if (prediction.predictedSuccess > 0.7 && prediction.confidence > 0.5) {
+        recordThermalEvent([
+            type: 'naturalHeating',
+            startTemp: currentTemp,
+            endTemp: currentTemp,
+            outdoorTemp: outdoorTemp,
+            duration: 0,
+            fanMode: getFanMode(),
+            humidity: humidity,
+            timeOfDay: new Date().format('HH:mm')
+        ])
+        
+        return [feasible: true, confidence: prediction.confidence]
+    }
+    
+    return [feasible: false, confidence: prediction.confidence]
+}
+def getOutdoorTempTooLowForAC() {
+    def seasonalPatterns = state.thermalBehavior?.environmentalFactors?.seasonalPatterns
+    def currentSeason = getSeason()
+    
+    // If we have learned patterns, use them
+    if (seasonalPatterns && seasonalPatterns[currentSeason]?.avgTemp) {
+        return Math.max(40.0, seasonalPatterns[currentSeason].avgTemp - 15.0)
+    }
+    
+    // Otherwise use season-based defaults
+    switch(currentSeason) {
+        case "winter":
+            return 45.0
+        case "summer":
+            return 40.0
+        case "spring":
+            return 40.0
+        case "fall":
+            return 42.0
+        default:
+            return 40.0
+    }
+}
+
+def getOutdoorTempTooHighForHeat() {
+    def seasonalPatterns = state.thermalBehavior?.environmentalFactors?.seasonalPatterns
+    def currentSeason = getSeason()
+    
+    // If we have learned patterns, use them
+    if (seasonalPatterns && seasonalPatterns[currentSeason]?.avgTemp) {
+        return Math.min(75.0, seasonalPatterns[currentSeason].avgTemp + 15.0)
+    }
+    
+    // Otherwise use season-based defaults
+    switch(currentSeason) {
+        case "winter":
+            return 70.0
+        case "summer":
+            return 75.0
+        case "spring":
+            return 72.0
+        case "fall":
+            return 72.0
+        default:
+            return 75.0
+    }
 }
 def trackEnvironmentalFactors() {
     /**
@@ -2202,6 +2700,10 @@ def trackEnvironmentalFactors() {
     * @see getSeasonalComfortAdjustment() for usage
     * @see getComfortVisualization() for UI representation
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def now = new Date()
     def hour = now.format("HH:mm")
     def season = getSeason()
@@ -2266,6 +2768,10 @@ def getTimeBlock(hour) {
     * 
     * Standardizes time periods for pattern analysis
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     // Break day into 2-hour blocks
     def hourNum = hour.split(":")[0].toInteger()
     return "${(hourNum - (hourNum % 2)).toString().padLeft(2, '0')}:00-${(hourNum + (2 - (hourNum % 2))).toString().padLeft(2, '0')}:00"
@@ -2278,6 +2784,10 @@ def getSeason() {
     * 
     * Used for seasonal adjustment calculations
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def month = new Date().format("MM").toInteger()
     switch(month) {
         case 12..2: return "winter"
@@ -2296,6 +2806,10 @@ def updateSeasonalPatterns(season, temp, tempChange) {
     * 
     * Maintains running statistics of seasonal temperature patterns
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def seasonalPatterns = state.thermalBehavior.environmentalFactors.seasonalPatterns
     seasonalPatterns[season] = seasonalPatterns[season] ?: [
         avgTemp: temp,
@@ -2321,6 +2835,10 @@ def calculateComfortRange(humidity) {
     * 
     * Adjusts acceptable temperature range based on humidity levels
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     // Adjust comfort range based on humidity
     def base = new BigDecimal("1.0")
     def humidityFactor = new BigDecimal("0.05")
@@ -2340,6 +2858,10 @@ def getAverageHumidity() {
     * Combines readings from all humidity-capable sensors
     * Returns default 45% if no sensors available
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def humidityCapableDevices = (tempSensors ?: []) + 
                                 (thermostats ?: []) + 
                                 (motionSensors ?: []).findAll { 
@@ -2349,145 +2871,117 @@ def getAverageHumidity() {
     def readings = humidityCapableDevices.collect {
         it.currentValue("humidity")
     }.findAll { it != null }
+
+    logDebug "humidity readings: $readings"
     
-    return readings ? readings.average() : 45 // Default to 45% if no readings
+    return readings ? safeAverage(readings) : 45 // Default to 45% if no readings
 }
 def fallback_need_eval(motionActiveEvent=false){
 
-    if(location.mode in restricted){
-        logTrace "Currently in restricted mode: $location.mode - no action needed"
-        return null
-    }
-
-    logTrace "state.thermostatsSetpointSTATES: ${state.thermostatsSetpointSTATES}"
-
-    
-    def off_mode = fan_only ? "fan_only" : set_to_auto_instead_of_off ? "auto" : "off"
+    def restrict = restriction(motionActiveEvent)
+    if(restrict.data.restricted_mode) return
+    def off_mode = restrict.data.off_mode    
+    if(restrict.data.set_to_off) return off_mode 
 
     def results = []
-
-    def motion = false 
-    if (motionActiveEvent){
-        motion = true // avoids calling motionIsActive() whenever possible. 
-    } else {
-        motion = motionIsActive() // potentially resource intensive
-    }
-
-    if(!motion){
-        log.warn "No motion. get_need returns $off_mode"
-        return off_mode
-    }
-
     def allThermostats = getAllThermostats()
     
 
-    // allThermostats.each { thermostat -> 
+    if (!thermostatController) {
+        formatText("NO thermostatController SET! Update settings.", "white", "red")
+        return 
+    }
 
-        // logDebug "-> processing $thermostat "
+    def targetTemp = getTargetTemp()        
+    def currentIndoorTemp = get_indoor_temperature() as BigDecimal
+    def currentOutdoorTemp =  outsideTemp.currentValue("temperature") as BigDecimal
+    def delayBetweenModes = 15 * 60 * 1000 // 15 minutes in milliseconds
+    def currentTime = now()
+    
+    state.lastModeChangeTime = state.lastModeChangeTime == null ? currentTime : state.lastModeChangeTime
+    state.lastMode = state.lastMode == null ? "initial" : state.lastMode
 
-        // def thermStates = state.thermostatsSetpointSTATES[thermostat.displayName]
+    def timeSinceLastChange = currentTime - state.lastModeChangeTime
 
-        // logDebug "state.lastNeed: $state.lastNeed"
-        
-        // if (!thermStates) resetMem() // reset and repopulate states if object is incomplete (happens after adding a new and we don't want that to happen on updated()) TODO: preserve existing entries. 
+    
 
-        // def targetTemp = state.lastNeed in ["cool", "heat"] ? thermStates."${state.lastNeed}ingSetpoint" : thermStates.thermostatSetpoint
+    // Temperature differential thresholds
+    def coolDiff = location.mode in powerSavingModes || !motion ? 5.0 : swing
+    def heatDiff = location.mode in powerSavingModes || !motion ? -5.0 : -swing
+    
+    logDebug "currentIndoorTemp: $currentIndoorTemp "
+    logDebug "targetTemp: $targetTemp "
 
-        if (!thermostatController) {
-            formatText("NO thermostatController SET! Update settings.", "white", "red")
-            return 
-        }
+    // Calculate temperature differences
+    def indoorToSetpointDiff = currentIndoorTemp - targetTemp
+    def indoorToOutdoorDiff = currentIndoorTemp - currentOutdoorTemp
+    
+    // Determine if temperature deviation is severe (+ 2 degrees beyond normal threshold)
+    def amplitudeThreshold = 5
+    def highAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff >= (coolDiff + amplitudeThreshold)
+    def lowAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff <= (heatDiff - amplitudeThreshold)
 
-        def targetTemp = thermostatController.currentValue("thermostatSetpoint")
-        
-        def currentIndoorTemp = get_indoor_temperature() as BigDecimal
-        def currentOutdoorTemp =  outsideTemp.currentValue("temperature") as BigDecimal
-        def delayBetweenModes = 15 * 60 * 1000 // 15 minutes in milliseconds
-        def currentTime = now()
-        
-        state.lastModeChangeTime = state.lastModeChangeTime == null ? currentTime : state.lastModeChangeTime
-        state.lastMode = state.lastMode == null ? "initial" : state.lastMode
+    // TODO: learn from user's interventions... 
+    def minOutdoorTempForCooling = 40.0 // Don't run AC when it's colder than 40°F outside
+    def maxOutdoorTempForHeating = 75.0 // Don't run heat when it's warmer than 75°F outside
+    def tooColdOutside = false
+    def tooWarmOutside = false
 
-        def timeSinceLastChange = currentTime - state.lastModeChangeTime
+    if (currentOutdoorTemp.toInteger() < minOutdoorTempForCooling.toInteger()) {
+        tooColdOutside = true
+    }
+    if (currentOutdoorTemp.toInteger() >= maxOutdoorTempForHeating.toInteger()) {
+        tooWarmOutside = true
+    }
+    
+    logConditions(
+        target: targetTemp, 
+        swing: swing, 
+        indoorTemp: currentIndoorTemp, 
+        indoorTempClass: currentIndoorTemp.class,
+        outdoorTemp: currentOutdoorTemp, 
+        indoorSetpointDifference: indoorToSetpointDiff,
+        indoorOutdoorDifference: indoorToOutdoorDiff,
+        minOutdoorTempForCooling: minOutdoorTempForCooling,
+        minOutdoorTempForCoolingClass: minOutdoorTempForCooling.class,
+        maxOutdoorTempForHeating: maxOutdoorTempForHeating,
+        maxOutdoorTempForHeatingClass: maxOutdoorTempForHeating.class,
+        tooColdOutside: tooColdOutside,
+        tooWarmOutside: tooWarmOutside,
+        highAmplitude: highAmplitude,
+        lowAmplitude: lowAmplitude,
+        lastMode: state.lastMode,
+        timeSinceLastChange: "${timeSinceLastChange/1000/60} minutes"
+    )
 
-        
-
-        // Temperature differential thresholds
-        def coolDiff = location.mode in powerSavingModes || !motion ? 5.0 : swing
-        def heatDiff = location.mode in powerSavingModes || !motion ? -5.0 : -swing
-        
-        logDebug "currentIndoorTemp: $currentIndoorTemp "
-        logDebug "targetTemp: $targetTemp "
-
-        // Calculate temperature differences
-        def indoorToSetpointDiff = currentIndoorTemp - targetTemp
-        def indoorToOutdoorDiff = currentIndoorTemp - currentOutdoorTemp
-        
-        // Determine if temperature deviation is severe (+ 2 degrees beyond normal threshold)
-        def amplitudeThreshold = 5
-        def highAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff >= (coolDiff + amplitudeThreshold)
-        def lowAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff <= (heatDiff - amplitudeThreshold)
-
-        // TODO: learn from user's interventions... 
-        def minOutdoorTempForCooling = 40.0 // Don't run AC when it's colder than 40°F outside
-        def maxOutdoorTempForHeating = 75.0 // Don't run heat when it's warmer than 75°F outside
-        def tooColdOutside = false
-        def tooWarmOutside = false
-
-        if (currentOutdoorTemp.toInteger() < minOutdoorTempForCooling.toInteger()) {
-            tooColdOutside = true
-        }
-        if (currentOutdoorTemp.toInteger() >= maxOutdoorTempForHeating.toInteger()) {
-            tooWarmOutside = true
-        }
-        
-        logTrace """<div style='border:1 px solid gray;'>
-            <br><b><u>Current conditions:</u></b>
-            <br><b>Target: </b>${targetTemp}°
-            <br><b>swing: </b>${swing}°
-            <br><b>Indoor temp:</b> ${currentIndoorTemp}° (${currentIndoorTemp.class})
-            <br><b>Outdoor temp:</b> ${currentOutdoorTemp}°
-            <br><b>Indoor/Setpoint </b>difference: ${indoorToSetpointDiff}°
-            <br><b>Indoor/Outdoor </b>difference: ${indoorToOutdoorDiff}°
-            <br><b>minOutdoorTempForCooling: $minOutdoorTempForCooling (${minOutdoorTempForCooling.class})
-            <br><b>maxOutdoorTempForHeating: $maxOutdoorTempForHeating (${maxOutdoorTempForHeating.class})
-            <br><b>tooColdOutside: $tooColdOutside
-            <br><b>tooWarmOutside: $tooWarmOutside
-            <br><b>High amplitude:</b> ${highAmplitude}
-            <br><b>Low amplitude:</b> ${lowAmplitude}
-            <br><b>Last mode:</b> ${state.lastMode}
-            <br><b>Time since </b>last change: ${timeSinceLastChange/1000/60} minutes
-            </div>
-        """
-        // Decision logic
-        if (indoorToSetpointDiff > coolDiff) {
-            if (!tooColdOutside && (currentOutdoorTemp >= currentIndoorTemp || highAmplitude)) {
-                logTrace "Indoor temperature too high, ${highAmplitude ? 'amplitude too high' : 'outdoor is warmer'} - mechanical cooling needed"
-                results += changeMode("cool", delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
-                state.boostMode = false
-            } else {
-                logTrace "Indoor temperature high but outdoor is cold enough - natural cooling possible"
-                results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
-                state.boostMode = false
-            }
-        } 
-        else if (indoorToSetpointDiff < heatDiff) {
-            
-            if (!tooWarmOutside && (currentOutdoorTemp <= currentIndoorTemp || lowAmplitude)) {
-                logTrace "Indoor temperature too low, ${lowAmplitude ? 'amplitude too high' : 'outdoor is colder'} - heating needed"
-                results += changeMode("heat", delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
-                state.boostMode = boost ? true : false
-            } else {
-                logTrace "Indoor temperature low but outdoor is warm enough - natural heating possible"
-                results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
-                state.boostMode = boost ? true : false
-            }
-        }
-        else {
-            logTrace "No extreme conditions detected - setting to ${off_mode}"
+    // Decision logic
+    if (indoorToSetpointDiff > coolDiff) {
+        if (!tooColdOutside && (currentOutdoorTemp >= currentIndoorTemp || highAmplitude)) {
+            logTrace "Indoor temperature too high, ${highAmplitude ? 'amplitude too high' : 'outdoor is warmer'} - mechanical cooling needed"
+            results += changeMode("cool", delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
+            state.boostMode = false
+        } else {
+            logTrace "Indoor temperature high but outdoor is cold enough - natural cooling possible"
             results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
+            state.boostMode = false
         }
-    // }
+    } 
+    else if (indoorToSetpointDiff < heatDiff) {
+        
+        if (!tooWarmOutside && (currentOutdoorTemp <= currentIndoorTemp || lowAmplitude)) {
+            logTrace "Indoor temperature too low, ${lowAmplitude ? 'amplitude too high' : 'outdoor is colder'} - heating needed"
+            results += changeMode("heat", delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
+            state.boostMode = boost ? true : false
+        } else {
+            logTrace "Indoor temperature low but outdoor is warm enough - natural heating possible"
+            results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
+            state.boostMode = boost ? true : false
+        }
+    }
+    else {
+        logTrace "No extreme conditions detected - setting to ${off_mode}"
+        results += changeMode(off_mode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime)
+    }
 
     logDebug "results: $results"
     if (results){
@@ -2530,6 +3024,10 @@ def getSeasonalComfortAdjustment() {
     * 
     * Modifies comfort ranges based on learned seasonal patterns
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def season = getSeason()
     def patterns = state.thermalBehavior.environmentalFactors.seasonalPatterns[season]
     if (!patterns) return 0
@@ -2537,7 +3035,8 @@ def getSeasonalComfortAdjustment() {
     // Calculate seasonal adjustment based on learned patterns
     def avgTemp = patterns.avgTemp
     def tempRange = patterns.tempRange.max - patterns.tempRange.min
-    def typicalChange = patterns.typicalChanges ? patterns.typicalChanges.average() : 0
+    def typicalChange = patterns.typicalChanges ? safeAverage(patterns.typicalChanges) : 0
+
     
     // Adjust comfort range based on season
     def adjustment = 0
@@ -2555,107 +3054,195 @@ def getSeasonalComfortAdjustment() {
     return adjustment
 }
 def getComfortVisualization() {
-    /**
-    * getComfortVisualization()
-    * Generates HTML visualization of comfort management data
-    * @return String containing HTML/CSS for comfort visualization
-    * 
-    * Creates visual representation of system performance and patterns
-    */
-    def html = """
+    return """
         <style>
-            .comfort-viz {
-                font-family: system-ui;
-                padding: 15px;
-                border-radius: 8px;
-                background: #f5f5f5;
+            #comfort-analytics * {
+                margin: 0 !important;
+                padding: 0 !important;
+                text-indent: 0 !important;
+                line-height: 1.3 !important;
             }
-            .comfort-chart {
+            
+            #comfort-analytics {
                 display: flex;
+                flex-direction: column;
+                gap: 24px;
+                width: 100%;
+                margin-top: 16px !important;
+            }
+            
+            .analytics-section {
+                background: white;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 16px !important;
+            }
+            
+            .section-header {
+                font-size: 16px;
+                color: #1a237e;
+                font-weight: bold;
+                margin-bottom: 16px !important;
+                padding-bottom: 8px !important;
+                border-bottom: 2px solid #e3f2fd;
+            }
+            
+            .chart-container {
                 height: 200px;
-                margin: 20px 0;
+                display: flex;
+                align-items: flex-end;
+                gap: 2px;
+                padding: 16px 0 !important;
                 border-left: 2px solid #333;
                 border-bottom: 2px solid #333;
             }
+            
             .chart-bar {
                 flex: 1;
-                margin: 0 2px;
-                background: linear-gradient(to top, #4CAF50, #2196F3);
                 transition: height 0.3s ease;
+                position: relative;
             }
-            .metrics-grid {
+            
+            .chart-bar:hover::after {
+                content: attr(data-tooltip);
+                position: absolute;
+                bottom: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 4px 8px !important;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+            }
+            
+            .patterns-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 15px;
+                gap: 16px;
+                margin-top: 16px !important;
             }
-            .metric-card {
-                background: white;
-                padding: 10px;
+            
+            .pattern-card {
+                background: #f8f9fa;
                 border-radius: 4px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                padding: 12px !important;
+            }
+            
+            .pattern-title {
+                font-weight: bold;
+                color: #2c3e50;
+                margin-bottom: 8px !important;
+            }
+            
+            .pattern-value {
+                font-size: 13px;
+                color: #666;
             }
         </style>
         
-        <div class="comfort-viz">
-            <h3>Comfort Management Analytics</h3>
-            
-            <div class="metrics-grid">
-                ${getMetricCards()}
+        <div id="comfort-analytics">
+            <div class="analytics-section">
+                <div class="section-header">Temperature Management Success Rate</div>
+                <div class="chart-container">
+                    ${getSuccessRateChart()}
+                </div>
             </div>
             
-            <h4>Temperature Management Success Rate</h4>
-            <div class="comfort-chart">
-                ${getSuccessRateChart()}
-            </div>
-            
-            <h4>Environmental Patterns</h4>
-            <div class="metrics-grid">
-                ${getEnvironmentalPatterns()}
+            <div class="analytics-section">
+                <div class="section-header">Environmental Patterns</div>
+                <div class="patterns-grid">
+                    ${getEnvironmentalPatterns()}
+                </div>
             </div>
         </div>
     """
-    
-    return html
 }
-def getMetricCards() {
-    def cards = []
-    def metrics = getComfortMetrics()
-    
-    metrics.each { metric ->
-        cards << """
-            <div class="metric-card">
-                <h4>${metric.name}</h4>
-                <div class="metric-value">${metric.value}</div>
-                <div class="metric-trend">${metric.trend}</div>
-            </div>
-        """
-    }
-    
-    return cards.join("\n")
-}
+
 def getComfortMetrics() {
+    // Initialize metrics history if needed
+    state.metricsHistory = state.metricsHistory ?: [
+        coolingEfficiency: [],
+        energySavings: [],
+        comfortScore: []
+    ]
+    
     def naturalCooling = state.thermalBehavior.naturalCooling
     def naturalHeating = state.thermalBehavior.naturalHeating
     
-    // Convert to BigDecimal and use setScale() instead of round()
+    // Calculate current values
+    def currentCoolingEfficiency = naturalCooling.events ? 
+        safeAverage(naturalCooling.events.collect{it.coolingRate}) : 0.0
+    def currentEnergySavings = calculateEnergySavings()
+    def currentComfortScore = calculateComfortScore()
+    
+    // Update historical values (keep last 7 days of daily averages)
+    def today = new Date().format('yyyy-MM-dd')
+    
+    // Update each metric's history
+    ['coolingEfficiency', 'energySavings', 'comfortScore'].each { metric ->
+        state.metricsHistory[metric] = state.metricsHistory[metric].findAll { entry ->
+            // Keep entries from last 7 days
+            def entryDate = Date.parse('yyyy-MM-dd', entry.date)
+            def sevenDaysAgo = new Date() - 7
+            entryDate.after(sevenDaysAgo)
+        }
+    }
+    
+    // Add today's values
+    def currentValues = [
+        coolingEfficiency: currentCoolingEfficiency,
+        energySavings: currentEnergySavings,
+        comfortScore: currentComfortScore
+    ]
+    
+    currentValues.each { metric, value ->
+        def todayEntry = state.metricsHistory[metric].find { it.date == today }
+        if (todayEntry) {
+            // Update today's running average
+            todayEntry.value = safeAverage([todayEntry.value, value])
+        } else {
+            state.metricsHistory[metric] << [date: today, value: value]
+        }
+    }
+    
+    // Calculate trends using historical data
+    def coolingEfficiencyTrend = calculateTrendIndicator(
+        currentCoolingEfficiency,
+        state.metricsHistory.coolingEfficiency.collect { it.value }
+    )
+    
+    def energySavingsTrend = calculateTrendIndicator(
+        currentEnergySavings,
+        state.metricsHistory.energySavings.collect { it.value }
+    )
+    
+    def comfortScoreTrend = calculateTrendIndicator(
+        currentComfortScore,
+        state.metricsHistory.comfortScore.collect { it.value }
+    )
+    
+    // Return metrics with real trend data
     return [
         [
             name: "Natural Cooling Efficiency",
-            value: "${(naturalCooling.events ? new BigDecimal(naturalCooling.events.collect{it.coolingRate}.average()).setScale(1, BigDecimal.ROUND_HALF_UP) : 0.0)}°/hr",
-            trend: "↑ 5% this week"
+            value: "${currentCoolingEfficiency}°/hr",
+            trend: "${coolingEfficiencyTrend.direction} ${coolingEfficiencyTrend.percentage}% this week"
         ],
         [
             name: "Energy Savings",
-            value: "${calculateEnergySavings().setScale(1, BigDecimal.ROUND_HALF_UP)}%",
-            trend: "↑ 12% vs. last month"
+            value: "${currentEnergySavings.setScale(1, BigDecimal.ROUND_HALF_UP)}%",
+            trend: "${energySavingsTrend.direction} ${energySavingsTrend.percentage}% vs. last week"
         ],
         [
             name: "Comfort Score",
-            value: "${(new BigDecimal(calculateComfortScore() * 100).setScale(0, BigDecimal.ROUND_HALF_UP))}%",
-            trend: "↑ 3% improvement"
+            value: "${(new BigDecimal(currentComfortScore * 100).setScale(0, BigDecimal.ROUND_HALF_UP))}%",
+            trend: "${comfortScoreTrend.direction} ${comfortScoreTrend.percentage}% improvement"
         ]
     ]
 }
+
 def calculateEnergySavings() {
     /**
     * calculateEnergySavings()
@@ -2685,6 +3272,10 @@ def calculateEnergySavings() {
     * @see trackEnvironmentalFactors() for event logging
     * @see getComfortMetrics() for usage in UI
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     // Initialize return value as BigDecimal
     def savings = new BigDecimal("0.0")
     
@@ -2768,6 +3359,10 @@ def calculateComfortScore() {
     * @see analyzeOccupancyHeat() for occupancy impact
     * @see analyzeSolarGain() for environmental factors
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def score = new BigDecimal("0.0")
     
     try {
@@ -2787,7 +3382,7 @@ def calculateComfortScore() {
         ]
         
         // Calculate temperature maintenance score
-        def targetTemp = thermostatController.currentValue("thermostatSetpoint") as BigDecimal
+        def targetTemp = getTargetTemp()
         def tempDeviations = events.collect { event ->
             def startDiff = (new BigDecimal(event.startTemp) - targetTemp).abs()
             def endDiff = (new BigDecimal(event.endTemp) - targetTemp).abs()
@@ -2799,13 +3394,13 @@ def calculateComfortScore() {
         tempScore = tempScore < new BigDecimal("0.0") ? new BigDecimal("0.0") : tempScore
         
         // Calculate response time score
-        def avgDuration = new BigDecimal(events.collect { it.duration }.average())
+        def avgDuration = safeAverage(events.collect { it.duration })
         def responseScore = new BigDecimal("1.0") - (avgDuration / (4 * 3600)) // Normalized to 4 hours
         responseScore = responseScore < new BigDecimal("0.0") ? new BigDecimal("0.0") : responseScore
         
         // Calculate consistency score
         def coolingRates = events.collect { new BigDecimal(it.coolingRate) }
-        def avgRate = coolingRates.sum() / coolingRates.size()
+        def avgRate = safeAverage(coolingRates)
         def rateVariance = coolingRates.collect { (it - avgRate).pow(2) }.sum() / coolingRates.size()
         def consistencyScore = new BigDecimal("1.0") - (rateVariance / new BigDecimal("4.0"))
         consistencyScore = consistencyScore < new BigDecimal("0.0") ? new BigDecimal("0.0") : consistencyScore
@@ -2857,6 +3452,10 @@ def getSuccessRateChart() {
     * 
     * @see getComfortVisualization() for complete UI
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     def bars = []
     try {
         // Get success rates for different temperature deltas
@@ -2927,6 +3526,11 @@ def getEnvironmentalPatterns() {
     * @see trackEnvironmentalFactors() for data collection
     * @see getDetailedAnalytics() for detailed view
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
+    
     def patterns = []
     try {
         def envFactors = state.thermalBehavior.environmentalFactors
@@ -2938,9 +3542,9 @@ def getEnvironmentalPatterns() {
             patterns << """
                 <div class="metric-card">
                     <h4>Seasonal Patterns (${currentSeason.capitalize()})</h4>
-                    <div>Average: ${seasonalData.avgTemp.round(1)}°F</div>
-                    <div>Range: ${seasonalData.tempRange.min.round(1)}°F - 
-                               ${seasonalData.tempRange.max.round(1)}°F</div>
+                    <div>Average: ${seasonalData.avgTemp ? seasonalData.avgTemp.round(1) : 'N/A'}°F</div>
+                    <div>Range: ${seasonalData.tempRange?.min ? seasonalData.tempRange.min.round(1) : 'N/A'}°F - 
+                               ${seasonalData.tempRange?.max ? seasonalData.tempRange.max.round(1) : 'N/A'}°F</div>
                 </div>
             """
         }
@@ -2948,14 +3552,14 @@ def getEnvironmentalPatterns() {
         // Add solar impact patterns
         def solarData = envFactors.solarGainPatterns
         if (solarData) {
-            def avgGain = solarData.collect { timeBlock, data -> 
+            def avgGain = safeAverage(solarData.collect { timeBlock, data -> 
                 data.solarGainWatts ?: 0 
-            }.average()
+            })
             
             patterns << """
                 <div class="metric-card">
                     <h4>Solar Impact</h4>
-                    <div>Average Gain: ${avgGain.round(1)} watts</div>
+                    <div>Average Gain: ${avgGain} watts</div>
                 </div>
             """
         }
@@ -2963,14 +3567,14 @@ def getEnvironmentalPatterns() {
         // Add occupancy patterns
         def occupancyData = envFactors.occupancyPatterns
         if (occupancyData) {
-            def avgHeat = occupancyData.collect { timeBlock, data ->
+            def avgHeat = safeAverage(occupancyData.collect { timeBlock, data ->
                 data.heatOutput ?: 0
-            }.average()
+            })
             
             patterns << """
                 <div class="metric-card">
                     <h4>Occupancy Impact</h4>
-                    <div>Average Heat: ${avgHeat.round(1)} watts</div>
+                    <div>Average Heat: ${avgHeat} watts</div>
                 </div>
             """
         }
@@ -2987,6 +3591,28 @@ def getEnvironmentalPatterns() {
     
     return patterns.join("\n")
 }
+
+
+
+def updateRollingAverage(map, newData) {
+    def n = map.sampleSize ?: 0
+    def newN = n + 1
+    
+    // Update each value with rolling average
+    newData.each { key, value ->
+        if (value instanceof Number) {
+            def oldValue = map[key] ?: value
+            map[key] = ((oldValue * n) + value) / newN
+        } else {
+            // For non-numeric values, just store the latest
+            map[key] = value
+        }
+    }
+    
+    map.sampleSize = newN
+    return map
+}
+
 
 def getDetailedAnalytics() {
     /**
@@ -3018,78 +3644,226 @@ def getDetailedAnalytics() {
     * @see calculateComfortScore() for scoring
     * @see calculateEnergySavings() for efficiency
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     try {
         def analytics = []
         def data = state.thermalBehavior
         
-        // Performance metrics
-        def totalEvents = (data.naturalCooling.events + data.naturalHeating.events).size()
-        def avgCoolingRate = data.naturalCooling.events ? 
-            data.naturalCooling.events.collect{it.coolingRate}.average() : 0
-        def avgHeatingRate = data.naturalHeating.events ?
-            data.naturalHeating.events.collect{it.coolingRate}.average() : 0
-            
+        // Create pattern analysis visualization
         analytics << """
-            <div class="detailed-analytics" style="margin-top: 20px;">
-                <h4>Performance Metrics</h4>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding: 8px; border: 1px solid #ddd;">Total Events</td>
-                        <td style="padding: 8px; border: 1px solid #ddd;">${totalEvents}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; border: 1px solid #ddd;">Avg Cooling Rate</td>
-                        <td style="padding: 8px; border: 1px solid #ddd;">${avgCoolingRate.round(2)}°/hr</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; border: 1px solid #ddd;">Avg Heating Rate</td>
-                        <td style="padding: 8px; border: 1px solid #ddd;">${avgHeatingRate.round(2)}°/hr</td>
-                    </tr>
-                </table>
-            </div>
+            <style>
+            .pattern-grid {
+                display: grid;
+                grid-template-columns: repeat(24, 1fr);
+                gap: 2px;
+                margin: 20px 0;
+            }
+            .pattern-cell {
+                height: 30px;
+                position: relative;
+            }
+            .cell-value {
+                position: absolute;
+                top: -20px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 10px;
+            }
+            .success-high { background-color: #4CAF50; }
+            .success-medium { background-color: #FFC107; }
+            .success-low { background-color: #f44336; }
+            </style>
+            
+            <div class="analytics-section">
+                <h3>Natural Temperature Management Success (24-hour view)</h3>
+                <div class="pattern-grid">
         """
         
-        // Success rates by temperature delta
-        def successRates = []
-        data.naturalCooling.performanceByDelta.each { delta, metrics ->
-            successRates << """
-                <tr>
-                    <td style="padding: 8px; border: 1px solid #ddd;">Cooling ${delta}°F</td>
-                    <td style="padding: 8px; border: 1px solid #ddd;">
-                        ${(metrics.successRate * 100).round(1)}%
-                    </td>
-                </tr>
-            """
-        }
-        data.naturalHeating.performanceByDelta.each { delta, metrics ->
-            successRates << """
-                <tr>
-                    <td style="padding: 8px; border: 1px solid #ddd;">Heating ${delta}°F</td>
-                    <td style="padding: 8px; border: 1px solid #ddd;">
-                        ${(metrics.successRate * 100).round(1)}%
-                    </td>
-                </tr>
-            """
-        }
-        
-        if (successRates) {
+        // Get hourly success rates from our environmental patterns
+        for (int hour = 0; hour < 24; hour++) {
+            def timeBlock = String.format("%02d:00", hour)
+            def success = getSuccessRateForHour(hour)
+            def colorClass = success >= 0.7 ? "success-high" : 
+                           success >= 0.4 ? "success-medium" : "success-low"
+            
             analytics << """
-                <div style="margin-top: 20px;">
-                    <h4>Success Rates by Temperature Delta</h4>
-                    <table style="width: 100%; border-collapse: collapse;">
-                        ${successRates.join("\n")}
-                    </table>
+                <div class="pattern-cell ${colorClass}">
+                    <span class="cell-value">${(success * 100).round()}%</span>
                 </div>
             """
         }
         
+        analytics << """
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    <span style="color: #4CAF50;">■</span> High Success (>70%)
+                    <span style="color: #FFC107; margin-left: 10px;">■</span> Medium Success (40-70%)
+                    <span style="color: #f44336; margin-left: 10px;">■</span> Low Success (<40%)
+                </div>
+            </div>
+        """
+        
+        // Add temperature differential effectiveness chart
+        analytics << """
+            <div class="analytics-section" style="margin-top: 30px;">
+                <h3>Temperature Differential Effectiveness</h3>
+                <div style="display: flex; height: 200px; align-items: flex-end; gap: 10px;">
+        """
+        
+        data.naturalCooling.performanceByDelta.each { delta, metrics ->
+            def height = (metrics.successRate * 100).round()
+            analytics << """
+                <div style="flex: 1; background: #2196F3; height: ${height}%;">
+                    <div style="transform: rotate(-90deg) translateY(20px); 
+                         white-space: nowrap; font-size: 12px;">
+                        ${delta}°F diff: ${height}%
+                    </div>
+                </div>
+            """
+        }
+        
+        analytics << """
+                </div>
+            </div>
+        """
+        
+        // Add current learning status
+        def learningStatus = getLearningProgress()
+        analytics << """
+            <div class="analytics-section" style="margin-top: 30px;">
+                <h3>Learning Status</h3>
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+                    <div style="margin-bottom: 10px;">Data Collection: ${learningStatus.dataPoints} points</div>
+                    <div style="background: #ddd; height: 20px; border-radius: 10px; overflow: hidden;">
+                        <div style="background: #2196F3; width: ${learningStatus.confidence}%; height: 100%;"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        System Confidence: ${learningStatus.confidence}%
+                    </div>
+                </div>
+            </div>
+        """
+        
         return analytics.join("\n")
         
     } catch (Exception e) {
-        log.error "Error generating detailed analytics: ${e.message}"
+        log.error "Error generating detailed analytics: ${e}"
         return "<div>Error generating detailed analytics</div>"
     }
 }
+
+private def getSuccessRateForHour(hour) {
+    // Get success rate from our patterns
+    def timeBlock = String.format("%02d:00", hour)
+    def patterns = state.thermalBehavior.environmentalFactors.dailyPatterns[timeBlock]
+    return patterns?.successRate ?: 0.0
+}
+
+private def getLearningProgress() {
+    def totalPossibleDataPoints = 24 * 7 // One week of hourly data points
+    def actualDataPoints = state.thermalBehavior.environmentalFactors.dailyPatterns.size()
+    def confidence = Math.min((actualDataPoints / totalPossibleDataPoints * 100).round(), 100)
+    
+    return [
+        dataPoints: actualDataPoints,
+        confidence: confidence
+    ]
+}
+def getComfortKPIDashboard() {
+    def metrics = getComfortMetrics()
+    
+    return """
+        <style>
+            #kpi-dashboard * {
+                margin: 0 !important;
+                padding: 0 !important;
+                text-indent: 0 !important;
+                line-height: 1.3 !important;
+            }
+            
+            #kpi-dashboard {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 12px;
+                width: 100%;
+                margin-top: 16px !important;
+            }
+            
+            .kpi-card {
+                background: white;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 16px !important;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            
+            .kpi-header {
+                font-size: 14px;
+                color: #2c3e50;
+                font-weight: bold;
+                margin-bottom: 4px !important;
+            }
+            
+            .kpi-value {
+                font-size: 24px;
+                font-weight: bold;
+                color: #1a237e;
+                margin: 8px 0 !important;
+            }
+            
+            .kpi-trend {
+                font-size: 13px;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            
+            .trend-up { color: #2e7d32; }
+            .trend-down { color: #c62828; }
+            .trend-neutral { color: #757575; }
+            
+            .kpi-context {
+                font-size: 12px;
+                color: #666;
+                margin-top: 4px !important;
+                font-style: italic;
+            }
+        </style>
+        
+        <div id="kpi-dashboard">
+            ${metrics.collect { metric ->
+                def trendClass = metric.trend.startsWith('↑') ? 'trend-up' : 
+                               metric.trend.startsWith('↓') ? 'trend-down' : 
+                               'trend-neutral'
+                """
+                <div class="kpi-card">
+                    <div class="kpi-header">${metric.name}</div>
+                    <div class="kpi-value">${metric.value}</div>
+                    <div class="kpi-trend ${trendClass}">${metric.trend}</div>
+                    ${getKPIContext(metric.name)}
+                </div>
+                """
+            }.join('')}
+        </div>
+    """
+}
+
+private String getKPIContext(metricName) {
+    def context = [
+        "Natural Cooling Efficiency": "Average temperature change rate during natural cooling",
+        "Energy Savings": "Reduction in HVAC usage compared to baseline",
+        "Comfort Score": "Overall system effectiveness rating"
+    ]
+    
+    return """<div class="kpi-context">${context[metricName]}</div>"""
+}
+
 def calculateTrendIndicator(currentValue, historicalValues) {
     /**
     * calculateTrendIndicator()
@@ -3115,23 +3889,33 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     * 
     * @see getComfortMetrics() for trend display
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     try {
-        if (!historicalValues || historicalValues.size() < 2) {
+        if (!historicalValues || historicalValues.isEmpty() || historicalValues.every { it == 0 }) {
+            logDebug "Insufficient historical data for trend calculation"
             return [direction: "→", percentage: "0"]
         }
         
-        // Convert inputs to BigDecimal
-        currentValue = new BigDecimal(currentValue)
-        def avgHistorical = new BigDecimal(historicalValues.sum()) / new BigDecimal(historicalValues.size())
+        // Convert inputs to BigDecimal and handle zero cases
+        def current = new BigDecimal(currentValue.toString())
+        def avgHistorical = safeAverage(historicalValues)
         
+        if (avgHistorical == 0) {
+            logDebug "Historical average is zero, cannot calculate percentage change"
+            return [direction: "→", percentage: "0"]
+        }
+
         // Calculate percentage change
-        def change = ((currentValue - avgHistorical) / avgHistorical) * new BigDecimal("100")
+        def change = ((current - avgHistorical) / avgHistorical) * 100
         
         // Determine direction
         def direction = "→"
-        if (change > new BigDecimal("0")) {
+        if (change > 0) {
             direction = "↑"
-        } else if (change < new BigDecimal("0")) {
+        } else if (change < 0) {
             direction = "↓"
         }
         
@@ -3140,10 +3924,19 @@ def calculateTrendIndicator(currentValue, historicalValues) {
             percentage: "${change.abs().setScale(1, BigDecimal.ROUND_HALF_UP)}"
         ]
     } catch (Exception e) {
-        log.error "Error calculating trend: ${e.message}"
+        logError "Error calculating trend: ${e.message}"
         return [direction: "→", percentage: "0"]
     }
 }
+
+/**
+    TODO:
+    Keep and use calculateMovingAverage() to improve our trend calculations.
+    We could update calculateTrendIndicator() to use it for smoother, more accurate trends.
+*/
+/** 
+ * Last Updated: 2025-01-05
+ */
 
 def calculateMovingAverage(List values, int window) {
     /**
@@ -3171,6 +3964,10 @@ def calculateMovingAverage(List values, int window) {
     * 
     * @see getDetailedAnalytics() for trend smoothing
     */
+/** 
+ * Last Updated: 2025-01-05
+ */
+
     if (!values || window <= 0 || window > values.size()) {
         return []
     }
@@ -3186,6 +3983,20 @@ def calculateMovingAverage(List values, int window) {
     
     return result
 }
+
+def safeAverage(list) {
+    logDebug "Calculating average for list: $list"
+    if (!list || list.isEmpty()) {
+        return 0.0
+    }
+    // Convert all elements to BigDecimal for consistent decimal arithmetic
+    def sum = list.collect { new BigDecimal(it.toString()) }.sum()
+    logDebug "sum: $sum"
+    def result = (sum / list.size()).setScale(1, BigDecimal.ROUND_HALF_UP)
+    logDebug "avg result: $result"
+    return result ? result : 0.0
+}
+
 def initialize_intelligence_states(){
     // From trackEnvironmentalFactors()
     state.thermalBehavior = state.thermalBehavior ?: [
@@ -3234,4 +4045,183 @@ def initialize_intelligence_states(){
     ]
 
     log.warn "Intelligence states are now reset!"
+}
+
+
+def backupIntelligenceData() {
+    // Create timestamp for filename
+    def timestamp = new Date().format("yyyy-MM-dd_HH-mm-ss")
+    def fileName = "Thermostat_Manager_Data_Backup_${timestamp}.json"
+    
+    // Collect all intelligence-related states
+    def backupData = [
+        thermalBehavior: state.thermalBehavior,
+        deviceTemperatures: state.deviceTemperatures,
+        comfortMetrics: state.comfortMetrics,
+        performanceHistory: state.performanceHistory,
+        predictionMetrics: state.predictionMetrics
+    ]
+    
+    // Serialize the data
+    def jsonData = serializeHashTable(backupData)
+    
+    // Write to file
+    if (writeToFile(fileName, jsonData)) {
+        log.info "Intelligence data successfully backed up to ${fileName}"
+        return fileName
+    } else {
+        log.error "Failed to backup intelligence data"
+        return null
+    }
+}
+
+def restoreIntelligenceData(fileName) {
+    try {
+        // Read the backup file
+        def jsonData = readFromFile(fileName)
+        if (!jsonData) {
+            log.error "No data found in backup file"
+            return false
+        }
+        
+        // Deserialize the data
+        def backupData = deserializeHashTable(jsonData)
+        
+        // Merge backup data with existing data
+        if (backupData.thermalBehavior) {
+            mergeAndUpdateData("thermalBehavior", backupData.thermalBehavior)
+        }
+        if (backupData.deviceTemperatures) {
+            mergeAndUpdateData("deviceTemperatures", backupData.deviceTemperatures)
+        }
+        if (backupData.comfortMetrics) {
+            mergeAndUpdateData("comfortMetrics", backupData.comfortMetrics)
+        }
+        if (backupData.performanceHistory) {
+            mergeAndUpdateData("performanceHistory", backupData.performanceHistory)
+        }
+        if (backupData.predictionMetrics) {
+            mergeAndUpdateData("predictionMetrics", backupData.predictionMetrics)
+        }
+        
+        log.info "Intelligence data successfully restored from ${fileName}"
+        return true
+    } catch (Exception e) {
+        log.error "Error restoring intelligence data: ${e}"
+        return false
+    }
+}
+
+private void mergeAndUpdateData(String key, Map backupData) {
+    def currentData = state[key] ?: [:]
+    
+    // For each type of data, implement specific merge logic
+    switch(key) {
+        case "thermalBehavior":
+            mergeThermalBehavior(currentData, backupData)
+            break
+        case "deviceTemperatures":
+            mergeDeviceTemperatures(currentData, backupData)
+            break
+        case "comfortMetrics":
+            mergeComfortMetrics(currentData, backupData)
+            break
+        case "performanceHistory":
+            mergePerformanceHistory(currentData, backupData)
+            break
+        case "predictionMetrics":
+            mergePredictionMetrics(currentData, backupData)
+            break
+    }
+    
+    state[key] = currentData
+}
+
+private void mergeThermalBehavior(Map current, Map backup) {
+    // Merge events while keeping the most recent ones
+    if (current.events && backup.events) {
+        def allEvents = (current.events + backup.events).unique { it.timestamp }
+        current.events = allEvents.sort { it.timestamp }
+    }
+    
+    // Merge performance metrics by combining data points
+    if (current.performanceByDelta && backup.performanceByDelta) {
+        backup.performanceByDelta.each { delta, metrics ->
+            if (current.performanceByDelta[delta]) {
+                current.performanceByDelta[delta].avgCoolingRate = 
+                    (current.performanceByDelta[delta].avgCoolingRate + metrics.avgCoolingRate) / 2
+                current.performanceByDelta[delta].successRate = 
+                    (current.performanceByDelta[delta].successRate + metrics.successRate) / 2
+            } else {
+                current.performanceByDelta[delta] = metrics
+            }
+        }
+    }
+}
+
+Boolean writeToFile(String fileName, String data) {
+    // Create boundary and payload
+    String boundary = "----CustomBoundary"
+    String payloadTop = "--${boundary}\r\nContent-Disposition: form-data; name=\"uploadFile\"; filename=\"${fileName}\"\r\nContent-Type: text/plain\r\n\r\n"
+    String payloadBottom = "\r\n--${boundary}--"
+
+    String fullPayload = "${payloadTop}${data}${payloadBottom}"
+
+    try {
+        def hubAction = new hubitat.device.HubAction(
+        method: "POST",
+        path: "/hub/fileManager/upload",
+        headers: [
+        HOST: "127.0.0.1:8080",
+        'Content-Type': "multipart/form-data; boundary=${boundary}"
+    ],
+        body: fullPayload
+    )
+
+        sendHubCommand(hubAction)
+
+        if (enabledebug) log.debug "HTTP POST was successful."
+        return true
+    } catch (Exception e) {
+        log.error "HTTP POST failed: ${e.message}"
+        return false
+    }
+}
+
+def readFromFile(fileName) {
+    def host = "localhost"  // or "127.0.0.1"
+    def port = "8080"  
+    def path = "/local/" + fileName
+    def uri = "http://" + host + ":" + port + path
+
+    if (enabledebug) log.trace "HTTP GET URI ====> $uri"
+
+    def fileData = null
+
+    try {
+        httpGet(uri) { resp ->
+            if (enabledebug) log.debug "HTTP Response Code: ${resp.status}"
+            if (enabledebug) log.debug "HTTP Response Headers: ${resp.headers}"
+            if (resp.success) {
+                if (enabledebug) log.debug "HTTP GET successful."
+                fileData = resp.data.text
+            } else {
+                log.error "HTTP GET failed. Response code: ${resp.status}"
+            }
+        }
+    } catch (Exception e) {
+        log.error "HTTP GET call failed: ${e.message}"
+    }
+
+    if (enabledebug) log.debug "HTTP GET RESPONSE DATA: ${fileData}"
+    return fileData
+}
+
+def serializeHashTable(hashTable) {
+    return JsonOutput.toJson(hashTable)
+}
+
+def deserializeHashTable(jsonString) {
+    JsonSlurper jsonSlurper = new JsonSlurper()
+    return jsonSlurper.parseText(jsonString)
 }

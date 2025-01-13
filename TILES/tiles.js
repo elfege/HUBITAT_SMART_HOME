@@ -19,6 +19,8 @@ jQuery(function () {
 
   console.log("------------- dom loaded -------------");
 
+  
+
   // console.log(JSON.stringify(allDevices));
   //delete all comments so they don't show in dev tools
   $("*").contents().filter(function () {
@@ -184,11 +186,18 @@ jQuery(function () {
   // $("#thremostatsToggle").trigger("click")
   // $("#locksToggle").trigger("click")
 
+  if (smartDevice) {
+    $("#thermostats").addClass('smart-device');
+  }
+
 });
 
 function openThermostatModal(thermostatWrap, id) {
   // Remove existing click event listener from the thermostat wrap
   $(thermostatWrap).off('click');
+  
+  // Store the next element before moving
+  const nextElement = $(thermostatWrap).next();
   
   // Create the modal element
   const modal = $('<div>').addClass('modal fade').attr('id', `thermostatModal${id}`);
@@ -214,8 +223,13 @@ function openThermostatModal(thermostatWrap, id) {
 
   // When modal is hidden, move thermostat wrap back and restore click listener
   modal.on('hidden.bs.modal', () => {
-    // Move thermostat wrap back to its original container
-    $(thermostatWrap).appendTo('#thermostats');
+    // Move thermostat wrap back to its original position
+    if (nextElement.length) {
+      $(thermostatWrap).insertBefore(nextElement);
+    } else {
+      // If it was the last element, append it
+      $(thermostatWrap).appendTo('#thermostats');
+    }
     
     // Restore original click event listener
     $(thermostatWrap).on('click', function(event) {
@@ -294,10 +308,11 @@ async function initialize(access_token, ip, appNumber) {
       const isLock = e.capabilities.find(el => el === "Lock");
       const isLight = e.name.toLowerCase().includes("light") || e.label.toLowerCase().includes("light");
       const isSwitchLevel = e.capabilities.includes("SwitchLevel");
-      const isSwitch = e.capabilities.includes("Switch") && !isSwitchLevel;
+      const hasSwitchCapability = e.capabilities.some(capability => ["Switch", "switch"].includes(capability));
+      const isSwitch = hasSwitchCapability && !isSwitchLevel;
       const isWindow = e.label.toLowerCase().includes("window")
       const isthermostat = e.capabilities.includes("Thermostat")
-      const isPowerMeterOnly = e.capabilities.includes("PowerMeter") && !isSwitch
+      const isPowerMeterOnly = e.capabilities.includes("PowerMeter") && !hasSwitchCapability
 
       let notAButton = !e.capabilities.find(el => el.toLowerCase().includes("button"));
 
@@ -543,7 +558,7 @@ async function initialize(access_token, ip, appNumber) {
           const nav = $("#row-nav-buttons")
           nav.prepend(`
             <div id="power${id_From_Hub}" class="col-fluid m-1 block">
-              <button id="pwr${id_From_Hub}" class="btn btn-outline-warning bt-block navButton m-0">POWER</button>
+              <button id="pwr${id_From_Hub}" class="btn btn-outline-dark bt-block navButton m-0">POWER</button>
             </div>
             `)
           const value = `${v} Watts`

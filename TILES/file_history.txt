@@ -1,0 +1,56 @@
+
+=== index.html History ===
+2c38629 - 2025-01-05 18:15:49 - feat(thermostat): improve mobile UI and modal interaction
+7c0f642 - 2024-12-31 17:45:19 - feat(comfort): Add intelligent comfort management system (BETA)
+c7b6f3d - 2023-05-21 01:28:42 - several improvements in battery management app as well as thermostat manageer.
+6d0576c - 2023-02-22 11:19:04 - power consumption tile and bug fixes
+0d4e223 - 2023-02-20 16:05:59 - minor updates and bug fixes
+6a2c207 - 2023-02-04 03:05:54 - Updates for TILES - design, performance and new capabilities. More to come soon!
+9814eb7 - 2023-01-22 17:37:37 - mutliple design improvements
+8ea05f4 - 2023-01-20 01:05:35 - restored locks management
+2d6dac4 - 2023-01-18 11:52:50 - ES2017 refactor
+282eacb - 2023-01-17 03:55:07 - token management
+6231e87 - 2023-01-17 02:42:36 - elfegeTILES 2.0 ES2015 refactored
+
+=== tiles.js History ===
+2c38629 - 2025-01-05 18:15:49 - feat(thermostat): improve mobile UI and modal interaction
+7c0f642 - 2024-12-31 17:45:19 - feat(comfort): Add intelligent comfort management system (BETA)
+c7b6f3d - 2023-05-21 01:28:42 - several improvements in battery management app as well as thermostat manageer.
+0d4e223 - 2023-02-20 16:05:59 - minor updates and bug fixes
+6a2c207 - 2023-02-04 03:05:54 - Updates for TILES - design, performance and new capabilities. More to come soon!
+9814eb7 - 2023-01-22 17:37:37 - mutliple design improvements
+8ea05f4 - 2023-01-20 01:05:35 - restored locks management
+455caa8 - 2023-01-18 14:47:35 - Readme.md
+57fd2c6 - 2023-01-18 11:57:39 - ES2017 refactor
+2d6dac4 - 2023-01-18 11:52:50 - ES2017 refactor
+282eacb - 2023-01-17 03:55:07 - token management
+60a07ae - 2023-01-17 03:00:30 - elfegeTILES 2.0 ES2015 refactored
+6231e87 - 2023-01-17 02:42:36 - elfegeTILES 2.0 ES2015 refactored
+
+=== tiles.css History ===
+2c38629 - 2025-01-05 18:15:49 - feat(thermostat): improve mobile UI and modal interaction
+7c0f642 - 2024-12-31 17:45:19 - feat(comfort): Add intelligent comfort management system (BETA)
+6a2c207 - 2023-02-04 03:05:54 - Updates for TILES - design, performance and new capabilities. More to come soon!
+9814eb7 - 2023-01-22 17:37:37 - mutliple design improvements
+8ea05f4 - 2023-01-20 01:05:35 - restored locks management
+2d6dac4 - 2023-01-18 11:52:50 - ES2017 refactor
+6231e87 - 2023-01-17 02:42:36 - elfegeTILES 2.0 ES2015 refactored
+
+=== roundslider.js History ===
+2c38629 - 2025-01-05 18:15:49 - feat(thermostat): improve mobile UI and modal interaction
+7c0f642 - 2024-12-31 17:45:19 - feat(comfort): Add intelligent comfort management system (BETA)
+6231e87 - 2023-01-17 02:42:36 - elfegeTILES 2.0 ES2015 refactored
+
+=== roundslider.css History ===
+7c0f642 - 2024-12-31 17:45:19 - feat(comfort): Add intelligent comfort management system (BETA)
+6a2c207 - 2023-02-04 03:05:54 - Updates for TILES - design, performance and new capabilities. More to come soon!
+9814eb7 - 2023-01-22 17:37:37 - mutliple design improvements
+6231e87 - 2023-01-17 02:42:36 - elfegeTILES 2.0 ES2015 refactored
+
+=== README.md History ===
+2c38629 - 2025-01-05 18:15:49 - feat(thermostat): improve mobile UI and modal interaction
+7c0f642 - 2024-12-31 17:45:19 - feat(comfort): Add intelligent comfort management system (BETA)
+9814eb7 - 2023-01-22 17:37:37 - mutliple design improvements
+8ea05f4 - 2023-01-20 01:05:35 - restored locks management
+455caa8 - 2023-01-18 14:47:35 - Readme.md
+

@@ -1,4 +1,8 @@
 /* groovylint-disable UnnecessaryGString */
+/** 
+ * Last Updated: 2025-01-13
+ */
+
 /*
 *  Copyright 2024 elfege
 *
@@ -11,6 +15,10 @@
 *  Author: Elfege 
 * disabled=ts1434
 */
+/** 
+ * Last Updated: 2025-01-13
+ */
+
 
 
 definition(
@@ -256,42 +264,15 @@ def initialize() {
         subscribe(switchesToKeepOffAtAllTimes, 'switch', switchHandler)
         log.debug "${switchesToKeepOffAtAllTimes.join(', ')} subscribed to switch events (switchesToKeepOffAtAllTimes)"
     }
-
-
-
-    if (watchdog) {
-        // Subscribe to hub events
-        subscribe(location, 'systemStart', hubEventHandler)
-        subscribe(location, 'zigbeeStatus', hubEventHandler)
-        subscribe(location, 'zwaveStatus', hubEventHandler)
-        subscribe(location, 'hubHealthStatus', hubEventHandler)
-        subscribe(location, 'internetStatus', hubEventHandler)
-        subscribe(location, 'cloudStatus', hubEventHandler)
-        subscribe(location, 'alertStatus', hubEventHandler)
-        subscribe(location, 'cpuUsage', hubEventHandler)
-        subscribe(location, 'memoryUsage', hubEventHandler)
-    }
-
     if (pauseButtons) {
-        pauseButtons.each {
-            button ->
-                subscribe(button, pauseButtonAction, buttonHandler)
+        pauseButtons.each { button ->
+            subscribe(button, pauseButtonAction, buttonHandler)
             logDebug "Subscribed to ${pauseButtonAction} events for button: ${button.displayName}"
         }
     }
 
-    // schedule('0 * * * * ?', master)
-    // schedule the first run:
     scheduleNextRun()
-
-    state.paused = false
-    state.pauseStart = null
-
-    
-
-    // Initialize debug and trace timing
     initializeLogging()
-
     resetStates()
 }
 
@@ -299,11 +280,10 @@ def appButtonHandler(btn) {
     switch (btn) {
         case 'pause':
             state.paused = !state.paused
-            logDebug "${app.label} is now ${state.paused ? 'PAUSED' : 'RESUMING'}"
+            log.debug "${app.label} is now ${state.paused ? 'PAUSED' : 'RESUMING'}"
             break
         case 'update':
             logDebug 'Update button pressed. Refreshing app configuration.'
-            state.paused = false
             updated()
             break
         case 'run':
@@ -328,25 +308,6 @@ def appButtonHandler(btn) {
     }
     appLabel()
 }
-def getAllSwitches() {
-    // Combine all switch lists, defaulting to empty lists if any are null
-    def combinedSwitches = (switches ?: []) +
-                           (additionalResumeSwitches ?: []) +
-                           (additionalPauseSwitches ?: []) +
-                           (switchesToKeepOff ?: []) +
-                           (switchesToKeepOffAtAllTimes ?: [])
-
-    // Filter out any null entries to avoid errors
-    def nonNullSwitches = combinedSwitches.findAll { it != null }
-
-    // Deduplicate switches by their 'id' to ensure each switch is only included once
-    // This is necessary because the same switch can appear in multiple lists
-    def uniqueSwitches = nonNullSwitches.unique { it.id }
-
-    // Return the final list of unique switches
-    return uniqueSwitches
-}
-
 def hubEventHandler(evt) {
     switch (evt.name) {
         case 'systemStart':
@@ -408,10 +369,10 @@ def hubEventHandler(evt) {
 
 
 }
-
 def motionHandler(evt) {
     if (state.paused) {
-        logDebug "Motion detected, but app is paused. Ignoring."
+        log.info "Motion detected, but app is paused. Ignoring."
+        checkPauseTimer()
         return
     }
 
@@ -448,20 +409,32 @@ def motionHandler(evt) {
     
     state.lastMotionHandled = now
 }
-
 def buttonHandler(evt) {
-    if (evt == null) {
-        log.error 'buttonHandler received null event'
-        return
-    }
-
-    logDebug "Button event: name=${evt.name}, value=${evt.value}, deviceId=${evt.deviceId}"
+    log.debug "Button event: name=${evt.name}, value=${evt.value}, deviceId=${evt.deviceId}"
 
     if (evt.name == pauseButtonAction) {
-        if (state.paused) {
+        def currentPauseState = state.paused // get current state's value
+        log.warn formatText("currentPauseState: $currentPauseState", "black", "yellow")
+        log.trace "state.paused: $state.paused"
+
+        if (state.paused == null) {
+            log.error "state.paused is null???"
+            resetStates()
+            log.trace "state.paused (after resetStates()): $state.paused"
+        }
+
+        def newPauseState = !currentPauseState // toggle state's value
+        state.paused = newPauseState // Persist state update (not necessarily available in this execution)
+
+        log.warn formatText("newPauseState: $newPauseState", "black", "green")
+        
+
+        if (newPauseState == true) {
+            state.pauseDueToButtonEvent = true
+            pauseApp() // motion events will trigger a double check of the timing.
+        } else { 
+            state.pauseDueToButtonEvent = false
             resumeNormalOperation()
-        } else {
-            pauseApp()
         }
     } else {
         log.warn "Unexpected button action: ${evt.name}. Expected: ${pauseButtonAction}"
@@ -478,7 +451,6 @@ def switchHandler(evt) {
     
     
 }
-
 def contactHandler(evt) {
     if (state.paused) return
 
@@ -531,6 +503,7 @@ def modeChangeHandler(evt) {
     unschedule(master)
     master()
 }
+
 def master(motionActiveEvent=false) {
     def startTime = now()
     logDebug 'master start'
@@ -559,41 +532,111 @@ def master(motionActiveEvent=false) {
 
     logDebug "---end of master loop. Duration = ${now() - startTime} milliseconds"
 }
+
 def pauseApp() {
-    state.paused = true
+    log.debug "Pausing $app.label..."
     state.pauseStart = now()
+    state.currentPauseDuration = pauseMillis
     def formattedDuration = formatPauseDuration()
-    logDebug "App paused for ${formattedDuration}"
+    logDebug "App paused for ${formattedDuration}"    
 
     schedule("0 * * * * ?", checkPauseTimer)// check every minute
 
     if (controlLightsOnPause) {
-        resetStates()
-        controlLights(pauseLightAction)
+        handleLightsPauseResume("pause")
     }
 }
-def resumeNormalOperation() {
-    if (!state.paused) return  // Avoid running if already resumed
+def toggleLight(sw){
+    if(sw.currentValue("switch") == "on") {
+        sw.off()
+    } else {
+        sw.on()
+    } 
+}
+def handleLightsPauseResume(action){
+    def switchesToControl = action == "pause" ? additionalPauseSwitches : additionalResumeSwitches
+    switchesToControl += switches 
 
-    state.paused = false
+    log.debug "controlLightsOnPause: $controlLightsOnPause"
+    log.debug "pauseLightAction: $pauseLightAction"
+    log.debug "switchesToControl: $switchesToControl"
+
+        if (controlLightsOnPause == "toggle") {
+            switchesToControl.each { sw ->        
+                toggleLight(sw)
+            }
+        } else {
+            def cmd
+            if(action == "pause") cmd = pauseLightAction == "turn off" ? "off" : "on"
+            if(action == "resume") cmd = resumeLightAction == "turn off" ? "off" : "on"
+            if(!cmd) {
+                log.error "no cmd? pauseLightAction = $pauseLightAction"
+                cmd = "off"
+            }
+
+            // we don't use controlLights() method here as there are too many interpolled switch categories, exceptions and exclusions managed by it
+            // which is not only useless here, it's also susceptible to mangle the outcome, notably because some, if not all of additionalPauseSwitches could 
+            // be outside of the motion controled swithces group (main switches): which controlLights() method actively exclude. 
+            switchesToControl.each { sw -> 
+                def swLink = "<a href='http://${location.hub.localIP}/device/edit/${sw.id}' target='_blank'>${sw.displayName}</a>"
+                logTrace "${sw.displayName} $action cmd -> $cmd | ${swLink}"
+                // log.warn formatText("TESTING! uncomment the line below when done!", "white", "red")
+                sw."${cmd}"() 
+            }
+            resetStates() // we reset the states so as to ensure that once the app resumes, current statuses are not recorded as user override.
+            // This is why state.paused must not ever be reset to false in resetStates() method. 
+        }
+}
+def resumeNormalOperation() {
+
+    log.debug formatText("RESUMING NORMAL OPERATION", "white", "green")
     state.pauseStart = null
     logDebug 'Resuming normal operation'
 
     if (controlLightsOnResume) {
-        controlLights(resumeLightAction)
+        handleLightsPauseResume("resume")
     }
 
     runIn(1, master)  // Schedule master to run shortly after resuming
     appLabel()
 }
+def checkPauseTimer() {
+    if (!state.pauseStart || !state.currentPauseDuration) {
+        log.warn "Pause state variables missing - resetting"
+        state.pauseStart = now()
+        state.currentPauseDuration = getPauseDurationMillis()
+    }
 
-def isNotBothAdditionaAndRegularSwitch(deviceId) {
-    // If a device is not in the main 'switches' list but IS in one of the additional lists,
-    // then it should not be turned on/off by motion events.
-    // Return true if it's in additional lists but not in regular
-    return ((additionalPauseSwitches ?: []) + (additionalResumeSwitches ?: [])).any { it?.id == deviceId } && !((switches ?: []).any { it?.id == deviceId })
+    def now = now()
+    def elapsedTime = now - state.pauseStart
+    def remainingTimeMillis = state.currentPauseDuration - elapsedTime
+    remainingTime = pauseDurationUnit == "Hours" ? (remainingTimeMillis / 60 / 60 / 1000) : (remainingTimeMillis / 60 / 1000)
+
+    if (state.paused && elapsedTime > state.currentPauseDuration) {
+        state.paused = false
+        state.pauseStart = null
+        state.currentPauseDuration = null
+        log.warn 'PAUSE TIME IS UP! Resuming operations'
+        unschedule(checkPauseTimer)
+        resumeNormalOperation()
+    } else if (state.paused) {
+        if (state.pauseDueToButtonEvent) {
+            log.info "${app.label} PAUSED BY BUTTON EVENT - ${formatPauseDuration(remainingTime)} remaining"
+        } else {
+            log.info "${app.label} PAUSED - ${remainingMinutes} minutes remaining"
+        }
+    }
 }
-
+def formatPauseDuration(duration=pauseDuration) {
+    // Convert to BigDecimal and set scale to 2 decimal places
+    def formattedDuration = new BigDecimal(duration).setScale(2, BigDecimal.ROUND_HALF_UP)
+    
+    if (pauseDurationUnit == 'Hours') {
+        return "${formattedDuration} hour${formattedDuration == 1.00 ? '' : 's'}"
+    } else {
+        return "${formattedDuration} minute${formattedDuration == 1.00 ? '' : 's'}"
+    }
+}
 def controlLights(action) {
     def allSwitches = getAllSwitches()
 
@@ -745,19 +788,22 @@ def handleLevelAndColors(deviceId, mem, cmd) {
         log.debug "useDim =$useDim"
     }
 }
-
 def setSwitch(data) {
-    if (data && data.deviceId) {
-        def device = getDeviceById_switch(data.deviceId)
-        logDebug "device is $device"
-        if (device) {
-            device."${data.value}"()
-            logInfo "Successfully turned ${data.value} ${device.displayName}"
+    if (data){
+        if (data.deviceId) {
+            def device = getDeviceById_switch(data.deviceId)
+            logDebug "device is $device"
+            if (device) {
+                device."${data.value}"()
+                logInfo "Successfully turned ${data.value} ${device.displayName}"
+            } else {
+                logError "Device with ID ${data.deviceId} not found."
+            }
         } else {
-            logError "Device with ID ${data.deviceId} not found."
+            logError "Missing deviceId in data: $data"
         }
     } else {
-        logError "No deviceId provided to turnOnSwitch."
+        logError "No device data parsed to turnOnSwitch."
     }
 
     
@@ -769,17 +815,21 @@ private void handleColorTemperature(device, temperature, mem) {
     }
 }
 def _setColorTemperature(data){
-    if (data && data.deviceId && data.value) {
-        def device = getDeviceById_switch(data.deviceId)
-        if (device) {
-            
-            device.setColorTemperature(data.value)
-            logInfo "Successfully set ${device.displayName} color temperature to ${data.value}"
+    if (data){
+        if (data.deviceId && data.value != null) {
+            def device = getDeviceById_switch(data.deviceId)
+            if (device) {
+                
+                device.setColorTemperature(data.value)
+                logInfo "Successfully set ${device.displayName} color temperature to ${data.value}"
+            } else {
+                logError "Device with ID ${data.deviceId} not found."
+            }
         } else {
-            logError "Device with ID ${data.deviceId} not found."
+            logError "Missing deviceId in data: $data"
         }
     } else {
-        logError "No deviceId provided to _setColorTemperature."
+        logError "No device data parsed to _setColorTemperature. data: ${data}"
     }
 }
 private void handleColor(device, colorValue, mem) {
@@ -789,33 +839,46 @@ private void handleColor(device, colorValue, mem) {
     }
 }
 def _setColor(data){
-    if (data && data.deviceId && data.value) {
-        def device = getDeviceById_switch(data.deviceId)
-        if (device) {
-            
-            device.setColorTemperature(data.value)
-            logInfo "Successfully set ${device.displayName} color to ${data.value}"
+    if (data){
+        if (data.deviceId && data.value != null) {
+            def device = getDeviceById_switch(data.deviceId)
+            if (device) {
+                
+                device.setColorTemperature(data.value)
+                logInfo "Successfully set ${device.displayName} color to ${data.value}"
+            } else {
+                logError "Device with ID ${data.deviceId} not found."
+            }
         } else {
-            logError "Device with ID ${data.deviceId} not found."
+            logError "Missing deviceId in data: $data"
         }
     } else {
-        logError "No deviceId provided to _setColor."
+        logError "No device data parsed to _setColor. data: ${data}"
     }
 }
 def _setLevel(data){
-    if (data && data.deviceId && data.value) {
-        def device = getDeviceById_switch(data.deviceId)
-        if (device) {
-            device.setLevel(data.value)
-            logInfo "Successfully set ${device.displayName} level to ${data.value}"
+    if (data){
+        if (data.deviceId && data.value != null) {
+            def device = getDeviceById_switch(data.deviceId)
+            if (device) {
+                device.setLevel(data.value)
+                logInfo "Successfully set ${device.displayName} level to ${data.value}"
+            } else {
+                logError "Device with ID ${data.deviceId} not found."
+            }
         } else {
-            logError "Device with ID ${data.deviceId} not found."
+            logError "Missing deviceId in data: $data"
         }
     } else {
-        logError "No deviceId provided to _setLevel."
+        logError "No device data parsed to _setLevel. data: ${data}"
     }
 }
-
+def isNotBothAdditionaAndRegularSwitch(deviceId) {
+    // If a device is not in the main 'switches' list but IS in one of the additional lists,
+    // then it should not be turned on/off by motion events.
+    // Return true if it's in additional lists but not in regular
+    return ((additionalPauseSwitches ?: []) + (additionalResumeSwitches ?: [])).any { it?.id == deviceId } && !((switches ?: []).any { it?.id == deviceId })
+}
 def memoizeThisSwitch(deviceId){
 
     if (memoize){
@@ -849,7 +912,6 @@ def memoizeThisSwitch(deviceId){
     return false
 }
 
-// these are all values as set BY THE APP
 def updateSwitchMem(mem, value, deviceName){
 
     logDebug "----------- mem = $mem"
@@ -877,7 +939,6 @@ def updateLevelMem(mem, value, deviceName){
         state.dimLevel[deviceName] = value
     }
 }
-
 def resetStates(){
 
     def now = now()
@@ -893,7 +954,7 @@ def resetStates(){
     // same logic as above, but for switch's 'on' and 'off' states. 
     state.switchState = [:]
 
-    state.paused = state.paused ?: false
+    state.paused = state.paused == null ? false : state.paused // preserve the state if it exists. 
     state.pauseStart = state.pauseStart ?: now
 
     state.functionalSensors = [:]
@@ -906,7 +967,7 @@ def resetStates(){
             displayName: sensor.displayName
         ]
     }
-    checkFunctionalSensors() // update with real values
+    checkFunctionalSensors() // update from devices retuned values
 
     state.functionalSensors.each { it -> 
         log.debug "${it}"
@@ -914,7 +975,6 @@ def resetStates(){
 
     state.lastMotionHandled = state.lastMotionHandled ?: now
     
-    state.pauseStart = state.pauseStart ?: now 
 
     state.pauseDueToButtonEvent = state.pauseDueToButtonEvent ?: false
 
@@ -930,41 +990,19 @@ def resetStates(){
     log.trace "---------- states reset ok ----------"
         
 }
-
-
-def getDeviceById_switch(deviceId) {
-    def allSwitches = getAllSwitches()
-    def device = allSwitches.find { it.id == deviceId }
-    if (!device) {
-        log.warn "Device with ID ${deviceId} not found in switches."
-    }
-    return device
-}
-
-// Add similar methods for other device types if needed:
-def getDeviceById_sensor(deviceId) {
-    def device = motionSensors.find { it.id == deviceId }
-    if (!device) {
-        log.warn "Device with ID ${deviceId} not found in motion sensors."
-    }
-    return device
-}
-
-// TODO
-// Function to clean up switch state
-def cleanUpSwitchState() {
-    cleanUpStateForDeviceType('switchState', getAllSwitches(), 'switch')
-}
-
-/**
- * Cleans up the state map for a specific device type by ensuring all device names
- * in the state map correspond to existing devices in the provided device list.
- *
- * @param stateMapKey The key in the state object (e.g., 'switchState').
- * @param deviceList The list of current devices of the specified type.
- * @param deviceType A string representing the device type for logging purposes.
- */
 def cleanUpStateForDeviceType(stateMapKey, deviceList, deviceType) {
+    /**
+    * Cleans up the state map for a specific device type by ensuring all device names
+    * in the state map correspond to existing devices in the provided device list.
+    *
+    * @param stateMapKey The key in the state object (e.g., 'switchState').
+    * @param deviceList The list of current devices of the specified type.
+    * @param deviceType A string representing the device type for logging purposes.
+    */
+/** 
+ * Last Updated: 2025-01-13
+ */
+
     def originalState = state."${stateMapKey}" ?: [:]
     def validDeviceNames = deviceList.collect { it.displayName }  // Collect device display names
     
@@ -980,18 +1018,60 @@ def cleanUpStateForDeviceType(stateMapKey, deviceList, deviceType) {
     }
 }
 
+def getAllSwitches() {
+    // Combine all switch lists, defaulting to empty lists if any are null
+    def combinedSwitches = (switches ?: []) +
+                           (additionalResumeSwitches ?: []) +
+                           (additionalPauseSwitches ?: []) +
+                           (switchesToKeepOff ?: []) +
+                           (switchesToKeepOffAtAllTimes ?: [])
 
+    // Filter out any null entries to avoid errors
+    def nonNullSwitches = combinedSwitches.findAll { it != null }
 
-def formatPauseDuration() {
-    if (pauseDurationUnit == 'Hours') {
-        return "${pauseDuration} hour${pauseDuration == 1 ? '' : 's'}"
-    } else {
-        return "${pauseDuration} minute${pauseDuration == 1 ? '' : 's'}"
+    // Deduplicate switches by their 'id' to ensure each switch is only included once
+    // This is necessary because the same switch can appear in multiple lists
+    def uniqueSwitches = nonNullSwitches.unique { it.id }
+
+    // Return the final list of unique switches
+    return uniqueSwitches
+}
+def getDeviceById_switch(deviceId) {
+    def allSwitches = getAllSwitches()
+    def device = allSwitches.find { it.id == deviceId }
+    if (!device) {
+        log.warn "Device with ID ${deviceId} not found in switches."
     }
+    return device
+}
+// Add similar methods for other device types
+def getDeviceById_sensor(deviceId) {
+    def device = motionSensors.find { it.id == deviceId }
+    if (!device) {
+        log.warn "Device with ID ${deviceId} not found in motion sensors."
+    }
+    return device
+}
+// Function to clean up switch state
+def cleanUpSwitchState() {
+    cleanUpStateForDeviceType('switchState', getAllSwitches(), 'switch')
 }
 def getPauseDurationMillis() {
-    return pauseDurationUnit == 'Hours' ? pauseDuration * 3600 : pauseDuration * 60
+    if (!pauseDuration) {
+        log.warn "No pause duration specified - defaulting to 60 minutes"
+        return 60 * 60 * 1000
+    }
+    def pauseDurationMillis = pauseDurationUnit == 'Hours' ? 
+        pauseDuration * 60 * 60 * 1000 : // Hours to milliseconds
+        pauseDuration * 60 * 1000        // Minutes to milliseconds
+
+    log.debug "Pause Will last $pauseDuration $pauseDurationUnit"
+    log.debug "Pause Duration in milliseconds: $pauseDurationMillis"
+    return pauseDurationMillis
 }
+
+
+
 def Active() {
 
     // return false
@@ -1059,7 +1139,6 @@ def Active() {
     log.warn "anyActiveWithinTimePeriod within the last ${timeOut} ${timeUnit} = $anyActiveWithinTimePeriod"
     return anyActiveWithinTimePeriod
 }
-
 def sendAlert() {
     if (location.mode in notificationModes){
         def now = now()
@@ -1090,8 +1169,6 @@ def sendAlert() {
         }
     }
 }
-
-
 def getFunctionalSensors(btnCmd=false) {
     def lastCheck = state.lastEventHistoryCheck ?: 0
     def nowTime = now()
@@ -1123,6 +1200,10 @@ def getFunctionalSensors(btnCmd=false) {
                     ]
 
                 */
+/** 
+ * Last Updated: 2025-01-13
+ */
+
                 def device = it.value
           
 
@@ -1161,7 +1242,6 @@ def getFunctionalSensors(btnCmd=false) {
     // Always return device objects (functional sensors)
     return functionalSensors
 }
-
 def generateHtmlTable(){
     def list_functional = """              
         <ol>
@@ -1234,7 +1314,6 @@ def generateHtmlTable(){
 
     return table
 }
-
 def checkFunctionalSensors() {
     def nowTime = now()
     def recentPeriod = new Date(nowTime - (24 * 60 * 60 * 1000)) // 24 hours ago
@@ -1414,18 +1493,6 @@ def getTimeout() {
     logDebug "getTimeout() returns $result ${timeUnit}"
     return result
 }
-def checkPauseTimer() {
-    logDebug ('check pause')
-    def pauseMillis = getPauseDurationMillis()
-    if (state.pauseDueToButtonEvent && now() - state.buttonPausedTime > pauseMillis) {
-        state.paused = false
-        state.pauseDueToButtonEvent = false
-        log.warn 'PAUSE BUTTON TIME IS UP! Resuming operations'
-        unschedule(checkPauseTimer)
-    } else if (state.pauseDueToButtonEvent) {
-        logDebug ('APP PAUSED BY BUTTON EVENT')
-    }
-}
 private Map getColorValue() {
     switch (colorPreset) {
         case 'Soft White':
@@ -1582,8 +1649,7 @@ private void initializeLogging() {
         logInfo('Warn logging enabled. Will never be disabled by this app.')
     }
 }
-def getDeviceUrl(deviceId, displayName)
-{
+def getDeviceUrl(deviceId, displayName){
     return "<a href='http://${location.hub.localIP}/device/edit/${deviceId}' target='_blank'>${displayName}</a>"
 }
 def formatText(title, textColor, bckgColor){

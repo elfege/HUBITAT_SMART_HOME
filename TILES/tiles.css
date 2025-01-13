@@ -132,7 +132,7 @@
   background: rgba(0, 0, 0, 0.2);
   border-radius: 1rem;
   backdrop-filter: blur(10px);
-  transition: transform 0.2s ease;
+  transition: transform 1.5s ease;
   width: 100%;
   max-width: 350px;
   margin: 0 auto;
@@ -223,7 +223,7 @@
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
-  transition: all 0.2s ease;
+  transition: all 0.8s ease;
   opacity: 0.7;
 }
 
@@ -262,142 +262,7 @@
 /* Mobile Styles */
 
 @media screen and (max-width: 768px) {
-  #thermostats {
-    grid-template-columns: 1fr;
-    padding: 0.5rem;
-  }
-
-  .thermostatWrap {
-    padding: 1rem;
-    gap: 1rem;
-    max-width: 300px;
-    /* Limit maximum width on mobile */
-  }
-
-  .thermostat {
-    width: 250px;
-    height: 250px;
-    margin: 0 auto;
-  }
-
-  .thermostatWrap .thermostat {
-    width: 250px;
-    height: 250px;
-  }
-
-  .spanThermostat {
-    font-size: 1.25rem;
-  }
-
-  /* Ensure the round slider remains centered on mobile */
-  .thermostat .rs-control {
-    width: 100% !important;
-    height: 100% !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-  }
-
-  /* Adjust handle positioning for better touch interaction */
-  .thermostat .rs-handle {
-    width: 20px !important;
-    height: 20px !important;
-    margin: -10px 0 0 -10px !important;
-  }
-
-  /* Thermostat tooltip positioning and styling */
-  .thermostat .rs-tooltip {
-    position: absolute !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    width: 100% !important;
-    text-align: center !important;
-    font-family: "Play", sans-serif;
-    pointer-events: none;
-    background: none !important;
-    border: none !important;
-  }
-
-  .thermostat .rs-tooltip-text {
-    font-size: 2rem;
-    color: #ffffff;
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    text-align: center;
-  }
-
-  /* Additional class for current temperature display */
-  .thermostat .current-temp {
-    font-size: 1rem;
-    color: rgba(255, 255, 255, 0.7);
-    position: absolute;
-    width: 100%;
-    text-align: center;
-    left: 50%;
-    transform: translateX(-50%);
-    top: calc(50% + 1.5rem);
-  }
-
-  /* Ensure tooltip stays centered during interaction */
-  .thermostat .rs-tooltip.rs-hover,
-  .thermostat .rs-tooltip.rs-edit {
-    position: absolute !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    margin: 0 !important;
-  }
-
-  /* Remove any transition effects that might affect positioning */
-  .thermostat .rs-tooltip,
-  .thermostat .rs-tooltip * {
-    transition: none !important;
-  }
-
-  /* Ensure the container maintains proper stacking context */
-  .thermostat {
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Thermostat Modal */
-  .modal {
-    --bs-modal-width: 95%;
-  }
   
-  .modal-content {
-    background-color: transparent;
-    border: none;
-  }
-  
-  /* mode buttons */
-
-  .thermostat-modes {
-    gap: 0.25rem;
-  }
-
-  .thermostat-mode-btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-  }
-
-  .tiles {
-    width: 48%;
-    height: var(--tileHeight);
-    opacity: 0.95;
-  }
-
-  .off:hover {
-    background-color: var(--onColor) !important;
-    color: var(--offColor) !important;
-  }
-
-  .on:hover {
-    background-color: var(--offColor) !important;
-    color: var(--onColor) !important;
-  }
 }
 
 

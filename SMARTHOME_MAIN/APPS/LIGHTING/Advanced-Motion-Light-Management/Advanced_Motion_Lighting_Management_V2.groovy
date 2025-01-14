@@ -1,6 +1,6 @@
 /* groovylint-disable UnnecessaryGString */
 /** 
- * Last Updated: 2025-01-13
+ * Last Updated: 2025-01-14
  */
 
 /*
@@ -16,7 +16,7 @@
 * disabled=ts1434
 */
 /** 
- * Last Updated: 2025-01-13
+ * Last Updated: 2025-01-14
  */
 
 
@@ -524,7 +524,6 @@ def master(motionActiveEvent=false) {
     if (motionActiveEvent || Active()) {
         controlLights('turn on')
     } else {
-        logDebug "...................................... INACTIVE => OFF ................................."
         controlLights('turn off')
     }
 
@@ -545,13 +544,6 @@ def pauseApp() {
     if (controlLightsOnPause) {
         handleLightsPauseResume("pause")
     }
-}
-def toggleLight(sw){
-    if(sw.currentValue("switch") == "on") {
-        sw.off()
-    } else {
-        sw.on()
-    } 
 }
 def handleLightsPauseResume(action){
     def switchesToControl = action == "pause" ? additionalPauseSwitches : additionalResumeSwitches
@@ -637,6 +629,7 @@ def formatPauseDuration(duration=pauseDuration) {
         return "${formattedDuration} minute${formattedDuration == 1.00 ? '' : 's'}"
     }
 }
+
 def controlLights(action) {
     def allSwitches = getAllSwitches()
 
@@ -677,6 +670,7 @@ def controlLights(action) {
                 logDebug "state.switchState: $state.switchState"
 
                 if (!shouldKeepSwitchOff(sw.id)) {
+                    handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="on")
                     if (sw.currentValue("switch") == "on"){
                         logTrace "${getDeviceUrl(sw.id, sw.displayName)} already on. Skipping"
                         return  // this works like 'continue' in the closure
@@ -687,10 +681,10 @@ def controlLights(action) {
                         logInfo "turning on ${getDeviceUrl(sw.id, sw.displayName)}"
                         updateSwitchMem(mem = mem, value = "on", deviceName = sw.displayName)
                         runIn(1, "setSwitch", [data: [deviceId: sw.id, value: "on"], overwrite: false])
-                        
                     }
-                    handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="on")
+                    
                 } else {
+                    handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="off")
                     if (sw.currentValue("switch") == "off"){
                         logTrace "${getDeviceUrl(sw.id, sw.displayName)} already off. Skipping"
                         return  // this works like 'continue' in the closure
@@ -702,7 +696,7 @@ def controlLights(action) {
                     else {
                         logWarn "Skipped shouldKeepSwitchOff off for ${getDeviceUrl(sw.id, sw.displayName)}; manually turned on"
                     }
-                    handleLevelAndColors(deviceId=sw.id, mem=mem, cmd="off")
+                    
                 }
             }
             break
@@ -715,9 +709,7 @@ def controlLights(action) {
                     return // this works like 'continue' in the closure
                 }
 
-                def mem = memoizeThisSwitch(sw.id)
-
-                
+                def mem = memoizeThisSwitch(sw.id)                
 
                 log.debug "eval case turn off for ${getDeviceUrl(sw.id, sw.displayName)}"
 
@@ -746,8 +738,10 @@ def handleLevelAndColors(deviceId, mem, cmd) {
     
     if (useDim) {
         def sw = getDeviceById_switch(deviceId)
-        def currentLevel = sw.currentValue('level')
+        
+        if(!sw.hasCommand('setLevel')) return
 
+        def currentLevel = sw.currentValue('level')
         def targetLevel = cmd == "off" ? 0 : getCurrentDimLevelPerMode()
 
         logTrace """<b>
@@ -763,7 +757,9 @@ def handleLevelAndColors(deviceId, mem, cmd) {
                 logDebug "${sw.displayName}: Turning off"
                 updateLevelMem(mem=mem, value=0, deviceName=sw.displayName)
                 runIn(1, "_setLevel", [data: [deviceId: sw.id, value: 0], overwrite: false])
-            } else if (sw.hasCommand('setLevel')) {
+            } else if (mem && state.dimLevel[sw.displayName] == targetLevel) {
+                log.warn "${getDeviceUrl(sw.id, sw.displayName)} has already been set to $targetLevel by this app and is memoized. Skipping."
+            } else {
                 logDebug "${sw.displayName}: Setting level to ${targetLevel}%"
                 updateLevelMem(mem=mem, value=targetLevel, deviceName=sw.displayName)
                 runIn(1, "_setLevel", [data: [deviceId: sw.id, value: targetLevel], overwrite: false])
@@ -772,7 +768,7 @@ def handleLevelAndColors(deviceId, mem, cmd) {
             logDebug "${sw.displayName}: Current level ${currentLevel}% matches target level, no change needed"
         }
 
-        // Handle colors if enabled
+        // Handle colors if enabled and capable
         if (useColor && sw.hasCapability('ColorControl')) {
             def colorValue = cmd == "off" ? null : getColorValue()
             if (colorValue) {
@@ -783,9 +779,6 @@ def handleLevelAndColors(deviceId, mem, cmd) {
                 }
             }
         }
-    }
-    else {
-        log.debug "useDim =$useDim"
     }
 }
 def setSwitch(data) {
@@ -809,7 +802,10 @@ def setSwitch(data) {
     
 }
 private void handleColorTemperature(device, temperature, mem) {
-    if (state.colorTemperature[device.displayName] != temperature) {
+    if (state.colorTemperature[device.displayName] == temperature) {
+        log.warn "${device.displayName)} ColorTemperature already set to $temperature by this app and is memoized. Skipping."
+    }
+    else {
         updateTempMem(mem=mem, tempValue=temperature, deviceName=device.displayName)
         runIn(1, "_setColorTemperature", [data: [deviceId: device.id, value: temperature], overwrite: false])
     }
@@ -833,7 +829,10 @@ def _setColorTemperature(data){
     }
 }
 private void handleColor(device, colorValue, mem) {
-    if (state.color[device.displayName] != colorValue) {
+    if (state.color[device.displayName] == colorValue) {
+        log.warn "${device.displayName)} color already set to $colorValue by this app and is memoized. Skipping."
+    }
+    else {
         updateColorMem(mem=mem, colorValue=colorValue, deviceName=device.displayName)
         runIn(1, "_setColor", [data: [deviceId: device.id, value: colorValue], overwrite: false])
     }
@@ -873,6 +872,14 @@ def _setLevel(data){
         logError "No device data parsed to _setLevel. data: ${data}"
     }
 }
+def toggleLight(sw){
+    if(sw.currentValue("switch") == "on") {
+        sw.off()
+    } else {
+        sw.on()
+    } 
+}
+
 def isNotBothAdditionaAndRegularSwitch(deviceId) {
     // If a device is not in the main 'switches' list but IS in one of the additional lists,
     // then it should not be turned on/off by motion events.
@@ -917,7 +924,7 @@ def updateSwitchMem(mem, value, deviceName){
     logDebug "----------- mem = $mem"
 
     if (mem) {
-        logTrace "memoizing state '${value}' for ${deviceName}"
+        logTrace "updateSwitchMem: memoizing state '${value}' for ${deviceName}"
         state.switchState[deviceName] = value
     }
     else {
@@ -926,39 +933,48 @@ def updateSwitchMem(mem, value, deviceName){
 }
 def updateColorMem(mem, value, deviceName){
     if (mem) {
+        logTrace "updateColorMem: memoizing state '${value}' for ${deviceName}"
         state.color[deviceName] = value
+    }
+    else {
+        logWarn "NOT memoizing state '${value}' for ${deviceName}"
     }
 }
 def updateTempMem(mem, value, deviceName){
     if (mem) {
+        logTrace "updateTempMem: memoizing state '${value}' for ${deviceName}"
         state.colorTemperature[deviceName] = value
+    }
+    else {
+        logWarn "NOT memoizing state '${value}' for ${deviceName}"
     }
 }
 def updateLevelMem(mem, value, deviceName){
     if (mem) {
+        logTrace "updateLevelMem: memoizing state '${value}' for ${deviceName}"
         state.dimLevel[deviceName] = value
+    }
+    else {
+        logWarn "NOT memoizing state '${value}' for ${deviceName}"
     }
 }
 def resetStates(){
 
     def now = now()
 
-    // Initialize memoization meant to prevent reseting the color/colorTemperature, 
-    // to allow other systems to use colors as needed (e.g. for water leak, smoke, gaz, fire alerts, etc.)
-    state.color = [:]                          // initialize memoization of colors
-    state.colorTemperature = [:]    // initialize memoization of color temperatures
-
-    // same logic, but for comfort reasons: allow user to manually set a level value. 
-    state.dimLevel = [:] 
-
-    // same logic as above, but for switch's 'on' and 'off' states. 
-    state.switchState = [:]
+    /** Purpose of Memoization 
+    * First, and foremost, SAFETY! allows other systems to use colors as needed (e.g. for water leak, smoke, gaz, fire alerts, etc.)
+    */
+    state.color = [:]                           // initialize memoization for colors
+    state.colorTemperature = [:]                // initialize memoization for color temperatures
+    state.dimLevel = [:]                        // initialize memoization for switch level
+    state.switchState = [:]                     // initialize memoization for on/off sw states
 
     state.paused = state.paused == null ? false : state.paused // preserve the state if it exists. 
     state.pauseStart = state.pauseStart ?: now
 
     state.functionalSensors = [:]
-    // repopulate the state
+    
     // Pre-populate with all known sensors
     motionSensors.each { sensor ->
         state.functionalSensors[sensor.id] = [
@@ -990,6 +1006,11 @@ def resetStates(){
     log.trace "---------- states reset ok ----------"
         
 }
+
+// NOT IN USE BUT PRESERVED AS IT CAN BE USEFULL IN THERMOSTAT MANAGER
+def cleanUpSwitchState() {
+    cleanUpStateForDeviceType('switchState', getAllSwitches(), 'switch')
+}
 def cleanUpStateForDeviceType(stateMapKey, deviceList, deviceType) {
     /**
     * Cleans up the state map for a specific device type by ensuring all device names
@@ -999,9 +1020,9 @@ def cleanUpStateForDeviceType(stateMapKey, deviceList, deviceType) {
     * @param deviceList The list of current devices of the specified type.
     * @param deviceType A string representing the device type for logging purposes.
     */
-/** 
- * Last Updated: 2025-01-13
- */
+    /** 
+    * Last Updated: 2025-01-14
+    */
 
     def originalState = state."${stateMapKey}" ?: [:]
     def validDeviceNames = deviceList.collect { it.displayName }  // Collect device display names
@@ -1044,17 +1065,12 @@ def getDeviceById_switch(deviceId) {
     }
     return device
 }
-// Add similar methods for other device types
 def getDeviceById_sensor(deviceId) {
     def device = motionSensors.find { it.id == deviceId }
     if (!device) {
         log.warn "Device with ID ${deviceId} not found in motion sensors."
     }
     return device
-}
-// Function to clean up switch state
-def cleanUpSwitchState() {
-    cleanUpStateForDeviceType('switchState', getAllSwitches(), 'switch')
 }
 def getPauseDurationMillis() {
     if (!pauseDuration) {
@@ -1069,8 +1085,6 @@ def getPauseDurationMillis() {
     log.debug "Pause Duration in milliseconds: $pauseDurationMillis"
     return pauseDurationMillis
 }
-
-
 
 def Active() {
 
@@ -1170,6 +1184,9 @@ def sendAlert() {
     }
 }
 def getFunctionalSensors(btnCmd=false) {
+    /** 
+    * Last Updated: 2025-01-14
+    */
     def lastCheck = state.lastEventHistoryCheck ?: 0
     def nowTime = now()
     def functionalSensors = []  // Initialize local array
@@ -1180,42 +1197,30 @@ def getFunctionalSensors(btnCmd=false) {
     if (btnCmd || nowTime - lastCheck < (10 * 60 * 1000)) {
         logDebug "Skipping getFunctionalSensors: Last check was ${(nowTime - lastCheck) / 60000} minutes ago."
 
-       
-
-        
         if (state.functionalSensors && !state.functionalSensors.isEmpty()) {
             // Display previously memoized alerts for unresponsive sensors
-            logDebug "state.functionalSensors: $state.functionalSensors"
-            
+            logDebug "state.functionalSensors: $state.functionalSensors"            
             def iterated = false
             state.functionalSensors.collect { it -> 
-                /* 
-                Structure:
-                    [
-                        deviceId:   [
-                                        funcitonal=true,
-                                        deviceId:254,
-                                        displayName: the device's name
-                                    ]
-                    ]
-
+                /**
+                    Structure:
+                        [
+                            deviceId:   [
+                                            funcitonal=true,
+                                            deviceId:254,
+                                            displayName: the device's name
+                                        ]
+                        ]
                 */
-/** 
- * Last Updated: 2025-01-13
- */
-
                 def device = it.value
-          
-
                 if (!device.functional) {
-                    
                         def m = "${app.label}: ${device.displayName} appears UNRESPONSIVE -- <a href='${state.locationUrl}/${device.deviceId}' target='_blank'>Manage Device</a>"
                         log.warn formatText(m, "black", "#E0E0E0")
                 
                     if(!iterated){
                         if (enableDebug || btnCmd)  log.info generateHtmlTable()
                     }
-                    iterated = true // avoid showing the table over each iteration
+                    iterated = true // avoid generating/logging the table over each iteration
                 }
             }
 
@@ -1225,12 +1230,11 @@ def getFunctionalSensors(btnCmd=false) {
             }
         } else {
             log.warn "No functional sensor to log... re-evaluating..."
-            functionalSensors = checkFunctionalSensors()
+            // functionalSensors = checkFunctionalSensors()???? 
         }
     }
     // redundant else on purpose for better readability/explicit logic
-    else {
-        
+    else {        
         functionalSensors = checkFunctionalSensors()
     }
 
@@ -1239,7 +1243,7 @@ def getFunctionalSensors(btnCmd=false) {
         log.warn formatText(m, "yellow", "red")
     }
 
-    // Always return device objects (functional sensors)
+    // return functional sensors as device objects
     return functionalSensors
 }
 def generateHtmlTable(){
@@ -1324,7 +1328,7 @@ def checkFunctionalSensors() {
     def functionalSensors = motionSensors.findAll { sensor ->
         // Get events for this sensor in the last 24 hours with a higher limit
         def events = sensor.eventsSince(recentPeriod, [max: 200]) ?: []
-        logDebug "Events for ${sensor.displayName}: ${events.collect { evt -> [name: evt.name, value: evt.value, date: evt.date] }}"
+        // logDebug "Events for ${sensor.displayName}: ${events.collect { evt -> [name: evt.name, value: evt.value, date: evt.date] }}"
 
         // Check if there are any 'motion' events
         def hasMotionEvents = events.any { event -> event.name == 'motion' }

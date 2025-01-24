@@ -1,5 +1,5 @@
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 /**
  * Thermostat Manager V3
@@ -38,7 +38,13 @@ preferences {
 
 }
 
+/** TODO: 
 
+- Mode bind thermostats when multiple 
+- Bind thermostats to night/sleep mode when multiple
+- Add electric heater (don't call that virtual thermostat since we have a virtual thermostat app-generated child-DEVICE)
+
+*/
 
 def MainPage() {
 
@@ -708,7 +714,7 @@ def createVirtualThermostat() {
     * def thermostat = createVirtualThermostat() // Creates "Temperature Living-Room" thermostat
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
     logWarn "Creating Virtual Thermostat..."
 
@@ -1847,7 +1853,7 @@ def restriction(motionActiveEvent=false){
 
 
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
 def get_need(motionActiveEvent=false) {
@@ -1908,7 +1914,7 @@ def get_need(motionActiveEvent=false) {
     */
 
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     def restrict = restriction(motionActiveEvent)
@@ -1918,24 +1924,35 @@ def get_need(motionActiveEvent=false) {
 
     if (!useAI) return fallback_need_eval(motionActiveEvent=motionActiveEvent, logs=true)
     
-
+    def result
+    def currentTime
+    def timeSinceLastMode
+    def delayBetweenModes
+    def coolDiff
+    def heatDiff
+    def amplitudeThreshold
+    def highAmplitude
+    def lowAmplitude
+    def validation
+    def changeMd
+  
     try {
         // get a first raw eval by legacy algorithm:
         def legacy_need = fallback_need_eval(motionActiveEvent=motionActiveEvent, logs=false)
 
         // Proceed to intelligent evaluation attempts
-        def result = null
-        def currentTime = now()
-        def timeSinceLastMode = currentTime - (state.lastModeChangeTime ?: 0)
-        def delayBetweenModes = 15 * 60 * 1000 // 15 minutes in milliseconds
-        def coolDiff = location.mode in powerSavingModes || !motion ? 5.0 : swing
-        def heatDiff = location.mode in powerSavingModes || !motion ? -5.0 : -swing
+        result = null
+        currentTime = now()
+        timeSinceLastMode = currentTime - (state.lastModeChangeTime ?: 0)
+        delayBetweenModes = 15 * 60 * 1000 // 15 minutes in milliseconds
+        coolDiff = location.mode in powerSavingModes || !motion ? 5.0 : swing
+        heatDiff = location.mode in powerSavingModes || !motion ? -5.0 : -swing
         // Determine if temperature deviation is severe (+ 2 degrees beyond normal threshold)
-        def amplitudeThreshold = 5
-        def highAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff >= (coolDiff + amplitudeThreshold)
-        def lowAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff <= (heatDiff - amplitudeThreshold)
+        amplitudeThreshold = 5
+        highAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff >= (coolDiff + amplitudeThreshold)
+        lowAmplitude = location.mode in powerSavingModes ? false : indoorToSetpointDiff <= (heatDiff - amplitudeThreshold)
 
-        def validation = validateComfortCapabilities()
+        validation = validateComfortCapabilities()
         
         if (!validation.isRequired) {
             log.warn "Required capabilities missing, falling back to basic algorithm"
@@ -1948,6 +1965,8 @@ def get_need(motionActiveEvent=false) {
         
         // Calculate total heat load
         def totalHeatLoad = occupancyHeat.heatOutput + solarGain.solarGainWatts
+
+        log.debug "totalHeatLoad: $totalHeatLoad"
         
         // Get temperature and humidity data
         def currentIndoorTemp = get_indoor_temperature()
@@ -2022,6 +2041,13 @@ def get_need(motionActiveEvent=false) {
         *   - Reaching target temperature
         *   - Changing modes
         */ 
+        logDebug """values to be parsed into changeMode(): 
+                    <br>delayBetweenModes:$delayBetweenModes
+                    <br>timeSinceLastMode:$timeSinceLastMode
+                    <br>highAmplitude:$highAmplitude
+                    <br>lowAmplitude:$lowAmplitude
+                    <br>currentTime:$currentTime
+                    """
         if (currentIndoorTemp > (targetTemp + comfortRange.upperBound)) {
             if (naturalCoolingPotential.feasible) {
                 if (!state.currentThermalEvent) {
@@ -2038,8 +2064,8 @@ def get_need(motionActiveEvent=false) {
                 }
                 result = fan_only ? "fan_only" : "off"
             } else {
-                
-                if(changeMode("cool", delayBetweenModes, timeSinceLastMode, highAmplitude, lowAmplitude, currentTime)){
+                changeMd = changeMode("cool", delayBetweenModes, timeSinceLastMode, highAmplitude, lowAmplitude, currentTime)
+                if(changeMd){
                     // If switching to mechanical cooling, finalize any ongoing event
                     if (state.currentThermalEvent) {
                         recordThermalEvent([
@@ -2069,8 +2095,9 @@ def get_need(motionActiveEvent=false) {
                 }
                 result = fan_only ? "fan_only" : "off"
             } else {
-                
-                if(changeMode("heat", delayBetweenModes, timeSinceLastMode, highAmplitude, lowAmplitude, currentTime)){
+                changeMd = changeMode("heat", delayBetweenModes, timeSinceLastMode, highAmplitude, lowAmplitude, currentTime)
+                log.warn "changeMode 'heat' returns: $changeMd"
+                if(changeMd){
                     // If switching to mechanical heating, finalize any ongoing event
                     if (state.currentThermalEvent) {
                         recordThermalEvent([
@@ -2078,6 +2105,7 @@ def get_need(motionActiveEvent=false) {
                             isNewEvent: false
                         ])
                     }
+                    log.warn "-------------SWITCHING TO MECHANICAL HEATING----------------"
                     result = "heat"
                 }
                 else {
@@ -2090,7 +2118,7 @@ def get_need(motionActiveEvent=false) {
         return fallback_need_eval(motionActiveEvent=motionActiveEvent, logs=true)
     }
 
-    result = result ? result : fan_only ? "fan_only" : "off"
+    result = result ?: (fan_only ? "fan_only" : "off")
     def colorMap = [cool:"blue", heat: "red", fan_only: "green", off: "brown"]
     def color = colorMap."${result}"
     log.debug "color: $color"
@@ -2196,7 +2224,7 @@ def validateComfortCapabilities() {
     * Used to determine if smart comfort management can be enabled and what features are available
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     def validationResults = [
@@ -2367,7 +2395,7 @@ def analyzeOccupancyHeat() {
     * @see getPredictedPerformance() for usage in predictions
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     
@@ -2416,7 +2444,7 @@ def analyzeSolarGain() {
     * Combines illuminance and UV index data to estimate solar heat impact
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     def comfCapTiers = comfortCapabilitiesTiers()
@@ -2490,7 +2518,7 @@ def recordThermalEvent(params) {
     * Maintains history of temperature management attempts and their outcomes
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     log.warn "Recording thermal event with params: $params"
@@ -2567,7 +2595,7 @@ def updatePerformanceMetrics(category, deltaBracket, event) {
     * Maintains running averages of cooling/heating rates and success rates
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     def metrics = state.thermalBehavior[category].performanceByDelta[deltaBracket] ?: [
@@ -2601,7 +2629,7 @@ def getPredictedPerformance(targetTemp, currentTemp, outdoorTemp) {
     * Uses historical performance data to predict effectiveness of natural cooling/heating
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     def tempDelta = Math.abs(currentTemp - outdoorTemp)
@@ -2904,7 +2932,7 @@ def trackEnvironmentalFactors_old() {
     * @see getComfortVisualization() for UI representation
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     def now = new Date()
@@ -3073,7 +3101,7 @@ def getTimeBlock(hour) {
     * Standardizes time periods for pattern analysis
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     // Break day into 2-hour blocks
@@ -3089,7 +3117,7 @@ def getSeason() {
     * Used for seasonal adjustment calculations
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     def month = new Date().format("MM").toInteger()
@@ -3118,7 +3146,7 @@ def updateSeasonalPatterns(season, temp, tempChange) {
     * Maintains running statistics of seasonal temperature patterns
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     log.debug "season: $season"
@@ -3200,7 +3228,7 @@ def getAverageHumidity() {
     * Returns default 45% if no sensors available
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     def humidityCapableDevices = (tempSensors ?: []) + 
@@ -3368,7 +3396,7 @@ def getSeasonalComfortAdjustment() {
     * Modifies comfort ranges based on learned seasonal patterns
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     def season = getSeason()
@@ -3616,7 +3644,7 @@ def calculateEnergySavings() {
     * @see getComfortMetrics() for usage in UI
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     // Initialize return value as BigDecimal
@@ -3703,7 +3731,7 @@ def calculateComfortScore() {
     * @see analyzeSolarGain() for environmental factors
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     def score = new BigDecimal("0.0")
@@ -3799,7 +3827,7 @@ def getSuccessRateChart_old() {
     * @see getComfortVisualization() for complete UI
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     def bars = []
@@ -4013,7 +4041,7 @@ def getEnvironmentalPatterns() {
     * @see getDetailedAnalytics() for detailed view
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     
@@ -4145,7 +4173,7 @@ def getDetailedAnalytics() {
     * @see calculateEnergySavings() for efficiency
     */
     /** 
-    * Last Updated: 2025-01-14
+    * Last Updated: 2025-01-24
     */
 
     try {
@@ -4390,7 +4418,7 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     * @see getComfortMetrics() for trend display
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     try {
@@ -4435,7 +4463,7 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     We could update calculateTrendIndicator() to use it for smoother, more accurate trends.
 */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
 def calculateMovingAverage(List values, int window) {
@@ -4465,7 +4493,7 @@ def calculateMovingAverage(List values, int window) {
     * @see getDetailedAnalytics() for trend smoothing
     */
 /** 
- * Last Updated: 2025-01-14
+ * Last Updated: 2025-01-24
  */
 
     if (!values || window <= 0 || window > values.size()) {

@@ -17,8 +17,6 @@ function Get-FunctionLastModified {
     try {
         $lineRange = "$startLine,${endLine}"
         $gitLog = git log -L "$lineRange:$filePath" --format="%ai" 2>&1
-
-        # Capture the complete date and time
         $logMatch = [regex]::Match($gitLog, '(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
         if ($logMatch.Success) {
             return [DateTime]::Parse($logMatch.Value).ToString('yyyy-MM-dd HH:mm:ss')
@@ -64,11 +62,11 @@ function Get-NextVersion {
     
     $patch += 1
     
-    if ($patch > 9) {
+    if ($patch -gt 9) {
         $patch = 0
         $build += 1
         
-        if ($build > 9) {
+        if ($build -gt 9) {
             $build = 0
             $minor += 1
         }
@@ -114,10 +112,11 @@ foreach ($file in $stagedFiles) {
     
     $updatedContent = $content
     if ($content -match '(?s)(/\*\*.*?Version:\s*)\d+\.\d+\.\d+\.\d+(\s*.*?\*/)') {
-        $updatedContent = $content -replace '(?s)(/\*\*.*?Version:\s*)\d+\.\d+\.\d+\.\d+(\s*.*?\*/)', "`${1}$newVersionString`$2"
+        $updatedContent = $updatedContent -replace '(?s)(/\*\*.*?Version:\s*)\d+\.\d+\.\d+\.\d+(\s*.*?\*/)', "`${1}$newVersionString`$2"
     }
     
-    $functionPattern = '(?m)^(\s*)[^\r\n]*\([^)]*\)\s*\{\s*'
+    # Updated function pattern to explicitly match lines ending with ") {"
+    $functionPattern = '(?m)^(\s*)[^\r\n]*?\)\s*\{\s*$'
     $lastUpdatedPattern = '(?s)(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})? *\r?\n *\*/'
     
     $functionMatches = [regex]::Matches($updatedContent, $functionPattern)

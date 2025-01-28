@@ -1,5 +1,5 @@
 /** 
-* Last Updated: 2025-01-28
+ * Last Updated: 2025-01-28
  */
 /**
  * Thermostat Manager V3
@@ -521,10 +521,9 @@ def createVirtualThermostat() {
     *     input "virThermLocation", "text", title: "Location (e.g., Living-Room)", required: true
     * }
     * def thermostat = createVirtualThermostat() // Creates "Temperature Living-Room" thermostat
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
     logWarn "Creating Virtual Thermostat..."
 
         
@@ -775,6 +774,7 @@ def setPointHandler(evt) {
     // Ignore events from the virtual thermostat controller
     if (evt.device.id == thermostatController.id) {
         logDebug "Ignoring event from thermostatController (${evt.device.displayName})."
+        // master([calledBy:"thermostatController", motionActiveEvent: false]) // no! feedback loops and unreliable outcomes. 
         return
     }
 
@@ -835,7 +835,7 @@ def setPointHandler(evt) {
     logFormattedObject([
         PreviousState: state.thermostatsSetpointSTATES[evt.device.displayName],
         NewValue: newValue,
-    ], title: "Memoized State Update")
+    ], title="Memoized State Update")
 }
 def pushableButtonHandler(evt){
     if(restriction().data.restricted_mode) return
@@ -2112,10 +2112,6 @@ def restriction(motionActiveEvent=false){
 *                                       INTELLIGENCE
 ******************************************** - *******************************************/
 
-/** 
-* Last Updated: 2025-01-28
- */
-
 def get_need(motionActiveEvent=false) {
     /**
         * get_need()
@@ -2171,11 +2167,9 @@ def get_need(motionActiveEvent=false) {
         * }
         * 
         * @see fallback_need_eval() for basic algorithm
-    */
-
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def restrict = restriction(motionActiveEvent)
     if(restrict.data.restricted_mode) return
@@ -2494,10 +2488,9 @@ def validateComfortCapabilities() {
     *   - motionAnalysis: Object containing motion sensing capabilities
     * 
     * Used to determine if smart comfort management can be enabled and what features are available
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def validationResults = [
         isRequired: false,
@@ -2671,10 +2664,9 @@ def analyzeOccupancyHeat() {
     * 
     * @see trackEnvironmentalFactors() for pattern logging
     * @see getPredictedPerformance() for usage in predictions
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     
     if (!motionSensors) return [heatOutput: 0, confidence: 0]
@@ -2720,10 +2712,9 @@ def analyzeSolarGain() {
     *   - hasData: Boolean indicating if relevant sensor data was available
     * 
     * Combines illuminance and UV index data to estimate solar heat impact
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def comfCapTiers = comfortCapabilitiesTiers()
     def allSensors = (tempSensors ?: []) + (motionSensors ?: [])
@@ -2794,10 +2785,9 @@ def recordThermalEvent(params) {
     *   - Additional environmental conditions
     * 
     * Maintains history of temperature management attempts and their outcomes
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     logWarn "Recording thermal event with params: $params"
     
@@ -2971,10 +2961,9 @@ def getPredictedPerformance(targetTemp, currentTemp, outdoorTemp) {
     * @return Map containing success probability and confidence level
     * 
     * Uses historical performance data to predict effectiveness of natural cooling/heating
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def tempDelta = Math.abs(currentTemp - outdoorTemp)
     def deltaBracket = "${Math.floor(tempDelta/5)*5}-${Math.floor(tempDelta/5)*5 + 5}"
@@ -3330,10 +3319,9 @@ def trackEnvironmentalFactors_old() {
     * 
     * @see getSeasonalComfortAdjustment() for usage
     * @see getComfortVisualization() for UI representation
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def now = new Date()
     def hour = now.format("HH:mm")
@@ -3499,9 +3487,8 @@ def getTimeBlock(hour) {
     * @return String representing time block (e.g., "14:00-16:00")
     * 
     * Standardizes time periods for pattern analysis
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     // Break day into 2-hour blocks
@@ -3515,9 +3502,8 @@ def getSeason() {
     * @return String ('winter', 'spring', 'summer', 'fall')
     * 
     * Used for seasonal adjustment calculations
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     def month = new Date().format("MM").toInteger()
@@ -3544,10 +3530,9 @@ def updateSeasonalPatterns(season, temp, tempChange) {
     * @param tempChange Recent temperature change
     * 
     * Maintains running statistics of seasonal temperature patterns
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     logDebug "season: $season"
     logDebug "temp: $temp"
@@ -3626,9 +3611,8 @@ def getAverageHumidity() {
     * 
     * Combines readings from all humidity-capable sensors
     * Returns default 45% if no sensors available
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     def humidityCapableDevices = (tempSensors ?: []) + 
@@ -3801,10 +3785,9 @@ def getSeasonalComfortAdjustment() {
     * @return Number temperature adjustment based on season
     * 
     * Modifies comfort ranges based on learned seasonal patterns
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def season = getSeason()
     def patterns = state.thermalBehavior.environmentalFactors.seasonalPatterns[season]
@@ -4048,9 +4031,8 @@ def calculateEnergySavings() {
     * 
     * @see trackEnvironmentalFactors() for event logging
     * @see getComfortMetrics() for usage in UI
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     // Initialize return value as BigDecimal
@@ -4135,10 +4117,9 @@ def calculateComfortScore() {
     * 
     * @see analyzeOccupancyHeat() for occupancy impact
     * @see analyzeSolarGain() for environmental factors
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def score = new BigDecimal("0.0")
     
@@ -4231,10 +4212,9 @@ def getSuccessRateChart_old() {
     * - Graceful fallback for missing data
     * 
     * @see getComfortVisualization() for complete UI
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     def bars = []
     try {
@@ -4445,9 +4425,8 @@ def getEnvironmentalPatterns() {
     * 
     * @see trackEnvironmentalFactors() for data collection
     * @see getDetailedAnalytics() for detailed view
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     
@@ -4577,10 +4556,9 @@ def getDetailedAnalytics() {
     * 
     * @see calculateComfortScore() for scoring
     * @see calculateEnergySavings() for efficiency
-    */
-    /** 
-   * Last Updated: 2025-01-28
-    */
+    *//** 
+ * Last Updated: 2025-01-28
+ */
 
     try {
         def analytics = []
@@ -4822,9 +4800,8 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     * [direction: "↑", percentage: "5.2"]
     * 
     * @see getComfortMetrics() for trend display
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     try {
@@ -4867,9 +4844,8 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     TODO:
     Keep and use calculateMovingAverage() to improve our trend calculations.
     We could update calculateTrendIndicator() to use it for smoother, more accurate trends.
-*/
-/** 
-* Last Updated: 2025-01-28
+*//** 
+ * Last Updated: 2025-01-28
  */
 
 def calculateMovingAverage(List values, int window) {
@@ -4897,9 +4873,8 @@ def calculateMovingAverage(List values, int window) {
     * - Uses BigDecimal for precision
     * 
     * @see getDetailedAnalytics() for trend smoothing
-    */
-/** 
-* Last Updated: 2025-01-28
+    *//** 
+ * Last Updated: 2025-01-28
  */
 
     if (!values || window <= 0 || window > values.size()) {

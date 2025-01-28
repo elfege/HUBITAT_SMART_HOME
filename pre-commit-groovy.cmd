@@ -22,16 +22,33 @@ foreach ($file in $stagedFiles) { ^
         $content = ''; ^
     }; ^
     Write-Host ('File content length: ' + $content.Length + ' characters'); ^
-    $lastUpdatedPattern = ' \* Last Updated: \d{4}-\d{2}-\d{2}'; ^
-    $newLastUpdatedText = ' /** ' + [Environment]::NewLine + ' * Last Updated: ' + $currentDate + [Environment]::NewLine + ' */' + [Environment]::NewLine + [Environment]::NewLine; ^
+    $lastUpdatedPattern = '(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2} *\r?\n *\*/'; ^
     if ($content -match $lastUpdatedPattern) { ^
         Write-Host 'Updating existing timestamp...' -ForegroundColor Yellow; ^
-        $updatedContent = $content -replace $lastUpdatedPattern, ('* Last Updated: ' + $currentDate); ^
+        $indent = $matches[1]; ^
+        $newLastUpdatedText = $indent + '/** ' + [Environment]::NewLine + ^
+                             $indent + ' * Last Updated: ' + $currentDate + [Environment]::NewLine + ^
+                             $indent + ' */'; ^
+        $updatedContent = $content -replace $lastUpdatedPattern, $newLastUpdatedText; ^
     } else { ^
         Write-Host 'Adding new timestamp...' -ForegroundColor Yellow; ^
-        if ($content -match '(?s)^/\*\*?.*?\*/') { ^
-            $updatedContent = $content -replace '(?s)^(/\*\*?.*?\*/\r?\n*)', ('$1' + $newLastUpdatedText); ^
+        if ($content -match '(?m)^(\s*)(?=/\*\*?)') { ^
+            $indent = $matches[1]; ^
+            $newLastUpdatedText = $indent + '/** ' + [Environment]::NewLine + ^
+                                 $indent + ' * Last Updated: ' + $currentDate + [Environment]::NewLine + ^
+                                 $indent + ' */' + [Environment]::NewLine + [Environment]::NewLine; ^
+            $updatedContent = $content -replace '(?s)^(\s*)(\/\*\*?.*?\*\/\r?\n*)', ('$1$2' + $newLastUpdatedText); ^
         } else { ^
+            if ($content -match '(?m)^(\s*)\S') { ^
+                $baseIndent = $matches[1]; ^
+                $indent = $baseIndent + '    '; ^
+            } else { ^
+                $baseIndent = ''; ^
+                $indent = '    '; ^
+            }; ^
+            $newLastUpdatedText = $indent + '/** ' + [Environment]::NewLine + ^
+                                 $indent + ' * Last Updated: ' + $currentDate + [Environment]::NewLine + ^
+                                 $indent + ' */' + [Environment]::NewLine + [Environment]::NewLine; ^
             $updatedContent = $newLastUpdatedText + $content; ^
         } ^
     }; ^

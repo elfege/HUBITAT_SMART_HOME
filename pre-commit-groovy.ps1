@@ -151,9 +151,12 @@ foreach ($file in $stagedFiles) {
         $functionContent = $updatedContent.Substring($match.Index, $functionEndIndex - $match.Index)
         
         # Check if this function or its contents were modified
-        $functionModified = $modifiedLines | Where-Object { 
-            $modifiedLine = $_
-            $functionContent -match [regex]::Escape($modifiedLine)
+        $functionModified = $false
+        foreach ($modifiedLine in $modifiedLines) {
+            if ($functionContent -match [regex]::Escape($modifiedLine)) {
+                $functionModified = $true
+                break
+            }
         }
         
         $baseIndent = $match.Groups[1].Value
@@ -183,7 +186,7 @@ foreach ($file in $stagedFiles) {
             $timestampBlock = @"
 
 $indent/** 
-$indent * Last Updated: $([DateTime]::Parse($timestamp).ToString('yyyy-MM-dd HH:mm:ss'))
+$indent * Last Updated: $timestamp
 $indent */
 "@
             

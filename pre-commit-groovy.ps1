@@ -121,8 +121,8 @@ foreach ($file in $stagedFiles) {
     # Pattern to find function declarations: looks for lines ending with () {
     $functionPattern = '(?m)^(\s*)[^\r\n]*\(\s*\)\s*\{\s*$'
     
-    # Pattern to find existing timestamps
-    $lastUpdatedPattern = '(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})? *\r?\n *\*/'
+    # Pattern to find existing timestamps - strict matching
+    $lastUpdatedPattern = '(?s)(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})? *\r?\n *\*/'
     
     # Get all function declarations in the file
     $functionMatches = [regex]::Matches($updatedContent, $functionPattern)
@@ -163,6 +163,8 @@ foreach ($file in $stagedFiles) {
         $nextContent = $updatedContent.Substring($match.Index + $match.Length)
         $hasTimestamp = $nextContent -match '^\s*/\*\* *\r?\n *\* Last Updated:'
         
+        Write-Host "Function at line $lineNumber - Modified: $functionModified, Has Timestamp: $hasTimestamp"
+        
         if ($functionModified -or -not $hasTimestamp) {
             # Remove existing timestamp if present
             if ($hasTimestamp) {
@@ -174,28 +176,22 @@ foreach ($file in $stagedFiles) {
                 $currentDate
             } else {
                 $lastModified = Get-FunctionLastModified -filePath $file -startLine $lineNumber -endLine $endLineNumber
-                if ($lastModified) {
-                    [DateTime]::Parse($lastModified).ToString('yyyy-MM-dd HH:mm:ss')
-                } else {
-                    $currentDate
-                }
+                [DateTime]::Parse($lastModified).ToString('yyyy-MM-dd HH:mm:ss')
             }
             
-            # Format and add timestamp with time
-            $formattedTime = if ($timestamp -match '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}') {
-                $timestamp
-            } else {
-                [datetime]::Parse($timestamp).ToString('yyyy-MM-dd HH:mm:ss')
-            }
-            
-            $newLastUpdatedText = @"
+            # Create timestamp block
+            $timestampBlock = @"
 
 $indent/** 
-$indent * Last Updated: $formattedTime
+$indent * Last Updated: $([DateTime]::Parse($timestamp).ToString('yyyy-MM-dd HH:mm:ss'))
 $indent */
 "@
+            
+            Write-Host "Adding timestamp: $timestamp"
+            
+            # Insert the timestamp
             $position = $match.Index + $match.Length
-            $updatedContent = $updatedContent.Insert($position, $newLastUpdatedText)
+            $updatedContent = $updatedContent.Insert($position, $timestampBlock)
         }
     }
     

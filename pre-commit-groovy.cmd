@@ -22,8 +22,8 @@ foreach ($file in $stagedFiles) { ^
         $content = ''; ^
     }; ^
     Write-Host ('File content length: ' + $content.Length + ' characters'); ^
-    $lastUpdatedPattern = '\* Last Updated: \d{4}-\d{2}-\d{2}'; ^
-    $newLastUpdatedText = '/** ' + [Environment]::NewLine + ' * Last Updated: ' + $currentDate + [Environment]::NewLine + ' */' + [Environment]::NewLine + [Environment]::NewLine; ^
+    $lastUpdatedPattern = ' \* Last Updated: \d{4}-\d{2}-\d{2}'; ^
+    $newLastUpdatedText = ' /** ' + [Environment]::NewLine + ' * Last Updated: ' + $currentDate + [Environment]::NewLine + ' */' + [Environment]::NewLine + [Environment]::NewLine; ^
     if ($content -match $lastUpdatedPattern) { ^
         Write-Host 'Updating existing timestamp...' -ForegroundColor Yellow; ^
         $updatedContent = $content -replace $lastUpdatedPattern, ('* Last Updated: ' + $currentDate); ^

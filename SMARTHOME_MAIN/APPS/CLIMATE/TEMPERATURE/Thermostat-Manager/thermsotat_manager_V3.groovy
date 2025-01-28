@@ -1,5 +1,5 @@
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 /**
  * Thermostat Manager V3
@@ -18,6 +18,13 @@ import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 import groovy.transform.Field
 
+/** TODO: 
+
+- bind thermostatController setpoints (IN PROGRESS)
+- Add electric heater (don't call that 'virtual thermostat' since we have a virtual thermostat app-generated child-DEVICE)
+
+*/
+
 definition(
     name: "Thermostat Manager V3",
     namespace: "elfege",
@@ -31,21 +38,11 @@ definition(
     iconX3Url: "https://www.elfege.com/penrose.jpg",
     image: "https://www.elfege.com/penrose.jpg"
 )
-
 preferences {
 
     page name: "MainPage"
 
 }
-
-/** TODO: 
-
-- Mode bind thermostats when multiple DONE
-- Bind thermostats to night/sleep mode when multiple DONE
-- Add electric heater (don't call that 'virtual thermostat' since we have a virtual thermostat app-generated child-DEVICE)
-
-*/
-
 def MainPage() {
 
     def pageProperties = [
@@ -327,8 +324,9 @@ def MainPage() {
     }
 }
 
-
-
+/******************************************* - *******************************************
+*                                      INITIALIZATION
+******************************************** - *******************************************/
 def installed(){
     logDebug "Installing with settings: $settings"
     initialize()
@@ -400,22 +398,9 @@ def initializeBoostTempArray(){
     state.boostTempArray = boostTempArray
 }
 def initializeStates(){
-    // Initialize setpoints memoization
-    state.thermostatsSetpointSTATES = state.thermostatsSetpointSTATES == null ? [:] : state.thermostatsSetpointSTATES
+    // Initialize setpoints memoization 
+    initializeSetpointStates()
 
-    if (state.thermostatsSetpointSTATES == [:]){
-        //populate it if empty. 
-        def allThermostats = getAllThermostats()
-            
-        logDebug "allThermostats: <br> ${allThermostats.join('<br>')}"
-
-        allThermostats.each{ thermostat -> 
-            logWarn "Calling memoization for $thermostat"
-            updateMem(thermostat)
-        }
-
-        logInfo "state.thermostatsSetpointSTATES (after population): $state.thermostatsSetpointSTATES"
-    }
 
     // track app-initiated setpoint changes
     state.appInitiatedChanges = state.appInitiatedChanges ?: [:]
@@ -471,154 +456,13 @@ def initializeStates(){
     // delay between modes (heat/cool) 
     state.delayBetweenModes = 30 * 60 * 1000 // 30 minutes in milliseconds
 }
-def updateMem(thermostat, attribute="all"){
+def initializeSetpointStates() {
+    // Just initialize empty maps - updateMem will populate them organically
+    state.appInitiatedChanges = state.appInitiatedChanges ?: [:]
+    state.thermostatsSetpointSTATES = state.thermostatsSetpointSTATES ?: [:]
+    state.thermostatModeSTATES = state.thermostatModeSTATES ?: [:]
+    state.lastProcessedValues = state.lastProcessedValues ?: [:]
 
-    logDebug "--------------- Updating memoization state for $thermostat"
-
-    
-
-    //ensure it doesn't initialize with boost values if this was called during a boosting operation
-    // Convert current values to BigDecimal with scale 1
-    def currSP = (thermostat.currentValue("thermostatSetpoint") as BigDecimal).setScale(1)
-    def currCSP = (thermostat.currentValue("coolingSetpoint") as BigDecimal).setScale(1)
-    def currHSP = (thermostat.currentValue("heatingSetpoint") as BigDecimal).setScale(1)
-
-
-    
-    // TODO: update to call isBoostTemp() instead (no need for conversion above then)
-
-    state.boostTempArray = state.boostTempArray ?: []
-
-    def thermostatSetpoint = currSP in state.boostTempArray ? 74.0 : currSP
-    def coolingSetpoint = currCSP in state.boostTempArray ? 74.0 : currCSP
-    def heatingSetpoint = currHSP in state.boostTempArray ? 74.0 : currHSP
-
-    logDebug """
-        <br> tempBoostCool: $tempBoostCool (${tempBoostCool.class})
-        <br> tempBoostHeat: $tempBoostHeat (${tempBoostHeat.class})
-        <br> currSP: $currSP (${currSP.class})
-        <br> currHSP: $currHSP (${currHSP.class})
-        <br> currCSP: $currCSP (${currCSP.class})
-        <br> state.boostTempArray: $state.boostTempArray
-        <br> currSP in boostTempArray ? ${currSP in boostTempArray}
-        <br> currHSP in boostTempArray ? ${currHSP in boostTempArray}
-        <br> currCSP in boostTempArray ? ${currCSP in boostTempArray}
-        """
-
-    
-    def previousSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.thermostatSetpoint ?: currSP
-    def previousCSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.coolingSetpoint ?: currCSP
-    def previousHSP = state.thermostatsSetpointSTATES?.get(thermostat.displayName)?.heatingSetpoint ?: currHSP
-
-    thermostatSetpoint = attribute in ["thermostatSetpoint", "all"] ? thermostatSetpoint : previousSP
-    coolingSetpoint = attribute in ["coolingSetpoint", "all"] ? coolingSetpoint : previousCSP    
-    heatingSetpoint = attribute in ["heatingSetpoint", "all"] ? heatingSetpoint : previousHSP
-
-    if (attribute != "all") {
-    logTrace """Selective update for $attribute:
-        <br> ${attribute == "thermostatSetpoint" ? "Updating" : "Preserving memoized"} thermostatSetpoint: $thermostatSetpoint
-        <br> ${attribute == "coolingSetpoint" ? "Updating" : "Preserving memoized"} cooling setpoint: $coolingSetpoint
-        <br> ${attribute == "heatingSetpoint" ? "Updating" : "Preserving memoized"} heating setpoint: $heatingSetpoint
-        """
-    }
-
-    state.thermostatsSetpointSTATES[thermostat.displayName] = [
-        thermostatSetpoint: thermostatSetpoint,
-        coolingSetpoint: coolingSetpoint,
-        heatingSetpoint: heatingSetpoint 
-    ]
-}
-def resetMem(){
-    logInfo "Resetting states..."
-    state.thermostatsSetpointSTATES = [:]
-    initializeStates() // repopulates
-    logTrace "Done."
-
-}
-def getThermControllerParagraph() {
-    def prgrph = """
-        <style>
-            #therm-controller * {
-                margin: 0 !important;
-                padding: 0 !important;
-                text-indent: 0 !important;
-                line-height: 1.3 !important;
-            }
-            #therm-controller > div {
-                flex: 1;
-                border: 1px solid #dee2e6;
-                padding: 12px !important;
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-            }
-            #therm-controller .column-header {
-                font-weight: bold;
-                color: #2c3e50;
-                font-size: 14px;
-                margin-bottom: 0px !important;
-            }
-            #therm-controller ul {
-                list-style-position: inside;
-                padding-left: 8px !important;
-                margin-top: 4px !important;
-                line-height: 0.1 !important;
-            }            
-            #therm-controller li {
-                font-size: 12px;
-                margin-bottom: 1px !important;
-                padding-bottom: 0 !important;
-                line-height: 14px !important;
-            }
-            #therm-controller .emphasis {
-                font-style: italic;
-                margin-top: 8px !important;
-            }
-        </style>
-
-        <div id="therm-controller" style="
-            display: flex;
-            width: 100%;
-            gap: 8px;
-            margin: 0 !important;
-            text-indent: 0 !important;
-            line-height: 1.3;
-        ">
-            
-            
-            <!-- Left Column -->
-            <div>
-                <div class="column-header">Virtual Thermostat Controller</div>
-                <div class="content-text">
-                    Using a dedicated virtual thermostat ensures reliable temperature control memoization in Hubitat's single-threaded environment. While ${app.name} uses hash maps for tracking setpoint changes, managing multiple thermostats with various comfort scenarios can lead to synchronization issues. A virtual thermostat provides a single source of truth for temperature preferences and ensures consistent behavior across your system.
-                </div>
-            </div>
-
-            <!-- Middle Column -->
-            <div>
-                <div class="column-header">Setup Guide</div>
-                <ul>
-                    <li>Create a virtual thermostat device in Hubitat if you haven't already</li>
-                    <li>Use a descriptive name (e.g., "Temperature Living Room")</li>
-                    <li>This thermostat will serve as the main reference point</li>
-                    <li>All other thermostats will follow its settings</li>
-                </ul>
-            </div>
-
-            <!-- Right Column -->
-            <div>
-                <div class="column-header">Voice Control</div>
-                <div class="content-text">
-                    Natural voice commands are supported:
-                    <br>"Alexa, set Living Room temperature to 75 degrees"
-                </div>
-                <div class="content-text emphasis">
-                    This approach simplifies state management and provides a more reliable user experience.
-                </div>
-            </div>
-        </div>
-        """
-    return prgrph
 }
 def findExistingVirTherm() {
     def ref_label = "Temperature ${settings.virThermLocation}"
@@ -679,7 +523,7 @@ def createVirtualThermostat() {
     * def thermostat = createVirtualThermostat() // Creates "Temperature Living-Room" thermostat
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
     logWarn "Creating Virtual Thermostat..."
 
@@ -759,6 +603,73 @@ def createVirtualThermostat() {
     }
 }
 
+/******************************************* - *******************************************
+*                             THERMOSTATS STATES MEMOIZATION
+******************************************** - *******************************************/
+def updateMem(thermostat, attribute="all") {
+    logDebug "--------------- Updating memoization state for $thermostat"
+
+    def currSP = thermostat.currentValue("thermostatSetpoint")
+    def currCSP = thermostat.currentValue("coolingSetpoint")
+    def currHSP = thermostat.currentValue("heatingSetpoint")
+    
+    // Let isBoostTemp handle the conversion and checking
+    def currentThermostatMode = thermostat.currentValue("thermostatMode")
+    def currentThermostatSetpoint = isBoostTemp(currSP) ? (state.thermostatsSetpointSTATES[thermostat.displayName].thermostatSetpoint ?: 74.0) : currSP
+    def currentCoolingSetpoint = isBoostTemp(currCSP) ? (state.thermostatsSetpointSTATES[thermostat.displayName].coolingSetpoint ?: 74.0) : currCSP
+    def currentHeatingSetpoint = isBoostTemp(currHSP) ? (state.thermostatsSetpointSTATES[thermostat.displayName].heatingSetpoint ?: 74.0) : currHSP
+
+    // Get previous values
+    def previousState = state.thermostatsSetpointSTATES[thermostat.displayName] ?: [:]
+    def previousSP = previousState.thermostatSetpoint ?: currSP
+    def previousCSP = previousState.coolingSetpoint ?: currCSP
+    def previousHSP = previousState.heatingSetpoint ?: currHSP
+
+    // Update only specified attribute or all
+    thermostatSetpoint = attribute in ["thermostatSetpoint", "all"] ? currentThermostatSetpoint : previousSP
+    coolingSetpoint = attribute in ["coolingSetpoint", "all"] ? currentCoolingSetpoint : previousCSP    
+    heatingSetpoint = attribute in ["heatingSetpoint", "all"] ? currentHeatingSetpoint : previousHSP
+
+    // Update state with new values and timestamp
+    state.thermostatsSetpointSTATES[thermostat.displayName] = [
+        thermostatSetpoint: thermostatSetpoint,
+        coolingSetpoint: coolingSetpoint,
+        heatingSetpoint: heatingSetpoint,
+        lastSetpointChange: new Date().time
+    ]
+
+    logFormattedObject ([
+        tempBoostCool: "$tempBoostCool (${tempBoostCool.class})",
+        tempBoostHeat: "$tempBoostHeat (${tempBoostHeat.class})",
+        currSP: "$currSP (${currSP.class})",
+        currHSP: "$currHSP (${currHSP.class})",
+        currCSP: "$currCSP (${currCSP.class})",
+        (state.boostTempArray): "${state.boostTempArray}",
+        "currSP in boostTempArray ?": "${currSP in boostTempArray}",
+        "currHSP in boostTempArray ?": "${currHSP in boostTempArray}",
+        "currCSP in boostTempArray ?": "${currCSP in boostTempArray}"
+    ], title="memoization class analysis", method="logDebug")
+
+     if (attribute != "all") {
+        logFormattedObject([
+            "<u><b></u></b>",
+            "${attribute == "thermostatSetpoint" ? "Updating" : "Preserving memoized"} thermostatSetpoint: $thermostatSetpoint",
+            "${attribute == "coolingSetpoint" ? "Updating" : "Preserving memoized"} cooling setpoint: $coolingSetpoint",
+            "${attribute == "heatingSetpoint" ? "Updating" : "Preserving memoized"} heating setpoint: $heatingSetpoint"
+        ], title="Selective update for $attribute:", method="logTrace")
+    }
+}
+def resetMem(){
+    logInfo "Resetting states..."
+    state.thermostatsSetpointSTATES = [:]
+    initializeStates() // repopulates
+    logTrace "Done."
+
+}
+
+/******************************************* - *******************************************
+*                                     EVENTS HANDLERS
+******************************************** - *******************************************/
 def appButtonHandler(btn) {
 
     switch (btn) {
@@ -855,29 +766,76 @@ def appButtonHandler(btn) {
             break
     }
 }
-
 def turboEventHandler(evt){
     log.debug "${evt.device} ${evt.name} is ${evt.value}"
 }
+def setPointHandler(evt) {
+    if (restriction().data.restricted_mode) return
 
-def setPointHandler(evt){
-    if(restriction().data.restricted_mode) return
-    
-    // Check if current value is a boost temperature
-    if(isBoostTemp(evt.value)) {
-        logWarn "Operation in boost mode (${evt.value}F matches boost temperature). Not updating states"
+    // Ignore events from the virtual thermostat controller
+    if (evt.device.id == thermostatController.id) {
+        logDebug "Ignoring event from thermostatController (${evt.device.displayName})."
         return
     }
 
-    alwaysWarn "<b>setPointHandler:</b> $evt.device $evt.name is $evt.value"
+    // Skip boost temperature values
+    if (isBoostTemp(evt.value)) {
+        logWarn "Boost mode detected (${evt.value}F). Skipping update."
+        return
+    }
 
-    logDebug "evt.device.displayName: ${evt.device.displayName}"
-    logDebug "evt.device.id: ${evt.device.id}"
-    logDebug "thermostatController.id: ${thermostatController.id}"
-    logDebug "thermostatController.deviceId: ${thermostatController.deviceId}"
+    // Skip negligible changes
+    def rawValue = evt.value.toBigDecimal()
+    state.lastProcessedValues = state.lastProcessedValues ?: [:]
 
-    updateMem(evt.device, attribute="all")
-    
+    // Normalize the last processed value and the raw value for consistent comparison
+    def lastProcessedValue = state.lastProcessedValues[evt.device.id] ?: evt.device.currentValue(evt.name)
+    def normalizedLastValue = lastProcessedValue ? normalizeValue(lastProcessedValue) : null
+    def normalizedRawValue = normalizeValue(rawValue)
+
+    // if (normalizedLastValue && Math.abs(normalizedLastValue - normalizedRawValue) < 1.0) {
+    //     alwaysWarn "Skipping negligible setpoint change (${rawValue}F, normalized: ${normalizedRawValue}F)."
+    //     return
+    // }
+
+    // Store the raw value for future comparisons
+    state.lastProcessedValues[evt.device.id] = rawValue
+
+    def deviceKey = "${evt.device.id}_${evt.name}"
+    def newValue = normalizeValue(evt.value)
+
+    logFormattedObject ([        
+            Device: evt.device.displayName,
+            AppInitiatedChangesBefore: state.appInitiatedChanges,
+            Attribute: evt.name,
+            Value: evt.value,
+            AppInitiated: "${state.appInitiatedChanges[deviceKey] ? 'Yes' : 'No'}"
+        ], 
+        title="Processing Event")
+
+    // Handle app-initiated changes
+    if (state.appInitiatedChanges.containsKey(deviceKey)) {
+        logDebug "App-initiated change detected for ${evt.device.displayName}. Clearing flag."
+        state.appInitiatedChanges.remove(deviceKey)
+        updateMem(evt.device, evt.name)
+        return
+    }
+
+    // Update virtual thermostat if necessary
+    if (evt.device.id != thermostatController.id) {
+        alwaysWarn "Updating ${thermostatController.displayName} to $newValue"
+        def controllerKey = "${thermostatController.id}_${evt.name}"
+        state.appInitiatedChanges[controllerKey] = true
+        thermostatController.setThermostatSetpoint(newValue)
+    }
+
+    // Update memoized state
+    updateMem(evt.device, evt.name)
+
+    logFormattedObject([
+        PreviousState: state.thermostatsSetpointSTATES[evt.device.displayName],
+        NewValue: newValue,
+    ], title: "Memoized State Update")
 }
 def pushableButtonHandler(evt){
     if(restriction().data.restricted_mode) return
@@ -997,7 +955,13 @@ def contactHandler(evt){
     logInfo "$evt.device is ${evt.value}" 
     master([calledBy:"contactHandler", motionActiveEvent: false])
 }
+def normalizeValue(value) {
+    return (value as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
+}
 
+/******************************************* - *******************************************
+*                                      MASTER 'THREAD'
+******************************************** - *******************************************/
 def master(data){
 
    if(restriction().data.restricted_mode && data.calledBy != "appButtonHandler") return
@@ -1042,6 +1006,10 @@ def master(data){
         logTrace "master ran less than $lapse seconds ago. Skipping"
     }
 }
+
+/******************************************* - *******************************************
+*                                        MAIN HANDLER
+******************************************** - *******************************************/
 def handleThermosats(motionActiveEvent=false, isButtonNightMode=false){
 
     logDebug "Processing thermostats..."
@@ -1131,7 +1099,13 @@ def handleThermosats(motionActiveEvent=false, isButtonNightMode=false){
     }
 }
 
+/******************************************* - *******************************************
+*                                         SETTERS
+******************************************** - *******************************************/
 def setThermostatsMode(data){
+
+    // Initialize state if null
+    state.appInitiatedChanges = state.appInitiatedChanges ?: [:]
 
     logDebug "setThermostatsMode: $data"
 
@@ -1252,87 +1226,57 @@ def setThermostatsSetpoint(data){
 
     if (cmd && need != "off") {
 
-        // deviceId: The unique identifier of the thermostat device
-        // Example: "1150" or "2f3a8b9c-1234-5678-90ab-cd1234567890"
         def deviceId = data.deviceId
-
-        // allThermostats: Array of all unique thermostat devices from user preferences
-        // Example: ["AC OFFICE", "AC BEDROOM", "AC LIVING ROOM"]
-        // def allThermostats = getAllThermostats()
-
-        // device: The specific thermostat device object found by its ID
-        // Example: {id: "1150", name: "AC OFFICE", currentTemp: 72}
         def device = getDeviceById(deviceId)
+        if(!device) {
+            logError "Device with ID ${data.deviceId} not found."
+            return
+        }
 
         // value: The target temperature to be set
         // Example: 72 (for normal operation) or 85/65 (for boost mode)
         def value = data.value
-
         def turboRequired = data.turboRequired
+
+        // Get current memoized state before change
+        def prevState = state.thermostatsSetpointSTATES[device.displayName]
+        logDebug "Current memoized state before change: $prevState"
+
+        // Set flag for app-initiated change
+        def deviceKey = "${data.deviceId}_${data.attribute}"
+        state.appInitiatedChanges[deviceKey] = true
         
-
-
-        if(device){
-            
-                if (device.currentValue(attribute) != value) {
-                    logTrace "${device.displayName} ${attribute} set to ${value}F"
-                    try {
-                        device."${cmd}"(value)
-                    } catch (Exception e) {
-                        logTrace "setThermostatsSetpoint() => $e"
-                        if(device.currentValue("coolingSetpoint").toInteger() != value.toInteger()){
-                            device.setCoolingSetpoint("${value.toInteger()}")
-                            logDebug "<b style='color:red'>${device.displayName}</b> coolingSetpoint set to ${value.toInteger()}"
-                        }
-                        else {
-                            logDebug "<b style='color:red'>${device.displayName}</b> coolingSetpoint already set to ${value.toInteger()}"
-                        }
-                        if(device.currentValue("heatingSetpoint").toInteger() != value.toInteger()){
-                            device.setHeatingSetpoint("${value.toInteger()}")
-                            logDebug "<b style='color:red'>${device.displayName}</b> heatingSetpoint set to ${value.toInteger()}"
-                        }
-                        else {
-                            logDebug "<b style='color:red'>${device.displayName}</b> heatingSetpoint already set to ${value.toInteger()}"
-                        }
-                    }
+        if (device.currentValue(attribute) != value) {
+            logTrace "${device.displayName} ${attribute} set to ${value}F"
+            try {
+                // update memoized state
+                updateMem(device, data.attribute)
+                device."${cmd}"(value)
+            } catch (Exception e) {
+                logTrace "setThermostatsSetpoint() => $e"
+                if(device.currentValue("coolingSetpoint").toInteger() != value.toInteger()){
+                    updateMem(device, "coolingSetpoint")
+                    device.setCoolingSetpoint("${value.toInteger()}")
+                    logDebug "<b style='color:red'>${device.displayName}</b> coolingSetpoint set to ${value.toInteger()}"
                 }
                 else {
-                    logTrace "${device.displayName} ${attribute} ALREADY set to ${value}F"
+                    logDebug "<b style='color:red'>${device.displayName}</b> coolingSetpoint already set to ${value.toInteger()}"
                 }
-                setTurbo(turboRequired)
-            
+                if(device.currentValue("heatingSetpoint").toInteger() != value.toInteger()){
+                    updateMem(device, "heatingSetpoint")
+                    device.setHeatingSetpoint("${value.toInteger()}")
+                    logDebug "<b style='color:red'>${device.displayName}</b> heatingSetpoint set to ${value.toInteger()}"
+                }
+                else {
+                    logDebug "<b style='color:red'>${device.displayName}</b> heatingSetpoint already set to ${value.toInteger()}"
+                }
+            }
         }
         else {
-            log.error "Device with ID ${data.deviceId} not found."
+            logTrace "${device.displayName} ${attribute} ALREADY set to ${value}F"
         }
+        setTurbo(turboRequired) 
     }
-    else{
-        logDebug "cmd:$cmd"
-    }
-    
-}
-def getDeviceById(id, devicesCollection=getAllThermostats()){
-    
-    def device = devicesCollection.find { it.id == id }
-    if (!device) {
-        log.error "Device with ID ${id} not found in devicesCollection: $devicesCollection."
-        return false
-    }
-    return device
-
-}
-def getAllThermostats() {
-    // Create a thread-safe copy of the thermostats collection
-    // prevents "java.util.ConcurrentModificationException" error
-    def thermostatsCopy = thermostats.collect()
-    thermostatsCopy = (thermostatsCopy ?: []) + (thermostatController ?: [])
-    def nonNullThermostats = thermostatsCopy.findAll { it != null }
-
-    // deduplicate
-    def uniqueThermostats = nonNullThermostats.unique { it.id }
-
-    logTrace "all Thermostats: $uniqueThermostats"
-    return uniqueThermostats
 }
 def setTurbo(required){
     def allThermostats = getAllThermostats() 
@@ -1353,7 +1297,6 @@ def setTurbo(required){
         }
     }
 }
-
 def changeMode(String newMode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime) {
     // Only apply delay and timestamp updates when dealing with actual mode changes between heat/cool
     def isNewModeActive = isActiveMode(newMode, highAmplitude, lowAmplitude)
@@ -1381,37 +1324,148 @@ def changeMode(String newMode, delayBetweenModes, timeSinceLastChange, highAmpli
     logWarn "changeMode returns $newMode"
     return newMode
 }
-def isActiveMode(mode, highAmplitude, lowAmplitude){
-    def result = mode in ["heat", "cool"] && !highAmplitude && !lowAmplitude
-    logTrace "isActiveMode ? $result"
-    return result    
-}
-def isBoostTemp(value) {
-    if(restriction().data.restricted_mode) return
-    if (!state.boostTempArray) {
-        initializeBoostTempArray()
-    }
 
-    // apply a margin due to variations in F to C and C to F in certain 
-    // devices such as Midea. 
-    def margin = 4.0
-     
-    // Convert input to BigDecimal with scale 1
-    def normalizedValue = (value as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
+/******************************************* - *******************************************
+*                                       BASIC GETTERS
+******************************************** - *******************************************/
+def getThermControllerParagraph() {
+    def prgrph = """
+        <style>
+            #therm-controller * {
+                margin: 0 !important;
+                padding: 0 !important;
+                text-indent: 0 !important;
+                line-height: 1.3 !important;
+            }
+            #therm-controller > div {
+                flex: 1;
+                border: 1px solid #dee2e6;
+                padding: 12px !important;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            #therm-controller .column-header {
+                font-weight: bold;
+                color: #2c3e50;
+                font-size: 14px;
+                margin-bottom: 0px !important;
+            }
+            #therm-controller ul {
+                list-style-position: inside;
+                padding-left: 8px !important;
+                margin-top: 4px !important;
+                line-height: 0.1 !important;
+            }            
+            #therm-controller li {
+                font-size: 12px;
+                margin-bottom: 1px !important;
+                padding-bottom: 0 !important;
+                line-height: 14px !important;
+            }
+            #therm-controller .emphasis {
+                font-style: italic;
+                margin-top: 8px !important;
+            }
+        </style>
+
+        <div id="therm-controller" style="
+            display: flex;
+            width: 100%;
+            gap: 8px;
+            margin: 0 !important;
+            text-indent: 0 !important;
+            line-height: 1.3;
+        ">
+            
+            
+            <!-- Left Column -->
+            <div>
+                <div class="column-header">Virtual Thermostat Controller</div>
+                <div class="content-text">
+                    Using a dedicated virtual thermostat ensures reliable temperature control memoization in Hubitat's single-threaded environment. While ${app.name} uses hash maps for tracking setpoint changes, managing multiple thermostats with various comfort scenarios can lead to synchronization issues. A virtual thermostat provides a single source of truth for temperature preferences and ensures consistent behavior across your system.
+                </div>
+            </div>
+
+            <!-- Middle Column -->
+            <div>
+                <div class="column-header">Setup Guide</div>
+                <ul>
+                    <li>Create a virtual thermostat device in Hubitat if you haven't already</li>
+                    <li>Use a descriptive name (e.g., "Temperature Living Room")</li>
+                    <li>This thermostat will serve as the main reference point</li>
+                    <li>All other thermostats will follow its settings</li>
+                </ul>
+            </div>
+
+            <!-- Right Column -->
+            <div>
+                <div class="column-header">Voice Control</div>
+                <div class="content-text">
+                    Natural voice commands are supported:
+                    <br>"Alexa, set Living Room temperature to 75 degrees"
+                </div>
+                <div class="content-text emphasis">
+                    This approach simplifies state management and provides a more reliable user experience.
+                </div>
+            </div>
+        </div>
+        """
+    return prgrph
+}
+def getDeviceById(id, devicesCollection=getAllThermostats()){
     
-    // Check each boost temp with +/- $margin degree tolerance
-    def result = state.boostTempArray.any { boostTemp ->
-        def normalizedBoostTemp = (boostTemp as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
-        def difference = (normalizedValue - normalizedBoostTemp).abs()
-        logDebug "difference <= $margin"
-        difference <= margin
+    def device = devicesCollection.find { it.id == id }
+    if (!device) {
+        log.error "Device with ID ${id} not found in devicesCollection: $devicesCollection."
+        return false
+    }
+    return device
+
+}
+def getAllThermostats() {
+    // Create a thread-safe copy of the thermostats collection
+    // prevents "java.util.ConcurrentModificationException" error
+    def thermostatsCopy = thermostats.collect()
+    thermostatsCopy = (thermostatsCopy ?: []) + (thermostatController ?: [])
+    def nonNullThermostats = thermostatsCopy.findAll { it != null }
+
+    // deduplicate
+    def uniqueThermostats = nonNullThermostats.unique { it.id }
+
+    logTrace "all Thermostats: $uniqueThermostats"
+    return uniqueThermostats
+}
+def getTargetTemp(Boolean boostAllowed = false, String need = null) {
+    // If it's a boost command, use boost temperatures
+    if (boostAllowed && need) {
+         if (!(need in ["heat", "cool"])) {
+            logWarn "Invalid need for boost mode: ${need}. Defaulting to 74°."
+            return 74
+        }
+        return need == "heat" ? tempBoostHeat : tempBoostCool
     }
     
-    def m = result ? "$value is in boostTempArray (±${margin}°)" : "$value IS NOT in boostTempArray (±1°)"
-    logWarn "<b>$m</b> [Array: ${state.boostTempArray}]"
-    return result
+    // Get the virtual thermostat's setpoint
+    def candidateTemp = thermostatController?.currentValue("thermostatSetpoint") ?: 74
+    
+    // Validate temperature
+    try {
+        // Convert to numeric and ensure it's a valid temperature
+        def temp = new BigDecimal(candidateTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
+        
+        // Check for extremely out-of-bounds temperatures
+        if (temp < 40 || temp > 90) {
+            logWarn formatText("Extremely out-of-bounds temperature detected: ${temp}°. Defaulting to 74°.", "white", "red")
+            return 74
+        }
+        
+        return temp
+    } catch (Exception e) {
+        log.error "Error processing temperature: ${candidateTemp}. Error: ${e.message}"
+        return 74 // safe default
+    }
 }
-
 def getTimeout() {
     def result = noMotionTime // default
 
@@ -1455,106 +1509,6 @@ def getTimeout() {
 def getFanMode() {
     // Returns current fan mode from thermostats[0]. 
     return thermostats[0].currentValue("thermostatFanMode")
-}
-def isInButtonEvtNightMode() {
-    // Initialize states if null
-    state.nightModeActivationTime = state.nightModeActivationTime ?: new Date().time
-    state.nightModeActive = state.nightModeActive ?: false
-
-    if (!state.nightModeActive) return false
-
-    // Calculate elapsed time in milliseconds
-    def timeElapsed = new Date().time - state.nightModeActivationTime
-    def timeLimit = simpleModeTimeLimit * 60 * 60 * 1000 // hours to milliseconds
-
-    // Handle system time adjustments
-    if (timeElapsed < 0) {
-        timeElapsed = Long.MAX_VALUE
-    }
-
-    // Check if time limit has been exceeded
-    if (timeElapsed >= timeLimit) {
-        state.nightModeActive = false
-        return false
-    }
-    
-    // Still in night mode
-    logWarn "${app.label} in sleeping/night mode - motion events ignored"
-    return true
-}
-def motionIsActive() {
-
-    // in location's default night mode, ignore motion inactive. TODO: make it optional
-    if (location.mode.contains("night")) return true
-
-    if (isInButtonEvtNightMode()) return true
-
-    logDebug "Checking if motion is active. Motion sensors: $motionSensors"
-
-    def functionalSensors = getFunctionalSensors()
-
-    // logDebug "functionalSensors: <br><ul> ${functionalSensors?.each { sensor -> sensor?.displayName }.join('<br><b><li></b>') }</ul>"
-    
-    def motionSensorNames = motionSensors?.collect { it.displayName } ?: []
-    def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
-
-    if(enableTrace || !functionalSensors) {
-        state.lastFuncSensorsLog = state.lastFuncSensorsLog ? state.lastFuncSensorsLog : new Date().time
-        if (new Date().time - state.lastFuncSensorsLog > 60 * 1000){
-            state.lastFuncSensorsLog = new Date().time 
-            logTrace """
-                functionalSensors:
-                <table>
-                <tr>
-                    <td>
-                    <b>All Motion Sensors</b>
-                    <ol>
-                        ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
-                    </ol>
-                    </td>
-                    <td>
-                    ${functionalSensors ? "<b>Functional Sensors" : "<b style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS: motion returns TRUE by default"}</b>
-                    <ol>
-                        ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
-                    </ol>
-                    </td>
-                </tr>
-                </table>
-            """
-        }
-    }
-    
-    if (!functionalSensors) {
-        if(considerActiveWhenFail) {
-            return true
-        } 
-        else {
-            return false
-        }
-        sendAlert()
-    }
-
-    // Check current state first (faster)
-    def any_active = functionalSensors.any { it.currentValue('motion') == 'active' }
-
-    if (any_active) {
-        logDebug "At least one sensor active."
-        return true
-    }
-
-    // Only check recent history if necessary
-    int timeOut = getTimeout()
-    long Dtime = timeUnit == 'minutes' ? timeOut * 60 * 1000 : timeOut * 1000
-    def period = new Date(new Date().time - Dtime)
-
-    def anyActiveWithinTimePeriod = functionalSensors.any { sensor ->
-            // max: N.this is resources hungry!
-            def N = 20
-            sensor.eventsSince(period, [max: N]).any { it.name == 'motion' && it.value == 'active' }
-    }
-
-    logDebug "anyActiveWithinTimePeriod within the last ${timeOut} ${timeUnit} = $anyActiveWithinTimePeriod"
-    return anyActiveWithinTimePeriod
 }
 def getFunctionalSensors() {
     def lastCheck = state.lastEventHistoryCheck ?: 0
@@ -1696,6 +1650,144 @@ def update_app_label(paused){
 
 }
 
+/******************************************* - *******************************************
+*                                        BOOLEANS
+******************************************** - *******************************************/
+def isInButtonEvtNightMode() {
+    // Initialize states if null
+    state.nightModeActivationTime = state.nightModeActivationTime ?: new Date().time
+    state.nightModeActive = state.nightModeActive ?: false
+
+    if (!state.nightModeActive) return false
+
+    // Calculate elapsed time in milliseconds
+    def timeElapsed = new Date().time - state.nightModeActivationTime
+    def timeLimit = simpleModeTimeLimit * 60 * 60 * 1000 // hours to milliseconds
+
+    // Handle system time adjustments
+    if (timeElapsed < 0) {
+        timeElapsed = Long.MAX_VALUE
+    }
+
+    // Check if time limit has been exceeded
+    if (timeElapsed >= timeLimit) {
+        state.nightModeActive = false
+        return false
+    }
+    
+    // Still in night mode
+    logWarn "${app.label} in sleeping/night mode - motion events ignored"
+    return true
+}
+def isMotionActive() {
+
+    // in location's default night mode, ignore motion inactive. TODO: make it optional
+    if (location.mode.contains("night")) return true
+
+    if (isInButtonEvtNightMode()) return true
+
+    logDebug "Checking if motion is active. Motion sensors: $motionSensors"
+
+    def functionalSensors = getFunctionalSensors()
+
+    // logDebug "functionalSensors: <br><ul> ${functionalSensors?.each { sensor -> sensor?.displayName }.join('<br><b><li></b>') }</ul>"
+    
+    def motionSensorNames = motionSensors?.collect { it.displayName } ?: []
+    def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
+
+    if(enableTrace || !functionalSensors) {
+        state.lastFuncSensorsLog = state.lastFuncSensorsLog ? state.lastFuncSensorsLog : new Date().time
+        if (new Date().time - state.lastFuncSensorsLog > 60 * 1000){
+            state.lastFuncSensorsLog = new Date().time 
+            logTrace """
+                functionalSensors:
+                <table>
+                <tr>
+                    <td>
+                    <b>All Motion Sensors</b>
+                    <ol>
+                        ${motionSensorNames.collect { "<li>${it}</li>" }.join('')}
+                    </ol>
+                    </td>
+                    <td>
+                    ${functionalSensors ? "<b>Functional Sensors" : "<b style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS: motion returns TRUE by default"}</b>
+                    <ol>
+                        ${functionalSensorNames.collect { "<li>${it}</li>" }.join('')}
+                    </ol>
+                    </td>
+                </tr>
+                </table>
+            """
+        }
+    }
+    
+    if (!functionalSensors) {
+        if(considerActiveWhenFail) {
+            return true
+        } 
+        else {
+            return false
+        }
+        sendAlert()
+    }
+
+    // Check current state first (faster)
+    def any_active = functionalSensors.any { it.currentValue('motion') == 'active' }
+
+    if (any_active) {
+        logDebug "At least one sensor active."
+        return true
+    }
+
+    // Only check recent history if necessary
+    int timeOut = getTimeout()
+    long Dtime = timeUnit == 'minutes' ? timeOut * 60 * 1000 : timeOut * 1000
+    def period = new Date(new Date().time - Dtime)
+
+    def anyActiveWithinTimePeriod = functionalSensors.any { sensor ->
+            // max: N.this is resources hungry!
+            def N = 20
+            sensor.eventsSince(period, [max: N]).any { it.name == 'motion' && it.value == 'active' }
+    }
+
+    logDebug "anyActiveWithinTimePeriod within the last ${timeOut} ${timeUnit} = $anyActiveWithinTimePeriod"
+    return anyActiveWithinTimePeriod
+}
+def isActiveMode(mode, highAmplitude, lowAmplitude){
+    def result = mode in ["heat", "cool"] && !highAmplitude && !lowAmplitude
+    logTrace "isActiveMode ? $result"
+    return result    
+}
+def isBoostTemp(value) {
+    if(restriction().data.restricted_mode) return
+    if (!state.boostTempArray) {
+        initializeBoostTempArray()
+    }
+
+    // apply a margin due to variations in F to C and C to F in certain 
+    // devices such as Midea. 
+    def margin = 4.0
+     
+    // Convert input to BigDecimal with scale 1
+    def normalizedValue = (value as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
+    
+    // Check each boost temp with +/- $margin degree tolerance
+    def result = state.boostTempArray.any { boostTemp ->
+        def normalizedBoostTemp = (boostTemp as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
+        def difference = (normalizedValue - normalizedBoostTemp).abs()
+        logDebug "difference <= $margin"
+        difference <= margin
+    }
+    
+    def m = result ? "$value is in boostTempArray (±${margin}°)" : "$value IS NOT in boostTempArray (±1°)"
+    logWarn "<b>$m</b> [Array: ${state.boostTempArray}]"
+    return result
+}
+
+/******************************************* - *******************************************
+*                                       FLASH LIGHTS
+******************************************** - *******************************************/
+
 def flashTheLight(){
     if(!lightSignal) return
     // save current on/off state
@@ -1709,6 +1801,9 @@ def stopFlashing() {
     lightSignal."${state.prevLightSignalState ?: "off"}"()
 }
 
+/******************************************* - *******************************************
+*                                         LOGGING
+******************************************** - *******************************************/
 def enableDebugLog() {
     state.EnableDebugTime = new Date().time
     app.updateSetting('enableDebug', [type: 'bool', value: true])
@@ -1782,7 +1877,6 @@ private void alwaysTrace(String message){
 private void logError(String message) {
     log.error formatText("ERROR: $message", "black", "red")
 }
-
 private void initializeLogging() {
     state.EnableDebugTime = new Date().time
     state.EnableTraceTime = new Date().time
@@ -1805,82 +1899,179 @@ private void initializeLogging() {
         logInfo('Warn logging enabled. Will never be disabled by this app.')
     }
 }
-
-
-private void logConditions(String source="", Map params = [:]) {
-
+private void logFormattedObject(def params, String title = "", String method = 'logTrace', int depth = 0) {
+    /**
+    * Enhanced recursive logging function that handles deeply nested data structures
+    * @param params Object to log (Map, List, or primitive)
+    * @param title String identifying the logging title/component
+    * @param method String specifying which log method to use (e.g. 'logDebug', 'logTrace')
+    * @param depth Integer tracking recursion depth for indentation
+    */
+    
     try {
-        logTrace """
-        <div style='border:1px solid gray;'>
-            <br><b><u>Comfort ${source} Analysis:</u></b>
-            <ol>
-                ${params.collect { key, value -> 
-                    if (!key || !value) {
-                        "<b style='color:red'> no value... </b>"
-                    }
-                    if(value instanceof Map){
-                    "key: $key values: $value"
-                    """
-                        <li style='border: 1px dashed grey; color: green; margin-right:50%;'><u>${key.replaceAll(/([A-Z])/, ' $1').capitalize()}:</u>
-                            <ul>
-                            ${
-                                value.collect { k, v ->                         
-                                    "<li><b>${k.replaceAll(/([A-Z])/, ' $1').capitalize()}:</b> ${v}</li>"
-                                    }?.join('\n')                        
-                            }
-                            </ul>
-                        </li>
-                    """
-                    }
-                    else {
-                        "<li><b>${key.replaceAll(/([A-Z])/, ' $1').capitalize()}:</b> ${value}</li>"
-                    }
-                }?.join('\n')}
-            </ol>
-            <ul>
-                ${tempSensors?.collect { sensor -> 
-                    "<li><a href='${state.locationUrl}${sensor.deviceId}' target='_blank'>${sensor.displayName}: ${sensor.currentValue('temperature')}F</a></li>"
-                    }?.join('\n')
+        // Base case: null value
+        if (params == null) {
+            "$method"("<span style='color:red'>null</span>")
+            return
+        }
+
+        // Handle primitive types directly
+        if (!(params instanceof Map) && !(params instanceof List)) {
+            "$method"(params.toString())
+            return
+        }
+
+        // Start HTML wrapper only for top-level call
+        def htmlWrapper = depth == 0
+        def indent = "    " * depth
+        def output = new StringBuilder()
+
+        if (htmlWrapper) {
+            output.append("""
+                <div style='border:1px solid gray;'>
+                    <br><b><u>${title}:</u></b>
+            """)
+        }
+
+        // Handle Lists (including Arrays)
+        if (params instanceof List) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            params.eachWithIndex { item, index ->
+                output.append("<li>")
+                if (item instanceof Map || item instanceof List) {
+                    // Recursive call for nested structures
+                    output.append("[${index}]: ")
+                    output.append(formatValue(item, depth + 1))
+                } else {
+                    output.append("${item}")
                 }
-            </ul>        
-        </div>
-        """   
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+
+        // Handle Maps
+        else if (params instanceof Map) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            params.each { key, value ->
+                output.append("<li>")
+                output.append("<b>${formatKey(key)}:</b> ")
+                output.append(formatValue(value, depth + 1))
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+
+        // Add sensor info if available (only at top level)
+        if (htmlWrapper && tempSensors) {
+            output.append("""
+                <div style='margin-top:10px;'>
+                    <b>Temperature Sensors:</b>
+                    <ul>
+                        ${tempSensors.collect { sensor ->
+                            "<li><a href='${state.locationUrl}${sensor.deviceId}' target='_blank'>${sensor.displayName}: ${sensor.currentValue('temperature')}F</a></li>"
+                        }.join('\n')}
+                    </ul>
+                </div>
+            """)
+        }
+
+        if (htmlWrapper) {
+            output.append("</div>")
+        }
+
+        "$method"(output.toString())
+
+    } catch (Exception e) {
+        logError """
+        <ul>
+            <li> logFormattedObject => $e</li> 
+            <li> params: $params</li>
+        </ul>
+        """
+    }
+}
+private String formatValue(def value, int depth) {
+    if (value == null) {
+        return "<span style='color:red'>null</span>"
+    }
+    
+    if (value instanceof Map || value instanceof List) {
+        def output = new StringBuilder()
+        if (value instanceof Map) {
+            output.append("<div style='border: 1px dashed teal; margin: 5px 0;'>")
+        }
+        output.append(formatComplexValue(value, depth))
+        if (value instanceof Map) {
+            output.append("</div>")
+        }
+        return output.toString()
+    }
+    
+    return value.toString()
+}
+private String formatComplexValue(def value, int depth) {
+    def output = new StringBuilder()
+    try{
+        if (value instanceof List) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            value.eachWithIndex { item, index ->
+                output.append("<li>")
+                if (item instanceof Map || item instanceof List) {
+                    output.append("[${index}]: ")
+                    output.append(formatValue(item, depth + 1))
+                } else {
+                    output.append("${item}")
+                }
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+        else if (value instanceof Map) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            value.each { k, v ->
+                output.append("<li>")
+                output.append("<b>${formatKey(k)}:</b> ")
+                output.append(formatValue(v, depth + 1))
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+    
+        return output.toString()
     } catch (Exception e){
-        logError "logConditions => $e"
-        logError "params: $params"
+        logError "formatComplexValue => $e"
+        logError "value: $value"
+    }
+}
+private String formatKey(def key) {
+    /**
+    * Helper function to format map keys into readable text
+    * @param key The key to format
+    * @return Formatted string with spaces before capital letters and capitalized first letter
+    * preserves acronyms and format them if they're entered without periods. 
+    */
+    if (!key) return ""
+    
+    try {
+        def text = key.toString()        
+        // Add space before capitals, remove underscore, capitalize first letter
+        return text
+            .replaceAll(/([A-Z])(?![A-Z])(?![A-Z]\.)/, ' $1')  // Add space before capitals, if it's not followed by yet another (in which case it's an acronym) and don't add a space if it's already formatted as accronym
+            .replaceAll(/([A-Z]{2,})/, ' $1') // add a space before a group of 2 or more letters
+            .replaceAll(/([A-Z])(?![a-z])/, '$1.') // Add periods between 2 ore more consecutive capitals, excluding next camel cased word by excluding it if capital is followed by lower case char.
+            .replaceAll(/_/, ' ')          // Replace underscores with spaces
+            .trim()                        // Remove leading/trailing spaces
+            .capitalize()                  // Capitalize first letter
+    } catch (Exception e) {
+        log.error "Error formatting key '$key': $e"
+        return key.toString()
     }
 }
 
-def getTargetTemp(Boolean boostAllowed = false, String need = null) {
-    // If it's a boost command, use boost temperatures
-    if (boostAllowed && need) {
-         if (!(need in ["heat", "cool"])) {
-            logWarn "Invalid need for boost mode: ${need}. Defaulting to 74°."
-            return 74
-        }
-        return need == "heat" ? tempBoostHeat : tempBoostCool
-    }
-    
-    // Get the virtual thermostat's setpoint
-    def candidateTemp = thermostatController?.currentValue("thermostatSetpoint") ?: 74
-    
-    // Validate temperature
-    try {
-        // Convert to numeric and ensure it's a valid temperature
-        def temp = new BigDecimal(candidateTemp).setScale(1, BigDecimal.ROUND_HALF_UP)
-        
-        // Check for extremely out-of-bounds temperatures
-        if (temp < 40 || temp > 90) {
-            logWarn formatText("Extremely out-of-bounds temperature detected: ${temp}°. Defaulting to 74°.", "white", "red")
-            return 74
-        }
-        
-        return temp
-    } catch (Exception e) {
-        log.error "Error processing temperature: ${candidateTemp}. Error: ${e.message}"
-        return 74 // safe default
-    }
-}
+/******************************************* - *******************************************
+*                                       RESTRICTIONS
+******************************************** - *******************************************/
 
 def restriction(motionActiveEvent=false){
     if(location.mode in restricted){
@@ -1895,8 +2086,8 @@ def restriction(motionActiveEvent=false){
     }
     def off_mode = fan_only ? "fan_only" : set_to_auto_instead_of_off ? "auto" : "off"
 
-    // avoid calling motionIsActive() if it's already executed from the motion events handler.  
-    def motion = motionActiveEvent ? true : motionIsActive()
+    // avoid calling isMotionActive() if it's already executed from the motion events handler.  
+    def motion = motionActiveEvent ? true : isMotionActive()
     if(!motion){
         logWarn "No motion. get_need shall return $off_mode"
         return [
@@ -1917,11 +2108,12 @@ def restriction(motionActiveEvent=false){
         ]
 }
 
-/* *********************************** INTELLIGENCE *********************************** */
-
+/******************************************* - *******************************************
+*                                       INTELLIGENCE
+******************************************** - *******************************************/
 
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
 def get_need(motionActiveEvent=false) {
@@ -1982,7 +2174,7 @@ def get_need(motionActiveEvent=false) {
     */
 
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def restrict = restriction(motionActiveEvent)
@@ -2198,7 +2390,7 @@ def get_need(motionActiveEvent=false) {
     logDebug "color: $color"
     conditions["need"] = color ? "<b style='color:${color};'>${result}</b>" : "<b style='color:red;'>ERROR. data: result value: ${result}. color:${color}. Map: ${colorMap}</b>"
     
-    logConditions(source="Intelligence", conditions)
+    logFormattedObject(conditions, title="Intelligence Analysis")
     
     if (result in ["cool", "heat"])
     {
@@ -2304,7 +2496,7 @@ def validateComfortCapabilities() {
     * Used to determine if smart comfort management can be enabled and what features are available
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def validationResults = [
@@ -2481,7 +2673,7 @@ def analyzeOccupancyHeat() {
     * @see getPredictedPerformance() for usage in predictions
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     
@@ -2530,7 +2722,7 @@ def analyzeSolarGain() {
     * Combines illuminance and UV index data to estimate solar heat impact
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def comfCapTiers = comfortCapabilitiesTiers()
@@ -2604,7 +2796,7 @@ def recordThermalEvent(params) {
     * Maintains history of temperature management attempts and their outcomes
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     logWarn "Recording thermal event with params: $params"
@@ -2653,7 +2845,7 @@ def recordThermalEvent(params) {
         ]
     ]
 
-    logConditions(source="recordThermalEvent", event)
+    logFormattedObject(event, title="recordThermalEvent")
     
     // Determine the delta bracket
     def tempDelta = Math.abs(state.currentThermalEvent.startTemp - state.currentThermalEvent.outdoorTemp)
@@ -2781,7 +2973,7 @@ def getPredictedPerformance(targetTemp, currentTemp, outdoorTemp) {
     * Uses historical performance data to predict effectiveness of natural cooling/heating
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def tempDelta = Math.abs(currentTemp - outdoorTemp)
@@ -2944,10 +3136,23 @@ def assessNaturalThermalPotential(prediction, targetTemp, currentTemp, outdoorTe
     }
 
     // Check if outdoor temperature prevents mechanical operation
+    def compareText = mode == 'cooling' ? 'below minimum' : 'above maximum'
+
     if (thermalThreshold.status == true) {
-        def compareText = mode == 'cooling' ? 'below minimum' : 'above maximum'
         alwaysWarn "Outdoor temperature ${outdoorTemp}°F is ${compareText} ${thermalThreshold.temperature}°F for mechanical ${mode}"
-        feasible = true
+    }
+
+    // Determine feasibility based on mode and threshold status
+    if (mode == 'cooling') {
+        // Natural cooling is feasible if:
+        // - outdoor temp is below minimum threshold for mechanical cooling OR
+        // - outdoor temp is below indoor temp
+        feasible = thermalThreshold.status || outdoorTemp < currentTemp
+    } else {
+        // Natural heating is feasible if:
+        // - outdoor temp is above maximum threshold for mechanical heating OR
+        // - outdoor temp is above indoor temp
+        feasible = thermalThreshold.status || outdoorTemp > currentTemp
     }
 
    // Create new event if we don't have one already set 
@@ -3054,7 +3259,6 @@ def getOutdoorTempCoolingThreshold(outdoorTemp) {
     logDebug "eval from seasonal patterns: $result (getOutdoorTempHeatingThreshold) | <b>method: $evalMethod</b>"
     return result
 }
-
 def getOutdoorTempHeatingThreshold(outdoorTemp) {
     def seasonalPatterns = state.thermalBehavior?.environmentalFactors?.seasonalPatterns
     def currentSeason = getSeason()
@@ -3128,7 +3332,7 @@ def trackEnvironmentalFactors_old() {
     * @see getComfortVisualization() for UI representation
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def now = new Date()
@@ -3297,7 +3501,7 @@ def getTimeBlock(hour) {
     * Standardizes time periods for pattern analysis
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     // Break day into 2-hour blocks
@@ -3313,7 +3517,7 @@ def getSeason() {
     * Used for seasonal adjustment calculations
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     def month = new Date().format("MM").toInteger()
@@ -3342,7 +3546,7 @@ def updateSeasonalPatterns(season, temp, tempChange) {
     * Maintains running statistics of seasonal temperature patterns
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     logDebug "season: $season"
@@ -3424,7 +3628,7 @@ def getAverageHumidity() {
     * Returns default 45% if no sensors available
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     def humidityCapableDevices = (tempSensors ?: []) + 
@@ -3584,7 +3788,7 @@ def fallback_need_eval(motionActiveEvent=false, logs=true){
     conditions["need"] = color ? "<b style='color:${color};'>${final_result}</b>" : "<b style='color:red;'>ERROR. data: final_result value: ${final_result}. color:${color}. Map: ${colorMap}</b>"
     conditions["results_array"] = results.join(', ') ?: "<b style='color:red;'>ERROR</b>"
 
-    if (logs) logConditions(source="legacy", conditions)   
+    if (logs) logFormattedObject(conditions, title="Legacy Need Definition")   
 
     if (logs) logTrace "need returns: $final_result"
     state.lastNeed = final_result
@@ -3598,9 +3802,9 @@ def getSeasonalComfortAdjustment() {
     * 
     * Modifies comfort ranges based on learned seasonal patterns
     */
-/** 
- * Last Updated: 2025-01-27
- */
+    /** 
+   * Last Updated: 2025-01-28
+    */
 
     def season = getSeason()
     def patterns = state.thermalBehavior.environmentalFactors.seasonalPatterns[season]
@@ -3733,7 +3937,6 @@ def getComfortVisualization() {
         </div>
     """
 }
-
 def getComfortMetrics() {
     // Initialize metrics history if needed
     state.metricsHistory = state.metricsHistory ?: [
@@ -3847,7 +4050,7 @@ def calculateEnergySavings() {
     * @see getComfortMetrics() for usage in UI
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     // Initialize return value as BigDecimal
@@ -3934,7 +4137,7 @@ def calculateComfortScore() {
     * @see analyzeSolarGain() for environmental factors
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def score = new BigDecimal("0.0")
@@ -4030,7 +4233,7 @@ def getSuccessRateChart_old() {
     * @see getComfortVisualization() for complete UI
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     def bars = []
@@ -4244,7 +4447,7 @@ def getEnvironmentalPatterns() {
     * @see getDetailedAnalytics() for detailed view
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     
@@ -4376,7 +4579,7 @@ def getDetailedAnalytics() {
     * @see calculateEnergySavings() for efficiency
     */
     /** 
-    * Last Updated: 2025-01-27
+   * Last Updated: 2025-01-28
     */
 
     try {
@@ -4621,7 +4824,7 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     * @see getComfortMetrics() for trend display
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     try {
@@ -4666,7 +4869,7 @@ def calculateTrendIndicator(currentValue, historicalValues) {
     We could update calculateTrendIndicator() to use it for smoother, more accurate trends.
 */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
 def calculateMovingAverage(List values, int window) {
@@ -4696,7 +4899,7 @@ def calculateMovingAverage(List values, int window) {
     * @see getDetailedAnalytics() for trend smoothing
     */
 /** 
- * Last Updated: 2025-01-27
+* Last Updated: 2025-01-28
  */
 
     if (!values || window <= 0 || window > values.size()) {
@@ -4790,17 +4993,7 @@ def resetThermalPerformanceData() {
     logWarn "thermalBehavior data reset!"
     logDebug "state.thermalBehavior: ${state.thermalBehavior}"
 }
-def initializeSetpointStates() {
-    state.appInitiatedChanges = state.appInitiatedChanges ?: [:]
-    state.thermostatsSetpointSTATES = state.thermostatsSetpointSTATES ?: [:]
 
-    // Initialize states for all thermostats
-    def allThermostats = getAllThermostats()
-    allThermostats.each { thermostat -> 
-        if(thermostat.id == thermostatController.id) return // skip this one. 
-        updateMem(thermostat, "all")
-    }
-}
 
 
 def backupIntelligenceData() {

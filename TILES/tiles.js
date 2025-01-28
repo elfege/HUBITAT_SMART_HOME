@@ -554,13 +554,24 @@ async function initialize(access_token, ip, appNumber) {
           mouseScrollAction: true,
           tooltipFormat: function (args) {
             const currentTemp = e.attributes.temperature;
+            const outsideTemp = e.attributes.outdoorTemperature ? e.attributes.outdoorTemperature : undefined;
+            
             setTimeout(() => {
               const tooltipEl = $(this.control).find('.rs-tooltip');
-              tooltipEl.html(`
-                    ${args.value}°F
-                    <div class="current-temp">Temp: ${currentTemp}°F</div>
-                `);
+              let tooltipHTML = `
+                ${args.value}°F`;
+              
+              if (currentTemp){
+                tooltipHTML += `<div class="current-temp">Temp: ${currentTemp}°F</div>`
+              }
+              
+              if (outsideTemp) {
+                tooltipHTML += `<div class="current-temp">Outside: ${outsideTemp}°F</div>`;
+              }
+              
+              tooltipEl.html(tooltipHTML);
             }, 0);
+            
             // Return the initial value without any symbol - the HTML update above will handle the display
             return `${args.value}`;
           },

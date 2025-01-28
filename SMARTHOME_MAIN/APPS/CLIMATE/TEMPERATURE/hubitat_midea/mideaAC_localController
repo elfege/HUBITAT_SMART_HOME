@@ -83,10 +83,10 @@ preferences
         input name: 'ledOff', type: 'bool', title: 'Led always off', defaultValue: false 
         input name: 'beepOff', type: 'bool', title: 'Beep always off', defaultValue: true 
         input name: 'refreshInterval', type: 'number', title: 'Polling refresh interval in seconds', defaultValue: 60
-        input name: 'enableDebug', type: 'bool', title: 'Enable debug logging', defaultValue: true        
-        input name: 'enableInfo', type: 'bool', title: 'Enable info logging', defaultValue: true
-        input name: 'enableTrace', type: 'bool', title: 'Enable info logging', defaultValue: true
-        input name: 'enableWarn', type: 'bool', title: 'Enable debug logging', defaultValue: true
+        input name: 'enableDebug', type: 'bool', title: 'Enable Debug Logging', defaultValue: true        
+        input name: 'enableInfo', type: 'bool', title: 'Enable Info Logging', defaultValue: true
+        input name: 'enableTrace', type: 'bool', title: 'Enable Trace Logging', defaultValue: true
+        input name: 'enableWarn', type: 'bool', title: 'Enable Warn Logging', defaultValue: true
     }
 }
 
@@ -216,6 +216,18 @@ def apply(cmdParams)
         setVolatileState('sessionActive', false)
     }
 }
+def normalizeTemperature(temp, scale = 'F') {
+    def rounded = (temp as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
+    if (scale == 'C') {
+        return rounded
+    } else {
+        // Convert Fahrenheit to Celsius for internal calculations, then back
+        def celsius = fahrenheitToCelsius(rounded)
+        def normalizedCelsius = (celsius * 2).setScale(0, BigDecimal.ROUND_HALF_UP) / 2
+        return celsiusToFahrenheit(normalizedCelsius)
+    }
+}
+
 def logHexBytes(data)
 {
     String res = ''
@@ -609,20 +621,29 @@ def _process_response(data)
     return resp
 }
 
-def correctTemp(input, inputScale)
-{
-    switch(inputScale)
-    {
+
+def correctTemp(input, inputScale='C', source="UNKNOWN?") {
+    log.debug "correctTemp called with input: ${input}, inputScale: ${inputScale}"
+
+    def output = input
+    switch (inputScale) {
         case 'F':
-            return (degC ? fahrenheitToCelsius(new BigDecimal(input)) : (Math.round(new BigDecimal(input) * 2) / 2).setScale(1, BigDecimal.ROUND_HALF_UP))
-        
+            output = degC
+                ? fahrenheitToCelsius(input as BigDecimal)
+                : (input as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP) // Normalize Fahrenheit
+            break
+
         case 'C':
-            return (degC ? new BigDecimal(input) : (Math.round(celsiusToFahrenheit(new BigDecimal(input)) * 2) / 2).setScale(1, BigDecimal.ROUND_HALF_UP))
-        
-        default:
-            return input
+            output = degC
+                ? (input as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP) // Normalize Celsius
+                : celsiusToFahrenheit(input as BigDecimal)
+            break
     }
+
+    log.debug "correctTemp input: $input, output: $output"
+    return output
 }
+
 
 
 // def ensureCelsius(input)
@@ -658,33 +679,233 @@ def _updateAttributes(resp) {
         log.warn 'no resp!'
         return
     }
+
+    def unit = getUnit()
+    log.warn "unit: $unit"
     
     // If the device is powered off, report thermostatMode as "off"
     def currentMode = resp.power_state ? translateMode(resp.operational_mode?.toInteger(), 'integer') : 'off'
-    def currentTemp = correctTemp(resp.target_temperature, 'C').toString()  // Convert to string
-    def indoorTemp = correctTemp(resp.indoor_temperature, 'C').toString()   // Convert to string
-    def outdoorTemp = correctTemp(resp.outdoor_temperature, 'C').toString() // Convert to string
+  
+    /*****************************************************************
+    *       REMEMBER this: Midea Always responds in Celsius          *
+    ******************************************************************/
+    def rawSetpoint = correctTemp(resp.target_temperature, inputScale='C', source='currentSetpoint')
+    // setpoint must not be decimal (C to F conversion can make that happen...)
+    def currentSetpoint = Math.round(rawSetpoint)
+
+    // we can keep decimal precision here.  
+    def indoorTemp = correctTemp(resp.indoor_temperature, inputScale='C', source='indoorTemp')
+    def outdoorTemp = correctTemp(resp.outdoor_temperature, inputScale='C', source='outdoorTemp')
+
+    // def currentSetpoint = correctTemp(resp.target_temperature, inputScale='C', source='currentSetpoint')
+    // def indoorTemp = correctTemp(resp.indoor_temperature, inputScale='C', source='indoorTemp')
+    // def outdoorTemp = correctTemp(resp.outdoor_temperature, inputScale='C', source='outdoorTemp')
+
+    logFormattedObject( [
+        currentSetpoint: "${currentSetpoint}",
+        indoorTemp: indoorTemp,
+        outdoorTemp: outdoorTemp,
+        MideaAPIReturnedTargetTemperature: resp.target_temperature,
+        MideaAPIReturnedIndoorTemperature: resp.indoor_temperature,
+        MideaAPIReturnedOutdoorTemperature: resp.outdoor_temperature
+    ], title="_updateAttributes processing", method="alwaysTrace")
+
+    // def currentSetpoint = correctTemp(resp.target_temperature, unit)
+    // def indoorTemp = correctTemp(resp.indoor_temperature, unit)
+    // def outdoorTemp = correctTemp(resp.outdoor_temperature, unit)
     
     def events = []
-    events << [name: 'coolingSetpoint', value: currentTemp, unit: getUnit()]
-    events << [name: 'heatingSetpoint', value: currentTemp, unit: getUnit()]
-    events << [name: 'temperature', value: indoorTemp, unit: getUnit()]
+    events << [name: 'coolingSetpoint', value: currentSetpoint, unit: unit]
+    events << [name: 'heatingSetpoint', value: currentSetpoint, unit: unit]
+    events << [name: 'temperature', value: indoorTemp, unit: unit]
     events << [name: 'thermostatFanMode', value: translateFanMode(resp.fan_speed?.toInteger(), 'integer')]
     events << [name: 'thermostatMode', value: currentMode]
     events << [name: 'thermostatOperatingState', value: resp.power_state ? 'on' : 'off']
-    events << [name: 'thermostatSetpoint', value: currentTemp, unit: getUnit()]
-    events << [name: 'outdoorTemperature', value: outdoorTemp, unit: getUnit()]
+    events << [name: 'thermostatSetpoint', value: currentSetpoint, unit: unit]
+    events << [name: 'outdoorTemperature', value: outdoorTemp, unit: unit]
     events << [name: 'turboMode', value: resp.turbo_mode ? 'on' : 'off']
     
     logInfo 'events.each {sendEvent(it)}'
     events.each { event -> 
         if (device.currentValue(event.name) != event.value){
+            log.warn "new event: $event"
             sendEvent(event)
         } else {
-            logInfo "device's currentvalue already set to ${event.name}:${event.value}"
+            logInfo "device's currentvalue already set to ${event.name}:${event.value} ${unit}"
         }
     }
 }
+
+private void logFormattedObject(def params, String title = "", String method = 'logTrace', int depth = 0) {
+    /**
+    * Enhanced recursive logging function that handles deeply nested data structures
+    * @param params Object to log (Map, List, or primitive)
+    * @param title String identifying the logging title/component
+    * @param method String specifying which log method to use (e.g. 'logDebug', 'logTrace')
+    * @param depth Integer tracking recursion depth for indentation
+    */
+    
+    try {
+        // Base case: null value
+        if (params == null) {
+            "$method"("<span style='color:red'>null</span>")
+            return
+        }
+
+        // Handle primitive types directly
+        if (!(params instanceof Map) && !(params instanceof List)) {
+            "$method"(params.toString())
+            return
+        }
+
+        // Start HTML wrapper only for top-level call
+        def htmlWrapper = depth == 0
+        def indent = "    " * depth
+        def output = new StringBuilder()
+
+        if (htmlWrapper) {
+            output.append("""
+                <div style='border:1px solid gray;'>
+                    <br><b><u>${title}:</u></b>
+            """)
+        }
+
+        // Handle Lists (including Arrays)
+        if (params instanceof List) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            params.eachWithIndex { item, index ->
+                output.append("<li>")
+                if (item instanceof Map || item instanceof List) {
+                    // Recursive call for nested structures
+                    output.append("[${index}]: ")
+                    output.append(formatValue(item, depth + 1))
+                } else {
+                    output.append("${item}")
+                }
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+
+        // Handle Maps
+        else if (params instanceof Map) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            params.each { key, value ->
+                output.append("<li>")
+                output.append("<b>${formatKey(key)}:</b> ")
+                output.append(formatValue(value, depth + 1))
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+
+        // Add sensor info if available (only at top level)
+        if (htmlWrapper && tempSensors) {
+            output.append("""
+                <div style='margin-top:10px;'>
+                    <b>Temperature Sensors:</b>
+                    <ul>
+                        ${tempSensors.collect { sensor ->
+                            "<li><a href='${state.locationUrl}${sensor.deviceId}' target='_blank'>${sensor.displayName}: ${sensor.currentValue('temperature')}F</a></li>"
+                        }.join('\n')}
+                    </ul>
+                </div>
+            """)
+        }
+
+        if (htmlWrapper) {
+            output.append("</div>")
+        }
+
+        "$method"(output.toString())
+
+    } catch (Exception e) {
+        logError """
+        <ul>
+            <li> logFormattedObject => $e</li> 
+            <li> params: $params</li>
+        </ul>
+        """
+    }
+}
+private String formatValue(def value, int depth) {
+    if (value == null) {
+        return "<span style='color:red'>null</span>"
+    }
+    
+    if (value instanceof Map || value instanceof List) {
+        def output = new StringBuilder()
+        if (value instanceof Map) {
+            output.append("<div style='border: 1px dashed teal; margin: 5px 0;'>")
+        }
+        output.append(formatComplexValue(value, depth))
+        if (value instanceof Map) {
+            output.append("</div>")
+        }
+        return output.toString()
+    }
+    
+    return value.toString()
+}
+private String formatComplexValue(def value, int depth) {
+    def output = new StringBuilder()
+    try{
+        if (value instanceof List) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            value.eachWithIndex { item, index ->
+                output.append("<li>")
+                if (item instanceof Map || item instanceof List) {
+                    output.append("[${index}]: ")
+                    output.append(formatValue(item, depth + 1))
+                } else {
+                    output.append("${item}")
+                }
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+        else if (value instanceof Map) {
+            output.append("<ul style='margin-left:${depth * 20}px;'>")
+            value.each { k, v ->
+                output.append("<li>")
+                output.append("<b>${formatKey(k)}:</b> ")
+                output.append(formatValue(v, depth + 1))
+                output.append("</li>")
+            }
+            output.append("</ul>")
+        }
+    
+        return output.toString()
+    } catch (Exception e){
+        logError "formatComplexValue => $e"
+        logError "value: $value"
+    }
+}
+private String formatKey(def key) {
+    /**
+    * Helper function to format map keys into readable text
+    * @param key The key to format
+    * @return Formatted string with spaces before capital letters and capitalized first letter
+    * preserves acronyms and format them if they're entered without periods. 
+    */
+    if (!key) return ""
+    
+    try {
+        def text = key.toString()        
+        // Add space before capitals, remove underscore, capitalize first letter
+        return text
+            .replaceAll(/([A-Z])(?![A-Z])(?![A-Z]\.)/, ' $1')  // Add space before capitals, if it's not followed by yet another (in which case it's an acronym) and don't add a space if it's already formatted as accronym
+            .replaceAll(/([A-Z]{2,})/, ' $1') // add a space before a group of 2 or more letters
+            .replaceAll(/([A-Z])(?![a-z])/, '$1.') // Add periods between 2 ore more consecutive capitals, excluding next camel cased word by excluding it if capital is followed by lower case char.
+            .replaceAll(/_/, ' ')          // Replace underscores with spaces
+            .trim()                        // Remove leading/trailing spaces
+            .capitalize()                  // Capitalize first letter
+    } catch (Exception e) {
+        log.error "Error formatting key '$key': $e"
+        return key.toString()
+    }
+}
+
 
 def getUnit()
 {
@@ -1671,4 +1892,10 @@ private void logWarn(String message) {
 }
 private void logTrace(String message) {
     if (enableTrace) log.trace message
+}
+private void alwaysWarn(String message){
+    log.warn formatText("WARNING: $message", "black", "yellow")
+}
+private void alwaysTrace(String message){
+    log.trace message
 }

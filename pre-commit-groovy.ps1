@@ -5,12 +5,34 @@ Write-Host 'Starting pre-commit hook for Groovy files...' -ForegroundColor Green
 $currentDate = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 Write-Host "Current timestamp: $currentDate"
 
+function Get-FunctionLastModified {
+    param (
+        [string]$filePath,
+        [int]$startLine,
+        [int]$endLine
+    )
+    
+    try {
+        # Get the last commit that modified these lines
+        $lineRange = "$startLine,${endLine}"
+        $gitLog = git log -L "$lineRange:$filePath" --format="%ai" 2>&1
+        
+        if ($gitLog -match '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}') {
+            return $matches[0]
+        }
+    }
+    catch {
+        Write-Warning "Could not get git history for function at line $startLine"
+    }
+    
+    return $currentDate
+}
+
 function Get-FileVersion {
     param (
         [string]$content
     )
     
-    # Try to find version in top comment section - now looking for 4 numbers
     if ($content -match '(?s)/\*\*.*?Version:\s*(\d+)\.(\d+)\.(\d+)\.(\d+)\s*.*?\*/') {
         return @{
             Major = [int]$matches[1]  # Immutable
@@ -105,17 +127,31 @@ foreach ($file in $stagedFiles) {
     # Get all function declarations in the file
     $functionMatches = [regex]::Matches($updatedContent, $functionPattern)
     
+    # Get file content as lines for line number calculation
+    $contentLines = $content -split "`n"
+    
     # Process matches in reverse order to maintain string positions
     for ($i = $functionMatches.Count - 1; $i -ge 0; $i--) {
         $match = $functionMatches[$i]
         $functionLine = $updatedContent.Substring($match.Index, $match.Length).Trim()
         
+        # Calculate line number for git history
+        $lineNumber = ($updatedContent.Substring(0, $match.Index) -split "`n").Length
+        
+        # Find the end of the function (matching closing brace)
+        $functionEndIndex = $match.Index + $match.Length
+        $braceCount = 1
+        while ($braceCount > 0 -and $functionEndIndex -lt $updatedContent.Length) {
+            $char = $updatedContent[$functionEndIndex]
+            if ($char -eq '{') { $braceCount++ }
+            if ($char -eq '}') { $braceCount-- }
+            $functionEndIndex++
+        }
+        
+        $endLineNumber = ($updatedContent.Substring(0, $functionEndIndex) -split "`n").Length
+        
         # Check if this function or its contents were modified
         $functionModified = $false
-        $functionEndIndex = $updatedContent.IndexOf('}', $match.Index + $match.Length)
-        if ($functionEndIndex -eq -1) {
-            $functionEndIndex = $updatedContent.Length
-        }
         $functionContent = $updatedContent.Substring($match.Index, $functionEndIndex - $match.Index)
         
         foreach ($modifiedLine in $modifiedLines) {
@@ -125,21 +161,29 @@ foreach ($file in $stagedFiles) {
             }
         }
         
-        if ($functionModified) {
-            $baseIndent = $match.Groups[1].Value
-            $indent = $baseIndent + '    '
-            
+        $baseIndent = $match.Groups[1].Value
+        $indent = $baseIndent + '    '
+        
+        # Check if function already has a timestamp
+        $nextContent = $updatedContent.Substring($match.Index + $match.Length)
+        $hasTimestamp = $nextContent -match '^\s*/\*\* *\r?\n *\* Last Updated:'
+        
+        if ($functionModified -or -not $hasTimestamp) {
             # Remove existing timestamp if present
-            $nextContent = $updatedContent.Substring($match.Index + $match.Length)
-            if ($nextContent -match '^\s*/\*\* *\r?\n *\* Last Updated:') {
+            if ($hasTimestamp) {
                 $updatedContent = $updatedContent -replace "$functionLine\s*$lastUpdatedPattern", $functionLine
             }
             
-            # Add new timestamp
+            # Get last modified date from git history if not modified now
+            $timestamp = if ($functionModified) { $currentDate } else {
+                Get-FunctionLastModified -filePath $file -startLine $lineNumber -endLine $endLineNumber
+            }
+            
+            # Add timestamp
             $newLastUpdatedText = @"
 
 $indent/** 
-$indent * Last Updated: $currentDate
+$indent * Last Updated: $timestamp
 $indent */
 "@
             $position = $match.Index + $match.Length

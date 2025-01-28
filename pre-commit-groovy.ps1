@@ -18,7 +18,7 @@ function Get-FunctionLastModified {
         $gitLog = git log -L "$lineRange:$filePath" --format="%ai" 2>&1
         
         if ($gitLog -match '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}') {
-            return $matches[0]
+            return [DateTime]::Parse($matches[0]).ToString('yyyy-MM-dd HH:mm:ss')
         }
     }
     catch {
@@ -121,7 +121,7 @@ foreach ($file in $stagedFiles) {
     # Pattern to find function declarations: looks for lines ending with () {
     $functionPattern = '(?m)^(\s*)[^\r\n]*\(\s*\)\s*\{\s*$'
     
-    # Pattern to find existing timestamps - now matches both with and without time
+    # Pattern to find existing timestamps - matches both with and without time
     $lastUpdatedPattern = '(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2})? *\r?\n *\*/'
     
     # Get all function declarations in the file
@@ -179,11 +179,18 @@ foreach ($file in $stagedFiles) {
                 Get-FunctionLastModified -filePath $file -startLine $lineNumber -endLine $endLineNumber
             }
             
-            # Add timestamp
+            # Format timestamp to ensure it includes time
+            $formattedTimestamp = if ($timestamp -match '^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}') {
+                $timestamp
+            } else {
+                [DateTime]::Parse($timestamp).ToString('yyyy-MM-dd HH:mm:ss')
+            }
+            
+            # Add new timestamp
             $newLastUpdatedText = @"
 
 $indent/** 
-$indent * Last Updated: $timestamp
+$indent * Last Updated: $formattedTimestamp
 $indent */
 "@
             $position = $match.Index + $match.Length

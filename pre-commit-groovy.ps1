@@ -182,8 +182,8 @@ foreach ($file in $stagedFiles) {
             # Add timestamp
             $newLastUpdatedText = @"
 
-$indent/** 
-$indent * Last Updated: $timestamp
+$indent /** 
+$indent * Last Updated: $timestamp // Format: 2025-01-28 14:30:45
 $indent */
 "@
             $position = $match.Index + $match.Length

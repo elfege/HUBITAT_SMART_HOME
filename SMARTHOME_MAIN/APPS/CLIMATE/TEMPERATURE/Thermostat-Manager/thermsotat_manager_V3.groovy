@@ -1941,7 +1941,6 @@ def enableTraceLog() {
     app.updateSetting('enableTrace', [type: 'bool', value: true])
     logTrace 'Trace logging enabled. Will automatically disable in 30 minutes.'
     runIn(1800, disableTraceLog)
-    logDebug "testing commits... debug to be removed!"
 }
 def disableTraceLog() {
     /** 

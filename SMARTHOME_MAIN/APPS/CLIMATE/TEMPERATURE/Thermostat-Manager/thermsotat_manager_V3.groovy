@@ -49,10 +49,9 @@ preferences {
 
 }
 def MainPage() {
+
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def pageProperties = [
         name: "MainPage",
@@ -338,9 +337,7 @@ def MainPage() {
 ******************************************** - *******************************************/
 def installed(){
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     logDebug "Installing with settings: $settings"
     initialize()
@@ -350,17 +347,13 @@ def installed(){
 }
 def updated(){
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     initialize()
 }
 def initialize(){
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     logInfo "initializing with settings: $settings"
 
@@ -414,9 +407,7 @@ def initialize(){
 }
 def initializeBoostTempArray(){
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Convert boost temps to BigDecimal with scale 1
     def boostTempArray = [
@@ -428,9 +419,7 @@ def initializeBoostTempArray(){
 }
 def initializeStates(){
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Initialize setpoints memoization 
     initializeSetpointStates()
@@ -492,9 +481,7 @@ def initializeStates(){
 }
 def initializeSetpointStates() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Just initialize empty maps - updateMem will populate them organically
     state.appInitiatedChanges = state.appInitiatedChanges ?: [:]
@@ -505,9 +492,7 @@ def initializeSetpointStates() {
 }
 def findExistingVirTherm() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def ref_label = "Temperature ${settings.virThermLocation}"
     logDebug "Looking for existing device with label: ${ref_label}"
@@ -540,9 +525,7 @@ def findExistingVirTherm() {
 }
 def createVirtualThermostat() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * Creates a virtual thermostat device for memoizing temperature setpoints
@@ -707,9 +690,7 @@ def updateMem(thermostat, attribute="all") {
 }
 def resetMem(){
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     logInfo "Resetting states..."
     state.thermostatsSetpointSTATES = [:]
@@ -1350,6 +1331,7 @@ def setTurbo(required){
     }
 }
 def changeMode(String newMode, delayBetweenModes, timeSinceLastChange, highAmplitude, lowAmplitude, currentTime) {
+    
     // Only apply delay and timestamp updates when dealing with actual mode changes between heat/cool
     def isNewModeActive = isActiveMode(newMode, highAmplitude, lowAmplitude)
     def wasLastModeActive = isActiveMode(state.lastMode, highAmplitude, lowAmplitude)
@@ -1382,9 +1364,7 @@ def changeMode(String newMode, delayBetweenModes, timeSinceLastChange, highAmpli
 ******************************************** - *******************************************/
 def getThermControllerParagraph() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def prgrph = """
         <style>
@@ -1482,9 +1462,7 @@ def getDeviceById(id, devicesCollection=getAllThermostats()){
 }
 def getAllThermostats() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Create a thread-safe copy of the thermostats collection
     // prevents "java.util.ConcurrentModificationException" error
@@ -1530,9 +1508,7 @@ def getTargetTemp(Boolean boostAllowed = false, String need = null) {
 }
 def getTimeout() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def result = noMotionTime // default
 
@@ -1575,18 +1551,14 @@ def getTimeout() {
 }
 def getFanMode() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Returns current fan mode from thermostats[0]. 
     return thermostats[0].currentValue("thermostatFanMode")
 }
 def getFunctionalSensors() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def lastCheck = state.lastEventHistoryCheck ?: 0
     def nowTime = new Date().time
@@ -1640,9 +1612,7 @@ def getFunctionalSensors() {
 }
 def checkFunctionalSensors() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def nowTime = new Date().time
     def recentPeriod = new Date(nowTime - (24 * 60 * 60 * 1000)) // 24 hours ago
@@ -1678,9 +1648,7 @@ def checkFunctionalSensors() {
 }
 def get_indoor_temperature() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def temps = []
 
@@ -1742,9 +1710,7 @@ def update_app_label(paused){
 ******************************************** - *******************************************/
 def isInButtonEvtNightMode() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Initialize states if null
     state.nightModeActivationTime = state.nightModeActivationTime ?: new Date().time
@@ -1772,10 +1738,9 @@ def isInButtonEvtNightMode() {
     return true
 }
 def isMotionActive() {
+
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // in location's default night mode, ignore motion inactive. TODO: make it optional
     if (location.mode.contains("night")) return true
@@ -1885,6 +1850,7 @@ def isBoostTemp(value) {
 ******************************************** - *******************************************/
 
 def flashTheLight(){
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -1899,9 +1865,7 @@ def flashTheLight(){
 }
 def stopFlashing() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     lightSignal.off()
     lightSignal."${state.prevLightSignalState ?: "off"}"()
@@ -1912,9 +1876,7 @@ def stopFlashing() {
 ******************************************** - *******************************************/
 def enableDebugLog() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableDebugTime = new Date().time
     app.updateSetting('enableDebug', [type: 'bool', value: true])
@@ -1923,9 +1885,7 @@ def enableDebugLog() {
 }
 def disableDebugLog() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableDebugTime = null
     app.updateSetting('enableDebug', [type: 'bool', value: false])
@@ -1933,21 +1893,16 @@ def disableDebugLog() {
 }
 def enableTraceLog() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableTraceTime = new Date().time
     app.updateSetting('enableTrace', [type: 'bool', value: true])
     logTrace 'Trace logging enabled. Will automatically disable in 30 minutes.'
     runIn(1800, disableTraceLog)
-    logDebug
 }
 def disableTraceLog() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableTraceTime = null
     app.updateSetting('enableTrace', [type: 'bool', value: false])
@@ -1955,9 +1910,7 @@ def disableTraceLog() {
 }
 def enableInfoLog() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableInfoTime = new Date().time
     app.updateSetting('enableInfo', [type: 'bool', value: true])
@@ -1966,9 +1919,7 @@ def enableInfoLog() {
 }
 def disableInfoLog() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableInfoTime = null
     app.updateSetting('enableInfo', [type: 'bool', value: false])
@@ -1976,9 +1927,7 @@ def disableInfoLog() {
 }
 def check_logs_timer() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     long now = new Date().time
     if (now - state.lastCheckTimer >= 60000) {  // Check every minute
@@ -2021,9 +1970,7 @@ private void logError(String message) {
 }
 private void initializeLogging() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.EnableDebugTime = new Date().time
     state.EnableTraceTime = new Date().time
@@ -2586,9 +2533,7 @@ def getComfortManagementSection(validation) {
 }
 def comfortCapabilitiesTiers() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     return [
         required: [
@@ -2627,9 +2572,7 @@ def comfortCapabilitiesTiers() {
 }
 def validateComfortCapabilities() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * validateComfortCapabilities()
@@ -2790,9 +2733,7 @@ def validateComfortCapabilities() {
 }
 def analyzeOccupancyHeat() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * analyzeOccupancyHeat()
@@ -2865,9 +2806,7 @@ def analyzeOccupancyHeat() {
 }
 def analyzeSolarGain() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * analyzeSolarGain()
@@ -3460,9 +3399,7 @@ def getOutdoorTempHeatingThreshold(outdoorTemp) {
 }
 def trackEnvironmentalFactors_old() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * trackEnvironmentalFactors()
@@ -3555,9 +3492,7 @@ def trackEnvironmentalFactors_old() {
 }
 def trackEnvironmentalFactors() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     logDebug "Starting trackEnvironmentalFactors()"
     def now = new Date()
@@ -3675,9 +3610,7 @@ def getTimeBlock(hour) {
 }
 def getSeason() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * getSeason()
@@ -3787,9 +3720,7 @@ def calculateComfortRange(humidity) {
 }
 def getAverageHumidity() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * getAverageHumidity()
@@ -3965,9 +3896,7 @@ def fallback_need_eval(motionActiveEvent=false, logs=true){
 }
 def getSeasonalComfortAdjustment() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * getSeasonalComfortAdjustment()
@@ -4007,9 +3936,7 @@ def getSeasonalComfortAdjustment() {
 }
 def getComfortVisualization() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     return """
         <style>
@@ -4118,9 +4045,7 @@ def getComfortVisualization() {
 }
 def getComfortMetrics() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     // Initialize metrics history if needed
     state.metricsHistory = state.metricsHistory ?: [
@@ -4205,6 +4130,7 @@ def getComfortMetrics() {
 }
 
 def calculateEnergySavings() {
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -4289,6 +4215,7 @@ def calculateEnergySavings() {
 }
 
 def calculateComfortScore() {
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -4394,9 +4321,7 @@ def calculateComfortScore() {
 // waiting to see true historics appear first.
 def getSuccessRateChart_old() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     /**
     * getSuccessRateChart()
@@ -4474,6 +4399,7 @@ def getSuccessRateChart_old() {
 }
 
 def getSuccessRateChart() {
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -4616,6 +4542,7 @@ def getSuccessRateChart() {
 }
 
 def getEnvironmentalPatterns() {
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -4909,6 +4836,7 @@ private def getSuccessRateForHour(hour) {
 }
 
 private def getLearningProgress() {
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -4925,9 +4853,7 @@ private def getLearningProgress() {
 }
 def getComfortKPIDashboard() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     def metrics = getComfortMetrics()
     
@@ -5145,6 +5071,7 @@ def safeAverage(list) {
 }
 
 def initialize_intelligence_states(){
+
     /** 
 
      * Last Updated: 2025-01-28
@@ -5192,9 +5119,7 @@ def initialize_intelligence_states(){
 }
 def initializeStateThermalBehavior() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.thermalBehavior = state.thermalBehavior ?: [
         roomId: app.id,
@@ -5210,9 +5135,7 @@ def initializeStateThermalBehavior() {
 }
 def resetThermalPerformanceData() {
     /** 
-
      * Last Updated: 2025-01-28
-
      */
     state.thermalBehavior.naturalCooling.performanceByDelta = [:]
     state.thermalBehavior.naturalHeating.performanceByDelta = [:]

@@ -121,7 +121,7 @@ foreach ($file in $stagedFiles) {
     # Pattern to find function declarations: looks for lines ending with () {
     $functionPattern = '(?m)^(\s*)[^\r\n]*\(\s*\)\s*\{\s*$'
     
-    # Pattern to find existing timestamps - matches both with and without time
+    # Pattern to find existing timestamps - now matches both with and without time
     $lastUpdatedPattern = '(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2})? *\r?\n *\*/'
     
     # Get all function declarations in the file
@@ -135,10 +135,8 @@ foreach ($file in $stagedFiles) {
         $match = $functionMatches[$i]
         $functionLine = $updatedContent.Substring($match.Index, $match.Length).Trim()
         
-        # Calculate line number for git history
+        # Calculate line numbers for git history lookup
         $lineNumber = ($updatedContent.Substring(0, $match.Index) -split "`n").Length
-        
-        # Find the end of the function (matching closing brace)
         $functionEndIndex = $match.Index + $match.Length
         $braceCount = 1
         while ($braceCount > 0 -and $functionEndIndex -lt $updatedContent.Length) {
@@ -147,18 +145,15 @@ foreach ($file in $stagedFiles) {
             if ($char -eq '}') { $braceCount-- }
             $functionEndIndex++
         }
-        
         $endLineNumber = ($updatedContent.Substring(0, $functionEndIndex) -split "`n").Length
         
-        # Check if this function or its contents were modified
-        $functionModified = $false
+        # Get function content for modification check
         $functionContent = $updatedContent.Substring($match.Index, $functionEndIndex - $match.Index)
         
-        foreach ($modifiedLine in $modifiedLines) {
-            if ($functionContent -match [regex]::Escape($modifiedLine)) {
-                $functionModified = $true
-                break
-            }
+        # Check if this function or its contents were modified
+        $functionModified = $modifiedLines | Where-Object { 
+            $modifiedLine = $_
+            $functionContent -match [regex]::Escape($modifiedLine)
         }
         
         $baseIndent = $match.Groups[1].Value
@@ -175,22 +170,22 @@ foreach ($file in $stagedFiles) {
             }
             
             # Get last modified date from git history if not modified now
-            $timestamp = if ($functionModified) { $currentDate } else {
-                Get-FunctionLastModified -filePath $file -startLine $lineNumber -endLine $endLineNumber
-            }
-            
-            # Format timestamp to ensure it includes time
-            $formattedTimestamp = if ($timestamp -match '^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}') {
-                $timestamp
+            $timestamp = if ($functionModified) {
+                $currentDate
             } else {
-                [DateTime]::Parse($timestamp).ToString('yyyy-MM-dd HH:mm:ss')
+                $lastModified = Get-FunctionLastModified -filePath $file -startLine $lineNumber -endLine $endLineNumber
+                if ($lastModified) {
+                    [DateTime]::Parse($lastModified).ToString('yyyy-MM-dd HH:mm:ss')
+                } else {
+                    $currentDate
+                }
             }
             
-            # Add new timestamp
+            # Add timestamp
             $newLastUpdatedText = @"
 
 $indent/** 
-$indent * Last Updated: $formattedTimestamp
+$indent * Last Updated: $timestamp
 $indent */
 "@
             $position = $match.Index + $match.Length

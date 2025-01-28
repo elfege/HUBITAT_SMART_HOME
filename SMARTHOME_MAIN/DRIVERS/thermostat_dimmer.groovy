@@ -3,9 +3,13 @@
 
 /// ORIGINAL MUST ALWAYS BE ON HUB1 !!!!!!!!!!!!!!!!!!!!!
 
-NB : MUST NEVER BE SET TO AUTO OR ALEXA WILL RETURN "Hum... deviceName is not responding"
+NB : MUST NEVER BE SET TO AUTO OR ALEXA WILL RETURN "Hum... deviceName is not responding" JAN 2025: STILL TRUE? 
 
 */
+/** 
+ * Last Updated: 2025-01-27
+ */
+
 
 
 metadata 
@@ -32,6 +36,9 @@ metadata
         command "lowerSetpoint"
         command "raiseSetpoint"
         command "setThermostatSetPoint"
+        command "setThermostatFanMode"
+        command "setHeatingSetpoint"
+        command "setCoolingSetpoint"
     }
 }
 
@@ -70,7 +77,7 @@ def refresh()
 
 def setToHeat()
 {
-    log.warn "this device must never be set to any other mode than 'heat'"
+    // log.warn "this device must never be set to any other mode than 'heat'"
    sendEvent(name: "thermostatMode",value: "heat")
 }
 
@@ -83,13 +90,13 @@ def parse(String description) // no parse in virtual device
 def on() {
     log.info "on()"
     sendEvent(name: "switch", value: "on")
-    ssetToHeat()// NEVER AUTO NEVER OFF !! 
+    // setToHeat()// NEVER AUTO NEVER OFF !! 
 }
 def off() {
     log.info "off()"
     sendEvent(name: "switch", value: "off")  // always on
     sendEvent(name: "switch", value: "on")
-    setToHeat() // NEVER AUTO NEVER OFF !! 
+    // setToHeat() // NEVER AUTO NEVER OFF !! 
 }
 
 def raiseSetpoint() {
@@ -108,30 +115,49 @@ def setThermostatSetpoint(value){
     state.level = value.toInteger()
     setLevel(value)
 }
-def setHeatingSetpoint(value){
-    state.level = value.toInteger()
-    setLevel(value)
+def setHeatingSetpoint(value) {
+    if (value == null) return
+    state.level = value.toString().toFloat().round()
+    setLevel(state.level)
 }
-def setCoolingSetpoint(value){
-    state.level = value.toInteger()
-    setLevel(value)
+def setCoolingSetpoint(value) {
+    if (value == null) return
+    state.level = value.toString().toFloat().round()
+    setLevel(state.level)
 }
-def setLevel(value)
-{
+def setThermostatFanMode(fanMode) {
+    return
+}
+def setLevel(value) {
+    if (value == null) return
+    
     log.info "setLevel $value"
-
-    max_value = state.max_value == null ? 130 : state.max_value
+    
+    def max_value = state.max_value ?: 130
     log.debug "max_value (setLevel): $max_value"
     
-    // Ensure that the level does not exceed 110%
-    if (value > max_value.toInteger()) {
-        log.warn "Value exceeds the maximum limit of ${state.max_value}%, setting to 110%"
-        value = max_value.toInteger() ?: 130
-    } 
+    value_float = value.toString().toFloat()
     
-    state.level = value.toInteger()
+    if (value_float > max_value.toFloat()) {
+        log.warn "Value exceeds maximum limit of ${max_value}, setting to max"
+        value_float = max_value.toFloat()
+    }
+    
+    state.level = value
     sendEvent(name: "level", value: value.toString())
-    sendEvent(name: "thermostatSetpoint", value: value.toString())
+    sendEvent(name: "thermostatSetpoint", value: value_float.toString())
+    sendEvent(name: "coolingSetpoint", value: value_float.toString())
+    sendEvent(name: "heatingSetpoint", value: value_float.toString())
+
+
+log.warn "- device.currentValue('thermostatSetpoint') != value_float: ${device.currentValue('thermostatSetpoint') != value_float} -- value_float=$value_float device's val: ${device.currentValue('thermostatSetpoint')}"
+log.warn "- device.currentValue('coolingSetpoint') != value_float: ${device.currentValue('coolingSetpoint') != value_float} -- value_float=$value_float device's val: ${device.currentValue('coolingSetpoint')}"
+log.warn "- device.currentValue('heatingSetpoint') != value: ${device.currentValue('heatingSetpoint') != value_float} -- value_float=$value_float device's val: ${device.currentValue('heatingSetpoint')}"
+
+    // bad idea... lol
+    // if (device.currentValue("thermostatSetpoint") != value_float) device.setThermostatSetPoint(value_float)
+    // if (device.currentValue("coolingSetpoint") != value_float) device.setCoolingSetpoint(value_float)
+    // if (device.currentValue("heatingSetpoint") != value_float) device.setHeatingSetpoint(value_float)
 }
 def cool()
 {

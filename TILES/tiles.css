@@ -259,10 +259,14 @@
   border-color: #666;
 }
 
-/* Mobile Styles */
-
-@media screen and (max-width: 768px) {
-  
+.mode-turbo {
+  background-color: #E74C3C;
+  border-color: #C0392B;
+  margin-top: 0.5rem;
 }
 
+.mode-off {
+  background-color: #34495E;
+  border-color: #2C3E50;
+}
 

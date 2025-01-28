@@ -19,7 +19,7 @@ jQuery(function () {
 
   console.log("------------- dom loaded -------------");
 
-  
+
 
   // console.log(JSON.stringify(allDevices));
   //delete all comments so they don't show in dev tools
@@ -195,10 +195,10 @@ jQuery(function () {
 function openThermostatModal(thermostatWrap, id) {
   // Remove existing click event listener from the thermostat wrap
   $(thermostatWrap).off('click');
-  
+
   // Store the next element before moving
   const nextElement = $(thermostatWrap).next();
-  
+
   // Create the modal element
   const modal = $('<div>').addClass('modal fade').attr('id', `thermostatModal${id}`);
   const modalDialog = $('<div>').addClass('modal-dialog modal-dialog-centered modal-lg');
@@ -206,7 +206,7 @@ function openThermostatModal(thermostatWrap, id) {
 
   // Move the thermostat container into the modal
   $(thermostatWrap).appendTo(modalContent);
-  
+
   // Add the modal structure to the page
   modal.append(modalDialog.append(modalContent));
   $('body').append(modal);
@@ -230,16 +230,16 @@ function openThermostatModal(thermostatWrap, id) {
       // If it was the last element, append it
       $(thermostatWrap).appendTo('#thermostats');
     }
-    
+
     // Restore original click event listener
-    $(thermostatWrap).on('click', function(event) {
+    $(thermostatWrap).on('click', function (event) {
       if (smartDevice) {
         openThermostatModal(thermostatWrap, id);
       } else {
         $(this).toggleClass('expanded');
       }
     });
-    
+
     // Remove modal from DOM after animation completes
     setTimeout(() => modal.remove(), 300);
   });
@@ -485,23 +485,48 @@ async function initialize(access_token, ip, appNumber) {
         }
       }
       if (isthermostat) {
+        const hasTurbo = e.attributes.hasOwnProperty('turboMode') || e.commands.includes('controlTurboMode');
+
         $("#thermostats").append(`
-            <div class="thermostatWrap" id="thermostatWrap${id_From_Hub}">
-                <span class="spanThermostat">${e.label}</span>
-                <div class="thermostat" id="thermostat${id_From_Hub}">
-                </div>
-                
-                <div class="thermostat-modes" id="thermostatModes${id_From_Hub}"></div>
+          <div class="thermostatWrap" id="thermostatWrap${id_From_Hub}">
+            <span class="spanThermostat">${e.label}</span>
+            <div class="thermostat" id="thermostat${id_From_Hub}">
             </div>
+            <div class="thermostat-modes" id="thermostatModes${id_From_Hub}"></div>
+            ${hasTurbo ? `
+              <div class="thermostat-turbo" id="thermostatTurbo${id_From_Hub}">
+                <button class="btn thermostat-mode-btn mode-turbo" data-turbo="off">
+                  Turbo
+                </button>
+              </div>` : ''}
+          </div>
         `);
 
         const thermostatWrapSelector = `#thermostatWrap${id_From_Hub}`;
         const thermostatWrap = $(thermostatWrapSelector);
 
+        // Setup turbo button if device has the capability
+        if (hasTurbo) {
+          const turboBtn = $(`#thermostatTurbo${id_From_Hub} button`);
+          turboBtn.on('click', async () => {
+            const currentState = turboBtn.attr('data-turbo');
+            const newState = currentState === 'on' ? 'off' : 'on';
+            const url = `http://${ip}/apps/api/${appNumber}/devices/${id_From_Hub}/controlTurboMode/${newState}?access_token=${access_token}`;
+            await sendCommand(url);
+          });
+
+          // Set initial state
+          if (e.attributes.turboMode === 'on') {
+            turboBtn.addClass('active');
+            turboBtn.attr('data-turbo', 'on');
+          }
+        }
+
+
         // Add click/touch event listener to the thermostat container
         thermostatWrap.on('click', function (event) {
           console.log("CLICK THERMOSTAT CONTAINER")
-         
+
           if (smartDevice) {
             console.log("OPENING THERMOSTAT MODAL")
             // Open the thermostat container in a modal
@@ -512,7 +537,7 @@ async function initialize(access_token, ip, appNumber) {
             $(this).toggleClass('expanded');
           }
         });
-        
+
 
         // Initialize the round slider
         $(`#thermostat${id_From_Hub}`).roundSlider({
@@ -870,7 +895,7 @@ function WebSocket_init(ip) {
             $(`#pwr${evt.deviceId}`).text(`${evt.value} Watts`);
           }
         }
-        else if (evt.name === "lock") {
+        if (evt.name === "lock") {
           const classToRemove = evt.value === "locked"
             ? "btn btn-warning bi bi-unlock"
             : "btn btn-success bi bi-lock";
@@ -881,10 +906,10 @@ function WebSocket_init(ip) {
 
           $(`#${evt.deviceId}lock`).removeClass(classToRemove).addClass(classToAdd);
         }
-        else if (evt.name === "level") {
+        if (evt.name === "level") {
           updateDimmerState(deviceElement, evt.deviceId, evt.name, evt.value);
         }
-        else if (states.find(e => e === evt.value)) {
+        if (states.find(e => e === evt.value)) {
           if (isDimCapable) {
             updateDimmerState(deviceElement, evt.deviceId, evt.name, evt.value);
           } else {
@@ -924,12 +949,39 @@ function WebSocket_init(ip) {
             tile.removeAttr("src");
           }
         }
-        else if (evt.name === "thermostatMode") {
+        if (evt.name === "thermostatMode") {
           // handle thermostat mode changes
           const modesContainer = $(`#thermostatModes${evt.deviceId}`);
           if (modesContainer.length) {
             modesContainer.find('.thermostat-mode-btn').removeClass('active');
             modesContainer.find(`[data-mode="${evt.value}"]`).addClass('active');
+          }
+        }
+        if (evt.name === "turboMode") {
+          console.log("Turbo mode event received:", evt);
+          const turboBtn = $(`#thermostatTurbo${evt.deviceId} button`);
+          if (turboBtn.length) {
+            const isOn = evt.value === "on";
+            turboBtn.toggleClass('active', isOn);
+            turboBtn.attr('data-turbo', evt.value);
+          }
+        }
+        if (evt.name === "thermostatSetpoint" || evt.name === "temperature") {
+          const thermostat = $(`#thermostat${evt.deviceId}`);
+          if (thermostat.length) {
+            const slider = thermostat.data("roundSlider");
+            if (evt.name === "thermostatSetpoint") {
+              slider.setValue(evt.value);
+            }
+            // Update the current temperature display
+            if (evt.name === "temperature") {
+              const tooltipEl = thermostat.find('.rs-tooltip');
+              const currentValue = slider.getValue();
+              tooltipEl.html(`
+                ${currentValue}°F
+                <div class="current-temp">Temp: ${evt.value}°F</div>
+              `);
+            }
           }
         }
       } catch (error) {
@@ -1100,6 +1152,7 @@ function restart() {
 function createThermostatModeButtons(id_From_Hub, currentMode) {
   console.log("createThermostatModeButtons()...........");
   const modes = [
+    { name: 'off', label: 'Off' },
     { name: 'auto', label: 'Auto' },
     { name: 'heat', label: 'Heat' },
     { name: 'cool', label: 'Cool' },

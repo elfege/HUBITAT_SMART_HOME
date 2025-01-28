@@ -119,7 +119,10 @@ foreach ($file in $stagedFiles) {
     }
     
     # Pattern to find function declarations: looks for lines ending with () {
-    $functionPattern = '(?m)^(\s*)[^\r\n]*\(\s*\)\s*\{\s*$'
+    # $functionPattern = '(?m)^(\s*)[^\r\n]*\(\s*\)\s*\{\s*$'
+    
+    # Pattern to find function declarations: looks for lines ending with ") {"
+    $functionPattern = '(?m)^(\s*)[^\r\n]*\([^)]*\)\s*\{\s*
     
     # Pattern to find existing timestamps - strict matching
     $lastUpdatedPattern = '(?s)(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})? *\r?\n *\*/'

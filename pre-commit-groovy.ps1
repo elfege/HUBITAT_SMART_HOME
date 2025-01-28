@@ -121,8 +121,8 @@ foreach ($file in $stagedFiles) {
     # Pattern to find function declarations: looks for lines ending with () {
     $functionPattern = '(?m)^(\s*)[^\r\n]*\(\s*\)\s*\{\s*$'
     
-    # Pattern to find existing timestamps
-    $lastUpdatedPattern = '(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} *\r?\n *\*/'
+    # Pattern to find existing timestamps - now matches both with and without time
+    $lastUpdatedPattern = '(\s*)/\*\* *\r?\n *\* Last Updated: \d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2})? *\r?\n *\*/'
     
     # Get all function declarations in the file
     $functionMatches = [regex]::Matches($updatedContent, $functionPattern)
@@ -182,8 +182,8 @@ foreach ($file in $stagedFiles) {
             # Add timestamp
             $newLastUpdatedText = @"
 
-$indent /** 
-$indent * Last Updated: $timestamp // Format: 2025-01-28 14:30:45
+$indent/** 
+$indent * Last Updated: $timestamp
 $indent */
 "@
             $position = $match.Index + $match.Length

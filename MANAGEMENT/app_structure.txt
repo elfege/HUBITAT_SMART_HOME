@@ -1,0 +1,14 @@
+.
+├── app_structure.txt
+├── Home_1
+│   ├── Zigbee_devices_home1.md
+│   └── Zwave_devices_home1.md
+├── Home_2
+│   ├── Zigbee_devices_home2.md
+│   └── Zwave_devices_home2.md
+├── Home_3
+│   └── Zwave_devices_home3.md
+├── Home_4
+└── Hubs_Description.md
+
+5 directories, 7 files

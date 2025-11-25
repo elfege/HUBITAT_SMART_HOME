@@ -2,7 +2,7 @@
 # pre-commit-groovy.sh
 
 # Path to the centralized scripts directory
-SCRIPTS_DIR="H:/OneDrive/Documents/PROGRAMMATION/HUBITAT"
+SCRIPTS_DIR="H:/OneDrive/Documents/PROJECTS/HUBITAT"
 
 # Path to the PowerShell script
 PS_SCRIPT_PATH="$SCRIPTS_DIR/Update-Timestamp.ps1"

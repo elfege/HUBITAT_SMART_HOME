@@ -107,6 +107,8 @@ def MainPage() {
                 if(fan_only) app.updateSetting('set_to_auto_instead_of_off', [type: "bool", value: false])
                 if(set_to_auto_instead_of_off) app.updateSetting('fan_only', [type: "bool", value: false])
             }
+
+            
             
         }
 
@@ -140,6 +142,7 @@ def MainPage() {
         }
 
         section('Motion Sensors') {
+            input "override", "bool", title: "Override (only with ${nightModeButton?.displayName ?: "Night Mode Button"}): use mechanical cooling based on target temp. No natural cooling! (very inefficient, but most comfortable)", submitOnChange: true
             input 'motionSensors', 'capability.motionSensor', title: 'Select motion sensors', multiple: true, required: true
             if(motionSensors){
                 input 'timeUnit', 'enum', title: 'Time unit', options: ['seconds', 'minutes'], defaultValue: 'minutes'
@@ -166,7 +169,7 @@ def MainPage() {
                 if(nightModeButton){
                     def therms = thermostats.collect{ t -> t.displayName}
                     if (therms.size() > 1) {
-                        input "nightModeThermostats", "enum", title: "optional: apply this rule only to these thermostats:", options: therms, submitOnChange: true, multiple: true, required: false
+                        input "nightModeThermostats", "enum", title: "optional: apply this rule only to these thermostats: (not selected thermostats will be kept off)", options: therms, submitOnChange: true, multiple: true, required: false
                     }
                     input "simpleModeTimeLimit", "number", title: "Return to normal motion detection after some time", required:true, description: "Time in hours", submitOnChange: true
                     
@@ -183,11 +186,17 @@ def MainPage() {
                         app.updateSetting("lightSignal", [type:"capability", value: []]) 
                     }
                 }
+                // else {
+                //     // must never be validated without specific "night mode" btn event (increases AI complexity)
+                //     app.updateSetting("override", [type: "bool", value: false])
+                // }
+
             }
         }
 
         section("Contact sensors"){
             input "contacts", "capability.contactSensor", title: "Select one ore more contacts sensor", required: false, multiple: true, submitOnChange:true
+            input "ignoreMotionModes", "mode", title: "Ignore motion in certain modes", required: false, multiple:true
         }
 
         section("Modes"){
@@ -197,7 +206,7 @@ def MainPage() {
 
         section("Comfort Intelligence") {
             def validation = validateComfortCapabilities()
-            def use_ai_descr = useAI ? "(<b>AI enabled</b>) Disable AI management (not destructive)" : "(<b>AI disabled</b>) Enable AI management (beta)"
+            def use_ai_descr = useAI ? "Disable narrow AI (not destructive) - <b style='color:blue; backgroundColor: dark-gray;'>AI is enabled</b>" : "(<b>AI disabled</b>) Enable AI management (beta)"
             input "useAI", "bool", title:"$use_ai_descr", submitOnChange: true
             if (useAI){
                 try {
@@ -226,7 +235,7 @@ def MainPage() {
 
         }
 
-                section("Comfort Analytics") {
+        section("Comfort Analytics") {
             if (useAI) {
                 try {
                     input "toggleKPIs", "button", 
@@ -279,11 +288,20 @@ def MainPage() {
             else {
                 input "update", "button", title: "Update", submitOnChange:true
                 input "pause", "button", title: "${state.paused ? 'Resume' : 'Pause'}", submitOnChange:true
+                
+                paragraph formatText ("Override: Ignore motion & A.I. decisions", "black", "#E0F2F1")
+                input "override_soft_btn", "button", title: "${!state.nightModeActive ? "Override Inactive" : "<span style='color:red';>Override Active </span>"}", submitOnChange:true
+                // TODO: conditional paragraph with remaining time. 
+
+                paragraph formatText ("Tests: Run Main Thread & Test Your App", "black", "#E0F2F1")
                 input "run", "button", title: "Test Run", submitOnChange: true
-                input "reset_therm_memoizations", "button", title: "Reset Thermostats Memoized States", submitOnChange: true
                 if(lightSignal){
                     input "flash", "button", title: "Test light signal", submitOnChange: true
                 }
+
+                paragraph formatText ("RESET: Manage Memory (caution!)", "black", "#E0F2F1")
+                input "reset_therm_memoizations", "button", title: "Reset Thermostats Memoized States", submitOnChange: true
+                
                 input "prompt_reset_intelligence", "button", title: "Reset Intelligence Learnings (!)", submitOnChange: true
                 if(state.prompt_reset_intelligence){
                     // TODO: add backup logic (to a file) and RESTORE logic (from file). 
@@ -617,6 +635,8 @@ def createVirtualThermostat() {
 def updateMem(thermostat, attribute="all") {
     logDebug "--------------- Updating memoization state for $thermostat"
 
+    attribute = "all" // for now we update them all. This param's value is probably no longer needed (maybe even param itself, actually...). TBD. 
+
     def currSP = thermostat.currentValue("thermostatSetpoint")
     def currCSP = thermostat.currentValue("coolingSetpoint")
     def currHSP = thermostat.currentValue("heatingSetpoint")
@@ -772,6 +792,11 @@ def appButtonHandler(btn) {
             }
                 initialize_intelligence_states()
             break
+        case "override_soft_btn":
+            state.nightModeActive = !state.nightModeActive
+            // reset timer, if any: don't wait for master or motion events for better timer accuracy. 
+            RunIn(1, isInButtonEvtNightMode)
+            break
     }
 }
 def turboEventHandler(evt){
@@ -802,6 +827,8 @@ def setPointHandler(evt) {
     def normalizedLastValue = lastProcessedValue ? normalizeValue(lastProcessedValue) : null
     def normalizedRawValue = normalizeValue(rawValue)
 
+    // Still forced to do that for now.... due to Midea. Otherwise setpoints increase by 1°F every now and then due to roundings.
+    // Doesn't address the issue, though... 
     // if (normalizedLastValue && Math.abs(normalizedLastValue - normalizedRawValue) < 1.0) {
     //     alwaysWarn "Skipping negligible setpoint change (${rawValue}F, normalized: ${normalizedRawValue}F)."
     //     return
@@ -826,7 +853,7 @@ def setPointHandler(evt) {
     if (state.appInitiatedChanges.containsKey(deviceKey)) {
         logDebug "App-initiated change detected for ${evt.device.displayName}. Clearing flag."
         state.appInitiatedChanges.remove(deviceKey)
-        updateMem(evt.device, evt.name)
+        // updateMem(evt.device, evt.name) // no, we don't record a value triggered by the app... These must serve as reference to stay on what was asked
         return
     }
 
@@ -838,7 +865,7 @@ def setPointHandler(evt) {
         thermostatController.setThermostatSetpoint(newValue)
     }
 
-    // Update memoized state
+    // Update memoized state only if it was not initiated by the app. 
     updateMem(evt.device, evt.name)
 
     logFormattedObject([
@@ -861,8 +888,10 @@ def pushableButtonHandler(evt){
     state.nightModeActive = nightModeActive
 
     if(nightModeActive){
-        logTrace formatText("NIGHT MODE ACTIVATED", "white", "orange")
+        alwaysTrace ("NIGHT MODE ACTIVATED")
         state.nightModeActivationTime = new Date().time
+
+        if (override) alwaysTrace ("OVERRIDE MODE ON. Dumb cooling if needed, even if cold outside.")
 
         flashTheLight()
     }else {
@@ -940,15 +969,18 @@ def temperatureHandler(evt){
     // Calculate absolute temperature difference
     def tempDifference = Math.abs(currentTemp - previousTemp)
         
-    // Only call master if temperature change is ≥ 0.5°F
+    // Force-run master if temperature change is ≥ 5°F (sort of emergency trigger)
     if (tempDifference >= 0.3) {
         logInfo "Temperature change of ${tempDifference.round(1)}°F detected for ${evt.device}. Triggering master()"
         // Update the temperature used for comparison only after deciding to call master()
         state.deviceTemperatures[deviceId] = currentTemp
-        master([calledBy:"temperatureHandler", motionActiveEvent: false])
+        master([calledBy:"temperatureHandler_EMERGENCY", motionActiveEvent: false, emergency:true])
     } else {
-        logTrace "Temperature change of ${tempDifference}°F is less than threshold. Skipping master() call."
+        // master will decline if timing is wrong
+        master([calledBy:"temperatureHandler", motionActiveEvent: false, emergency:false])
     }
+
+    
 }
 def outsideTempHandler(evt){
     if(restriction().data.restricted_mode) return
@@ -979,7 +1011,9 @@ def master(data){
     def lapse = 5 // interval in seconds
     state.lastRun = state.lastRun == null ? new Date().time : state.lastRun
 
-    if (new Date().time - state.lastRun > lapse * 1000){
+    def emergency = data.emergency ?: false 
+
+    if (new Date().time - state.lastRun > lapse * 5000 || emergency){
         logDebug "master: $data"
         def isButtonNightMode = isInButtonEvtNightMode() 
         logTrace "isInButtonEvtNightMode(): ${isButtonNightMode}"
@@ -992,28 +1026,13 @@ def master(data){
         }
         state.lastRun = new Date().time
     
-
-        if(data.calledBy in ["master", "initialiaze", "appButtonHandler"]) {
-            unschedule("master") // Cancel any existing scheduled runs
-            runIn(
-                    120, 
-                    "master", 
-                        [
-                            data: [
-                                calledBy: "master unscheduled",
-                                motionActiveEvent: false
-                            ],
-                            overwrite: true  // Making the default behavior explicit for clarity
-                        ]
-
-                )
-        }
-        check_logs_timer()
         logDebug "master eval executed successfully. called by: $calledBy"
     }
     else {
         logTrace "master ran less than $lapse seconds ago. Skipping"
     }
+
+    check_logs_timer()
 }
 
 /******************************************* - *******************************************
@@ -1029,7 +1048,12 @@ def handleThermosats(motionActiveEvent=false, isButtonNightMode=false){
     def contactOpen = contacts.any{it -> it.currentValue("contact") == "open"}
     if(contactOpen){
         def openContacts = contacts.findAll{it -> it.currentValue('contact') == 'open'}
-        logWarn "<b>${openContacts.join(', ')} ${openContacts.size() > 1 ? 'are' : 'is'} open </b>"   
+        def output = [] 
+        openContacts.each { openContact -> 
+            output << "<a href='${state.locationUrl}/${openContact.id}' target='_blank'>${openContact.displayName}</a> is open"
+            }
+        logFormattedObject(output, title="Open Contacts:", method="alwaysWarn")
+        
     }
     def need = contactOpen ? "off" : get_need(motionActiveEvent) 
     attribute = need in ["heat", "cool"] ? "${need}ingSetpoint" : "thermostatSetpoint"
@@ -1040,10 +1064,12 @@ def handleThermosats(motionActiveEvent=false, isButtonNightMode=false){
 
         logInfo "Processing ${thermostat}..."
 
+        alwaysWarn "isButtonNightMode: $isButtonNightMode"
+
         def isButtonNightModeTherm = !nightModeThermostats ? true : nightModeThermostats.contains(thermostat.displayName)
 
         if (isButtonNightMode && !isButtonNightModeTherm) {
-            logWarn "Keeping ${thermostat.displayName} off due to night/sleeping mode"
+            alwaysWarn "Keeping ${thermostat.displayName} off due to night/sleeping mode"
             setThermostatsMode([deviceId: thermostat.id, need: "off"])
             return
         }
@@ -1137,7 +1163,7 @@ def setThermostatsMode(data){
     // TODO: rethink this logic, it's shitty as F***. We need a separate logic for thermostat FAN MODE (=speed) and thermostat Mode (which includes "fan_only")
     // the attempt here to do 2 in 1 is not right. 
 
-    def cmd = need == "fan_only" ? "setThermostatFanMode" : "setThermostatMode" // we'll need both to set the thermostatMode(speed) and the thermostatMode('fan_only')
+    def cmd = need == "fan_only" ? "setThermostatFanMode" : "setThermostatMode" // we'll need both to set the thermostatFanMode(speed_value) and the thermostatMode('fan_only')
     
     def attribute = need == "fan_only" ? "thermostatFanMode" : "thermostatMode" 
 
@@ -1173,7 +1199,8 @@ def setThermostatsMode(data){
                 if(device.currentValue("thermostatMode") != "off") device.off() //Fan should be turned on separately in the scope below...
             }
         }
-        else if (need == "fan_only" && !use_fan_only) // if need is fan_only it's instead of off and because fan_only option has been enabled by user, but not for this device (!use_fan_only => it's the exception device)
+        // if need is fan_only at this point, it's to be applied instead of off and because fan_only option has been enabled by user, but not for this device (!use_fan_only => it's the exception device)
+        else if (need == "fan_only" && !use_fan_only) 
         {
             logTrace "${device.displayName} is not among fan circulating devices (aka 'fan_only_thermostats'). Turning off instead. "
 
@@ -1449,14 +1476,14 @@ def getTargetTemp(Boolean boostAllowed = false, String need = null) {
     // If it's a boost command, use boost temperatures
     if (boostAllowed && need) {
          if (!(need in ["heat", "cool"])) {
-            logWarn "Invalid need for boost mode: ${need}. Defaulting to 74°."
-            return 74
+            logWarn "Invalid need for boost mode: ${need}. Defaulting to 72°."
+            return 72
         }
         return need == "heat" ? tempBoostHeat : tempBoostCool
     }
     
     // Get the virtual thermostat's setpoint
-    def candidateTemp = thermostatController?.currentValue("thermostatSetpoint") ?: 74
+    def candidateTemp = thermostatController?.currentValue("thermostatSetpoint") ?: 72
     
     // Validate temperature
     try {
@@ -1465,14 +1492,14 @@ def getTargetTemp(Boolean boostAllowed = false, String need = null) {
         
         // Check for extremely out-of-bounds temperatures
         if (temp < 40 || temp > 90) {
-            logWarn formatText("Extremely out-of-bounds temperature detected: ${temp}°. Defaulting to 74°.", "white", "red")
-            return 74
+            logWarn formatText("Extremely out-of-bounds temperature detected: ${temp}°. Defaulting to 72°.", "white", "red")
+            return 72
         }
         
         return temp
     } catch (Exception e) {
-        log.error "Error processing temperature: ${candidateTemp}. Error: ${e.message}"
-        return 74 // safe default
+        logError "Error processing temperature: ${candidateTemp}. Error: ${e.message}"
+        return 72 // safe default
     }
 }
 def getTimeout() {
@@ -1691,7 +1718,7 @@ def isInButtonEvtNightMode() {
 def isMotionActive() {
 
     // in location's default night mode, ignore motion inactive. TODO: make it optional
-    if (location.mode.contains("night")) return true
+    if (location in ignoreMotionModes && location.mode.contains("night")) return true
 
     if (isInButtonEvtNightMode()) return true
 
@@ -1775,7 +1802,7 @@ def isBoostTemp(value) {
 
     // apply a margin due to variations in F to C and C to F in certain 
     // devices such as Midea. 
-    def margin = 4.0
+    def margin = 2.0
      
     // Convert input to BigDecimal with scale 1
     def normalizedValue = (value as BigDecimal).setScale(1, BigDecimal.ROUND_HALF_UP)
@@ -1788,7 +1815,7 @@ def isBoostTemp(value) {
         difference <= margin
     }
     
-    def m = result ? "$value is in boostTempArray (±${margin}°)" : "$value IS NOT in boostTempArray (±1°)"
+    def m = result ? "${normalizedValue}(${normalizedValue.class}) (original evt.value:${value}(${value.class}) is in boostTempArray (±${margin}°)" : "$value IS NOT in boostTempArray (±1°)"
     logWarn "<b>$m</b> [Array: ${state.boostTempArray}]"
     return result
 }
@@ -2005,6 +2032,11 @@ private String formatValue(def value, int depth) {
         return "<span style='color:red'>null</span>"
     }
     
+    // Handle Date objects with special formatting
+    if (value instanceof Date) {
+        return value.format("MM-dd-yyyy HH:mm:ss")
+    }
+    
     if (value instanceof Map || value instanceof List) {
         def output = new StringBuilder()
         if (value instanceof Map) {
@@ -2021,7 +2053,7 @@ private String formatValue(def value, int depth) {
 }
 private String formatComplexValue(def value, int depth) {
     def output = new StringBuilder()
-    try{
+    try {
         if (value instanceof List) {
             output.append("<ul style='margin-left:${depth * 20}px;'>")
             value.eachWithIndex { item, index ->
@@ -2029,6 +2061,8 @@ private String formatComplexValue(def value, int depth) {
                 if (item instanceof Map || item instanceof List) {
                     output.append("[${index}]: ")
                     output.append(formatValue(item, depth + 1))
+                } else if (item instanceof Date) {
+                    output.append(item.format("yyyy-MM-dd HH:mm:ss"))
                 } else {
                     output.append("${item}")
                 }
@@ -2048,9 +2082,10 @@ private String formatComplexValue(def value, int depth) {
         }
     
         return output.toString()
-    } catch (Exception e){
+    } catch (Exception e) {
         logError "formatComplexValue => $e"
         logError "value: $value"
+        return "Error formatting value"
     }
 }
 private String formatKey(def key) {
@@ -2213,6 +2248,7 @@ def get_need(motionActiveEvent=false) {
     def outdoorTempCoolingThreshold
     def outdoorTempHeatingThreshold
     def prediction
+    
   
     try {
         // get a first raw eval by legacy algorithm:
@@ -2296,6 +2332,7 @@ def get_need(motionActiveEvent=false) {
         conditions = [
             need:"<b style='color:red;'>ERROR</b>",
             legacyNeed: legacy_need,
+            override: override,
             targetTemp: targetTemp, 
             swing: swing, 
             indoorTemp: currentIndoorTemp, 
@@ -2341,10 +2378,11 @@ def get_need(motionActiveEvent=false) {
                 changeMd = changeMode("cool", delayBetweenModes, timeSinceLastMode, highAmplitude, lowAmplitude, currentTime)
                 if(changeMd){
                     // If switching to mechanical cooling, finalize any ongoing event
-                    if (state.currentThermalEvent?.type == "cooling") {
+                    if (state.currentThermalEvent?.type == "cooling" && !state.currentThermalEvent?.eventHasEnded) {
                         recordThermalEvent([
                             endTemp: currentIndoorTemp,
-                            isNewEvent: false
+                            isNewEvent: false,
+                            eventHasEnded: true
                         ])
                     }
                     logTrace "-------------SWITCHING TO MECHANICAL COOLING----------------"
@@ -2371,10 +2409,11 @@ def get_need(motionActiveEvent=false) {
                 logWarn "changeMode 'heat' returns: $changeMd"
                 if(changeMd){
                     // If switching to mechanical heating, finalize any ongoing event
-                    if (state.currentThermalEvent?.type == "naturalHeating") {
+                    if (state.currentThermalEvent?.type == "naturalHeating" && !state.currentThermalEvent?.eventHasEnded) {
                         recordThermalEvent([
                             endTemp: currentIndoorTemp,
-                            isNewEvent: false
+                            isNewEvent: false, 
+                            eventHasEnded: true
                         ])
                     }
                     logTrace "-------------SWITCHING TO MECHANICAL HEATING----------------"
@@ -2386,7 +2425,7 @@ def get_need(motionActiveEvent=false) {
             }
         }
     } catch (Exception e){
-        log.error "(app is FALLING BACK TO LEGACY ALGORITHM) - Exception in get_need() => $e "
+        logError "(app is FALLING BACK TO LEGACY ALGORITHM) - Exception in get_need() => $e "
         return fallback_need_eval(motionActiveEvent=motionActiveEvent, logs=true)
     }
     
@@ -2423,9 +2462,10 @@ def getComfortManagementSection(validation) {
         } else {
             def features = validation.enhancedFeatures
             def enhancedCount = features.size()
-            
+            def inOverrideMode = state.nightModeActive && override && state.lastNeed == "cool"
+
             paragraph formatText(
-                """✓ Smart Comfort Management Active
+                """✓ Smart Comfort Management ${inOverrideMode ? "<span style='color:yellow'>Temporarily Inactive</span> (override mode)" : "Active"}
                 ${enhancedCount} Enhanced Features Available""",
                 "white",
                 "#43A047"
@@ -2901,15 +2941,15 @@ def updatePerformanceMetrics(category, deltaBracket, event) {
    * - sampleSize: Number of events recorded
    *
    * Success Criteria:
-   * For heating events:
-   * - Negative cooling rate (temperature increased)
-   * - Final temp within swing range of target
-   * - Outdoor temp > (indoor - 5°F)
+   *    For heating events:
+   *        - Negative cooling rate (temperature increased)
+   *        - Final temp within swing range of target
+   *        - Outdoor temp > (indoor - 5°F)
    *
-   * For cooling events:
-   * - Positive cooling rate (temperature decreased) 
-   * - Final temp within swing range of target
-   * - Outdoor temp < (indoor + 5°F)
+   *    For cooling events:
+   *        - Positive cooling rate (temperature decreased) 
+   *        - Final temp within swing range of target
+   *        - Outdoor temp < (indoor + 5°F)
    */
 
    // Initialize or get existing metrics for this delta bracket
@@ -3092,114 +3132,157 @@ def assessNaturalThermalPotential(prediction, targetTemp, currentTemp, outdoorTe
 
     logDebug "assessing Natural ${mode.capitalize()} Potential..."
 
-    // Initialize timing variables for mode change management
-    def currentTime = new Date().time
-    def timeSinceLastMode = currentTime - (state.lastModeChangeTime ?: 0)
-    def delayBetweenModes = state.delayBetweenModes ?: 30 * 60 * 1000 // 30 minutes in milliseconds
-    def feasible  = false
-    // Use learned confidence from historical data if available
-    // Default to 0.9 when:
-    // 1. No historical data exists yet 
-    // 2. System is starting up
-    // 3. Previous predictions were invalid
-    def confidence = prediction.confidence ?: 0.9
-    def result = [:]
+    try {
+        // Initialize timing variables for mode change management
+        def currentTime = new Date().time
+        def timeSinceLastMode = currentTime - (state.lastModeChangeTime ?: 0)
+        def delayBetweenModes = state.delayBetweenModes ?: 30 * 60 * 1000 // 30 minutes in milliseconds
+        def feasible  = false
+        // Use learned confidence from historical data if available
+        // Default to 0.9 when:
+        // 1. No historical data exists yet 
+        // 2. System is starting up
+        // 3. Previous predictions were invalid
+        def confidence = prediction.confidence ?: 0.9
+        def result = [:]
+        def inOverrideMode = state.nightModeActive && override && mode == "cooling"
 
-    // Get current thermal management event if one exists
-    
-    def maxDuration = calculateMaxNaturalAttemptDuration(currentTemp, targetTemp)
+        alwaysWarn "inOverrideMode ? $inOverrideMode"
 
-    // Check if we're currently in a thermal management event
-    if (state.currentThermalEvent) {
-        // Verify it's the same type of event we're assessing
-        if (state.currentThermalEvent?.type == "natural${mode.capitalize()}") {
-            def duration = new Date().time - state.currentThermalEvent.startTime
-            
-            // If we've exceeded maximum duration, record failure and exit
-            if (duration > maxDuration) {
-                alwaysWarn "Natural ${mode} attempt exceeded maximum duration"
-                recordThermalEvent([
-                    endTemp: currentTemp,
-                    isNewEvent: false
-                ])
-                // Clear for potential new event
-                state.currentThermalEvent = null
+        // Get current thermal management event if one exists
+        
+        def maxDuration = calculateMaxNaturalAttemptDuration(currentTemp, targetTemp)
 
-                //update the prediction value as if we got here it means the prediction didn't work
-                updatePerformanceMetrics(category, deltaBracket, [
-                    //coolingRate is used as the metric name regardless of heating or cooling mode. 
-                    // The sign of the value determines heating (-) or cooling (+)
-                    coolingRate: 0, 
-                    duration: event.duration,
-                    success: false
-                ])
+        // Check if we're currently in a thermal management event
+        if (state.currentThermalEvent || inOverrideMode) {
+            // Verify it's the same type of event we're assessing
+            if (state.currentThermalEvent?.type == "natural${mode.capitalize()}") {
+                def duration = new Date().time - state.currentThermalEvent.startTime
 
-                // "we are very confident that natural temperature management is NOT feasible"
-                return [feasible: false, confidence: 0.9]
+                // Log remaining time for monitoring
+                def remainingTime = (maxDuration - duration) / (60 * 1000)
+                def elapsedTime = duration / (60 * 1000)
+                alwaysTrace "Natural ${recordingInProgress?.type} time check: ${new BigDecimal(elapsedTime).setScale(1, BigDecimal.ROUND_HALF_UP)} minutes elapsed, ${new BigDecimal(remainingTime).setScale(1, BigDecimal.ROUND_HALF_UP)} minutes remaining until timeout (max: ${new BigDecimal(maxDuration/(60*1000)).setScale(1, BigDecimal.ROUND_HALF_UP)} minutes)"
+        
+                
+                // If we've exceeded maximum duration, record failure and exit
+                if (duration > maxDuration || (inOverrideMode)) {
+
+                    // if !inOverrideMode, then it's a failure event that needs to be logged and recorded. 
+                    if (!inOverrideMode)  alwaysWarn "Natural ${mode} attempt exceeded maximum duration"
+
+                    // whether or not it's a failure or an override, we must close any ongoing thermalEvent recoding session. 
+                    if (!state.currentThermalEvent?.eventHasEnded){
+                        recordThermalEvent([
+                            endTemp: currentTemp,
+                            isNewEvent: false,
+                            eventHasEnded: true
+                        ])
+                    }
+                    // Clear for potential new event
+                    state.currentThermalEvent = null
+
+                    // Current REFLEXION & TODOs
+
+                    // RECORD FAILED PREDICTION --> what to do when in night user/btn triggered override mode? 
+
+                    // if we're in override mode, system must remember any previous ongoing event duration. 
+                    // but not register this as a failure. 
+                    //  (TODO: we would need event ids!)
+                    // not able to implement this logic yet. No trivalence possible. So we need to implement an event id system. 
+                    // event id will require too much memory, though. External storage? Definitely gotta start considering setting a PSQL cluster somewhere. 
+                    // But that would render the app poorly transportable for others to use. And installation cumbersome; might have to create install script, etc. 
+
+                    // so we simply set the duration in stone, for now? What is even 'event.duration' ?? forgot lolol  
+                    // if (inOverrideMode){
+
+                    // }else {
+
+                    
+                    // update the prediction value as if we got here it means the prediction FAILED
+                    // unless we're in override mode (which applies only in button related 'night mode' and for cooling events)
+                    // In which case we don't want to falsify the learning data. (and also there shouldn't be any ongoing thermalEvent)
+                    if (!inOverrideMode){ 
+                        updatePerformanceMetrics(category, deltaBracket, [
+                            //coolingRate is used as the metric name regardless of heating or cooling mode. 
+                            // The sign of the value determines heating (-) or cooling (+)
+                            "${mode}Rate": 0, 
+                            duration: event.duration,
+                            success: false // TODO: trivalent logic required here as when it's override, it's neither true nor false. For now, we simply don't record a failure. 
+                        ])
+                    }
+                    
+                    // "we are very confident that natural temperature management is NOT feasible"
+                    return [feasible: false, confidence: 0.9, isOverride: inOverrideMode]
+                }        
             }
-            
-            // Log remaining time for monitoring
-            def remainingTime = (maxDuration - duration) / (60 * 1000)
-            def elapsedTime = duration / (60 * 1000)
-            alwaysTrace "Natural ${recordingInProgress.type} time check: ${new BigDecimal(elapsedTime).setScale(1, BigDecimal.ROUND_HALF_UP)} minutes elapsed, ${new BigDecimal(remainingTime).setScale(1, BigDecimal.ROUND_HALF_UP)} minutes remaining until timeout (max: ${new BigDecimal(maxDuration/(60*1000)).setScale(1, BigDecimal.ROUND_HALF_UP)} minutes)"
         }
+
+        // Prefer natural methods if we recently changed modes (even with override = true!)
+        if (timeSinceLastMode < delayBetweenModes) {
+            alwaysTrace "Recent mode change (${timeSinceLastMode/1000/60} minutes ago). Preferring natural ${mode}"
+            feasible = true
+        }
+
+        // Check if outdoor temperature prevents mechanical operation
+        def compareText = mode == 'cooling' ? 'below minimum' : 'above maximum'
+
+        if (thermalThreshold.status == true) {
+            alwaysWarn "Outdoor temperature ${outdoorTemp}°F is ${compareText} ${thermalThreshold.temperature}°F for mechanical ${mode}"
+        }
+
+        // Determine feasibility based on mode and threshold status
+        if (mode == 'cooling') {
+            // Natural cooling is feasible if:
+            // - outdoor temp is below minimum threshold for mechanical cooling OR
+            // - outdoor temp is below indoor temp
+            // not inOverrideMode
+            if (inOverrideMode) {
+                feasible = false
+            } else {
+                feasible = thermalThreshold.status || outdoorTemp < currentTemp
+            }
+        } else {
+            // Natural heating is feasible if:
+            // - outdoor temp is above maximum threshold for mechanical heating OR
+            // - outdoor temp is above indoor temp
+            feasible = thermalThreshold.status || outdoorTemp > currentTemp
+        }
+
+    // Create new event if we don't have one already set 
+        if ((!inOverrideMode && !recordingInProgress?.isNewEvent || recordingInProgress?.type != "natural${mode.capitalize()}")) {
+            recordThermalEvent([
+                type: "natural${mode.capitalize()}",
+                startTemp: currentTemp,
+                endTemp: currentTemp,
+                outdoorTemp: outdoorTemp,
+                duration: 0,
+                fanMode: getFanMode(),
+                humidity: humidity,
+                timeOfDay: new Date().format('HH:mm'),
+                isNewEvent: true, 
+                eventHasEnded: false
+            ])
+
+            alwaysTrace """natural${mode.capitalize()} Prediction success check:
+            <ul>
+                <li>predictedSuccess: ${prediction.predictedSuccess}</li>
+                <li>confidence: ${prediction.confidence}</li>
+                <li>pastEvents: ${state.thermalBehavior."natural${mode.capitalize()}".events.size()}</li>
+            </ul>
+            """
+        }
+
+        result = [feasible : feasible, confidence: confidence]
+
+
+        alwaysWarn "assessNaturalThermalPotential ($mode): ${result.collect{it -> "${it.key}:${it.value}"}}"
+
+        return result
+    } catch (Exception e){
+        logError "assessNaturalThermalPotential => $e"
+        throw e
     }
-
-    // Prefer natural methods if we recently changed modes
-    if (timeSinceLastMode < delayBetweenModes) {
-        alwaysTrace "Recent mode change (${timeSinceLastMode/1000/60} minutes ago). Preferring natural ${mode}"
-        feasible = true
-    }
-
-    // Check if outdoor temperature prevents mechanical operation
-    def compareText = mode == 'cooling' ? 'below minimum' : 'above maximum'
-
-    if (thermalThreshold.status == true) {
-        alwaysWarn "Outdoor temperature ${outdoorTemp}°F is ${compareText} ${thermalThreshold.temperature}°F for mechanical ${mode}"
-    }
-
-    // Determine feasibility based on mode and threshold status
-    if (mode == 'cooling') {
-        // Natural cooling is feasible if:
-        // - outdoor temp is below minimum threshold for mechanical cooling OR
-        // - outdoor temp is below indoor temp
-        feasible = thermalThreshold.status || outdoorTemp < currentTemp
-    } else {
-        // Natural heating is feasible if:
-        // - outdoor temp is above maximum threshold for mechanical heating OR
-        // - outdoor temp is above indoor temp
-        feasible = thermalThreshold.status || outdoorTemp > currentTemp
-    }
-
-   // Create new event if we don't have one already set 
-    if ((!recordingInProgress?.isNewEvent || recordingInProgress.type != "natural${mode.capitalize()}")) {
-        recordThermalEvent([
-            type: "natural${mode.capitalize()}",
-            startTemp: currentTemp,
-            endTemp: currentTemp,
-            outdoorTemp: outdoorTemp,
-            duration: 0,
-            fanMode: getFanMode(),
-            humidity: humidity,
-            timeOfDay: new Date().format('HH:mm'),
-            isNewEvent: true
-        ])
-
-        alwaysTrace """natural${mode.capitalize()} Prediction success check:
-        <ul>
-            <li>predictedSuccess: ${prediction.predictedSuccess}</li>
-            <li>confidence: ${prediction.confidence}</li>
-            <li>pastEvents: ${state.thermalBehavior."natural${mode.capitalize()}".events.size()}</li>
-        </ul>
-        """
-    }
-
-    result = [feasible : feasible, confidence: confidence]
-
-
-    alwaysWarn "assessNaturalThermalPotential ($mode): $result"
-
-    return result
 }
 def calculateMaxNaturalAttemptDuration(currentTemp, targetTemp) {
     /**

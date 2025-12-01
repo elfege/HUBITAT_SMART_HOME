@@ -1,0 +1,457 @@
+    /**
+    * get_need()
+    * Primary decision-making function for temperature management
+    * @param motionActiveEvent Boolean indicating if this was triggered by a motion event
+    * @return String HVAC mode ('cool', 'heat', 'fan_only', or 'off')
+    * 
+    * Evaluates current conditions and determines optimal HVAC mode by:
+    * 1. Validating required sensor capabilities
+    * 2. Analyzing occupancy heat and solar gain
+    * 3. Calculating comfort ranges based on humidity
+    * 4. Assessing natural cooling/heating potential
+    * Falls back to basic algorithm if required capabilities are missing
+    * 
+    * @param motionActiveEvent Boolean indicating if triggered by motion event
+    * @return String HVAC mode ('cool', 'heat', 'fan_only', or 'off')
+    * 
+    * Decision Flow:
+    * ┌─────────────────┐
+    * │ Validate Sensors├──No──→┌──────────────┐
+    * └────────┬────────┘       │Fallback Logic│
+    *          │                └──────────────┘
+    *          Yes
+    *          ↓
+    * ┌─────────────────┐
+    * │ Analyze Inputs  │←──────────────┐
+    * └────────┬────────┘               │
+    *          │                        │
+    *          ↓                        │
+    * ┌─────────────────┐      ┌───────────────┐
+    * │ Check Natural   ├─No──→│Mechanical HVAC│
+    * │ Cooling/Heating │      └───────────────┘
+    * └────────┬────────┘
+    *          │
+    *          Yes
+    *          ↓
+    * ┌─────────────────┐
+    * │  Fan or Off     │
+    * └─────────────────┘
+    * 
+    * Related Functions:
+    * - validateComfortCapabilities() - Initial capability check
+    * - analyzeOccupancyHeat() - Occupancy heat contribution
+    * - analyzeSolarGain() - Solar heat impact
+    * - getPredictedPerformance() - Natural cooling/heating viability
+    * 
+    * Example Return States:
+    * {
+    *   'cool': When mechanical cooling needed
+    *   'heat': When mechanical heating needed
+    *   'fan_only': When natural management possible with fan
+    *   'off': When natural management possible without fan
+    * }
+    * 
+    * @see fallback_need_eval() for basic algorithm
+    */
+
+    /**
+    * analyzeOccupancyHeat()
+    * Estimates heat generation from room occupancy based on motion events
+    * 
+    * Heat Generation Model:
+    * ┌─────────────┐    ┌──────────────┐    ┌────────────┐
+    * │Motion Events│───→│People Counter│───→│Heat Output │
+    * └─────────────┘    └──────────────┘    └────────────┘
+    *       ↑                   ↑                  ↑
+    *    3/minute         1 person per         200W per
+    *                    3 events/min           person
+    * 
+    * @return Map Example:
+    * [
+    *   heatOutput: 400,      // Watts (2 people detected)
+    *   confidence: 0.8,      // High confidence due to consistent events
+    *   events: {            // Last 5 minutes of events
+    *     "12:00": 3,
+    *     "12:01": 4,
+    *     "12:02": 2
+    *   }
+    * ]
+    * 
+    * Confidence Calculation:
+    * - Base: 0.8
+    * - Reduced by 50% if < 1 event per minute
+    * - Increased by consistency of readings
+    * 
+    * @see trackEnvironmentalFactors() for pattern logging
+    * @see getPredictedPerformance() for usage in predictions
+    */
+
+    /**
+    * trackEnvironmentalFactors()
+    * Comprehensive environmental pattern tracking system
+    * 
+    * Data Structure:
+    * state.thermalBehavior
+    * ├── dailyPatterns
+    * │   ├── morning: { temp: 68, humid: 45 }
+    * │   ├── afternoon: { temp: 74, humid: 42 }
+    * │   └── evening: { temp: 71, humid: 44 }
+    * ├── seasonalPatterns
+    * │   ├── winter: { avg: 69, range: [65,72] }
+    * │   ├── spring: { avg: 72, range: [68,75] }
+    * │   └── summer: { avg: 76, range: [72,79] }
+    * ├── solarGainPatterns
+    * │   └── hourly: [...]
+    * └── occupancyPatterns
+    *     └── weekday: {...}
+    * 
+    * Pattern Analysis:
+    *     Time →
+    * Temp  AM    Noon   PM
+    * 78°F  ·      ███   ·
+    * 74°F  ·    ███████ ·
+    * 70°F  ████ ███████ ███
+    * 66°F  ████ ███     ███
+    * 
+    * @see getSeasonalComfortAdjustment() for usage
+    * @see getComfortVisualization() for UI representation
+    */
+
+
+
+
+
+
+
+
+    /**
+    * validateComfortCapabilities()
+    * Evaluates available sensor capabilities against required and enhanced feature sets
+    * @return Map containing:
+    *   - isRequired: Boolean indicating if minimum requirements are met
+    *   - enhancedFeatures: List of available enhanced capabilities
+    *   - missingSensors: List of missing required sensors
+    *   - availableSensors: List of detected sensors and their capabilities
+    *   - motionAnalysis: Object containing motion sensing capabilities
+    * 
+    * Used to determine if smart comfort management can be enabled and what features are available
+    */
+
+
+    /**
+    * analyzeSolarGain()
+    * Calculates solar heat contribution using illuminance and UV sensors
+    * @return Map containing:
+    *   - solarGainWatts: Estimated solar heat gain in watts
+    *   - confidence: Confidence level in the calculation (0-1)
+    *   - hasData: Boolean indicating if relevant sensor data was available
+    * 
+    * Combines illuminance and UV index data to estimate solar heat impact
+    */
+
+    /**
+    * recordThermalEvent()
+    * Records temperature management events for learning
+    * @param params Map containing:
+    *   - type: String ('naturalCooling' or 'naturalHeating')
+    *   - startTemp: Initial temperature
+    *   - endTemp: Final temperature
+    *   - outdoorTemp: Outdoor temperature
+    *   - duration: Event duration in seconds
+    *   - Additional environmental conditions
+    * 
+    * Maintains history of temperature management attempts and their outcomes
+    */
+
+    /**
+    * updatePerformanceMetrics()
+    * Updates success metrics for temperature management strategies
+    * @param category String ('naturalCooling' or 'naturalHeating')
+    * @param deltaBracket String temperature differential range
+    * @param event Map containing event details
+    * 
+    * Maintains running averages of cooling/heating rates and success rates
+    */
+
+    /**
+    * getPredictedPerformance()
+    * Predicts success likelihood of natural temperature management
+    * @param targetTemp Desired temperature
+    * @param currentTemp Current indoor temperature
+    * @param outdoorTemp Current outdoor temperature
+    * @return Map containing success probability and confidence level
+    * 
+    * Uses historical performance data to predict effectiveness of natural cooling/heating
+    */
+
+
+    /**
+    * getTimeBlock()
+    * Converts time to standardized 2-hour blocks
+    * @param hour String in "HH:mm" format
+    * @return String representing time block (e.g., "14:00-16:00")
+    * 
+    * Standardizes time periods for pattern analysis
+    */
+
+    /**
+    * getSeason()
+    * Determines current season based on month
+    * @return String ('winter', 'spring', 'summer', 'fall')
+    * 
+    * Used for seasonal adjustment calculations
+    */
+
+    /**
+    * updateSeasonalPatterns()
+    * Updates learned seasonal temperature patterns
+    * @param season Current season
+    * @param temp Current temperature
+    * @param tempChange Recent temperature change
+    * 
+    * Maintains running statistics of seasonal temperature patterns
+    */
+
+    /**
+    * getSeasonalComfortAdjustment()
+    * Calculates seasonal comfort adjustments
+    * @return Number temperature adjustment based on season
+    * 
+    * Modifies comfort ranges based on learned seasonal patterns
+    */
+
+    /**
+    * calculateComfortRange()
+    * Determines comfort temperature range based on humidity
+    * @param humidity Current relative humidity percentage
+    * @return Map with upperBound and lowerBound temperature adjustments
+    * 
+    * Adjusts acceptable temperature range based on humidity levels
+    */
+
+    /**
+    * getAverageHumidity()
+    * Calculates average humidity from available sensors
+    * @return Number average humidity percentage
+    * 
+    * Combines readings from all humidity-capable sensors
+    * Returns default 45% if no sensors available
+    */
+
+    /**
+    * getComfortVisualization()
+    * Generates HTML visualization of comfort management data
+    * @return String containing HTML/CSS for comfort visualization
+    * 
+    * Creates visual representation of system performance and patterns
+    */
+
+
+
+
+    /**
+    * calculateEnergySavings()
+    * Calculates energy savings from natural temperature management
+    * 
+    * Process Flow:
+    * ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+    * │  Get Natural  │────>│   Calculate   │────>│   Compute     │
+    * │Events (7 days)│     │Energy per Event│     │Total Savings %│
+    * └───────────────┘     └───────────────┘     └───────────────┘
+    *         │                     │                     │
+    *    Events List          kWh Savings           Percentage
+    * 
+    * @return BigDecimal Percentage of energy saved compared to baseline
+    * 
+    * Calculation Method:
+    * 1. Collect natural cooling/heating events from past week
+    * 2. For each event:
+    *    - Convert duration to hours
+    *    - Calculate kWh saved (vs. mechanical HVAC)
+    *    - Adjust for effectiveness
+    * 3. Compare to baseline (24/7 HVAC operation)
+    * 
+    * Example Return:
+    * 23.5 (meaning 23.5% energy saved)
+    * 
+    * @see trackEnvironmentalFactors() for event logging
+    * @see getComfortMetrics() for usage in UI
+    */
+
+    /**
+    * calculateComfortScore()
+    * Evaluates overall comfort management effectiveness
+    * 
+    * Scoring Components:
+    * ┌─────────────────┐
+    * │  Comfort Score  │
+    * └────────┬────────┘
+    *     ┌────┴────┬────────┐
+    * ┌────┴───┐ ┌──┴───┐ ┌──┴───┐
+    * │ Temp   │ │System│ │Stable│
+    * │Maintain│ │ Resp │ │Temps │
+    * └────┬───┘ └──┬───┘ └──┬───┘
+    *   0.4*x    0.3*y    0.3*z
+    * 
+    * @return BigDecimal Score between 0 and 1
+    * 
+    * Scoring Factors:
+    * - Temperature Maintenance (40%)
+    *   - How well target temperature is maintained
+    * - System Response (30%)
+    *   - How quickly system responds to changes
+    * - Temperature Stability (30%)
+    *   - How consistent temperatures remain
+    * 
+    * Example Returns:
+    * 0.85 - Excellent comfort management
+    * 0.60 - Average performance
+    * 0.30 - Needs improvement
+    * 
+    * @see analyzeOccupancyHeat() for occupancy impact
+    * @see analyzeSolarGain() for environmental factors
+    */
+
+    /**
+    * getSuccessRateChart()
+    * Generates HTML visualization of temperature management success rates
+    * 
+    * Data Flow:
+    * ┌──────────┐    ┌──────────┐    ┌──────────┐
+    * │Collect   │───>│Transform │───>│Generate  │
+    * │Rate Data │    │  to %    │    │HTML/CSS  │
+    * └──────────┘    └──────────┘    └──────────┘
+    * 
+    * Chart Structure:
+    *     Success %
+    * 100│   █
+    *    │ █ █ █
+    *  50│ █ █ █ █
+    *    │ █ █ █ █ █
+    *   0└─────────────
+    *     C5 C10 H5 H10
+    *     Temperature Δ
+    * 
+    * @return String HTML/CSS for bar chart visualization
+    * 
+    * Visualization Features:
+    * - Color-coded bars (blue=cooling, green=heating)
+    * - Tooltips with detailed information
+    * - Responsive design
+    * - Graceful fallback for missing data
+    * 
+    * @see getComfortVisualization() for complete UI
+    */
+
+    /**
+    * getEnvironmentalPatterns()
+    * Generates visualization of environmental impact patterns
+    * 
+    * Data Organization:
+    * ┌─────────────────┐
+    * │Environmental    │
+    * │Patterns UI     │
+    * └─┬──────┬───────┘
+    *   │      │       │
+    * ┌─┴──┐ ┌─┴──┐ ┌─┴──┐
+    * │Season│Solar│Occup│
+    * │Stats │Heat │Heat │
+    * └─────┘└─────┘└────┘
+    * 
+    * @return String HTML markup for pattern visualization
+    * 
+    * Components:
+    * - Seasonal temperature patterns
+    *   - Average temperatures
+    *   - Temperature ranges
+    * - Solar gain impact
+    *   - Average daily gain
+    *   - Peak hours
+    * - Occupancy patterns
+    *   - Heat contribution
+    *   - Usage patterns
+    * 
+    * @see trackEnvironmentalFactors() for data collection
+    * @see getDetailedAnalytics() for detailed view
+    */
+
+    /**
+    * getDetailedAnalytics()
+    * Generates comprehensive performance analytics visualization
+    * 
+    * Analytics Structure:
+    * ┌────────────────────┐
+    * │Detailed Analytics  │
+    * └┬──────────┬───────┘
+    *  │          │
+    * ┌┴────┐   ┌─┴───┐
+    * │Perf.│   │Success│
+    * │Stats│   │Rates │
+    * └─────┘   └──────┘
+    * 
+    * @return String HTML markup for analytics display
+    * 
+    * Components:
+    * 1. Performance Metrics
+    *    - Total events
+    *    - Average rates
+    *    - System efficiency
+    * 2. Success Rates
+    *    - By temperature delta
+    *    - By mode (heating/cooling)
+    *    - Historical trends
+    * 
+    * @see calculateComfortScore() for scoring
+    * @see calculateEnergySavings() for efficiency
+    */
+
+    /**
+    * calculateTrendIndicator()
+    * Calculates trend direction and magnitude for metrics
+    * 
+    * Trend Calculation:
+    * ┌──────────┐   ┌──────────┐   ┌──────────┐
+    * │Historical│   │ Compare  │   │ Generate │
+    * │ Values   │──>│  to Avg  │──>│Indicator │
+    * └──────────┘   └──────────┘   └──────────┘
+    * 
+    * @param currentValue Current metric value
+    * @param historicalValues List of previous values
+    * @return Map with direction (↑,→,↓) and percentage
+    * 
+    * Trend Analysis:
+    * - Upward trend (↑): Current > Historical avg
+    * - Neutral (→): Current ≈ Historical avg
+    * - Downward (↓): Current < Historical avg
+    * 
+    * Example Return:
+    * [direction: "↑", percentage: "5.2"]
+    * 
+    * @see getComfortMetrics() for trend display
+    */
+
+    /**
+    * calculateMovingAverage()
+    * Calculates moving average for smoothing time series data
+    * 
+    * Processing Steps:
+    * ┌─────────┐   ┌─────────┐   ┌─────────┐
+    * │Window   │   │Sum      │   │Average  │
+    * │Selection│──>│Values   │──>│Calc     │
+    * └─────────┘   └─────────┘   └─────────┘
+    * 
+    * @param values List of numerical values
+    * @param window Size of moving average window
+    * @return List of moving averages
+    * 
+    * Example:
+    * Input: [1,2,3,4,5], window=3
+    * Output: [2.00,3.00,4.00]
+    * 
+    * Method:
+    * - Slides window over data points
+    * - Calculates average within window
+    * - Uses BigDecimal for precision
+    * 
+    * @see getDetailedAnalytics() for trend smoothing
+    */

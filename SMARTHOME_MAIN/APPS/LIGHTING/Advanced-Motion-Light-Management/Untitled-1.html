@@ -1,0 +1,172 @@
+// Approach 1: Full page overlay modal
+section('App Control') {
+    input 'update', 'button', title: 'UPDATE'
+    input 'run', 'button', title: 'RUN'
+    input 'reset', 'button', title: 'Reset States'
+    input 'checkSensors', 'button', title: 'Health Check'
+    
+    if (state.showHealthCheck) {
+        def motionSensorNames = motionSensors?.collect { it.displayName } ?: []
+        def functionalSensors = checkFunctionalSensors()
+        def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
+        
+        paragraph """
+            <style>
+                .modal-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    z-index: 9999;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                .modal-content {
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    max-width: 800px;
+                    width: 90%;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    position: relative;
+                }
+                .close-button {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #666;
+                }
+            </style>
+            <div class="modal-overlay" id="healthCheckModal">
+                <div class="modal-content">
+                    <button class="close-button" onclick="closeModal()">&times;</button>
+                    <h2 style="margin-top: 0;">Sensor Health Check Results</h2>
+                    <div style="margin: 20px 0;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="padding: 10px; border: 1px solid #ddd;">
+                                    <b>All Motion Sensors</b>
+                                    <ol style="margin: 10px 0;">
+                                        ${motionSensorNames.collect { "<li style='margin: 5px 0;'>${it}</li>" }.join('')}
+                                    </ol>
+                                </td>
+                                <td style="padding: 10px; border: 1px solid #ddd;">
+                                    <b>${functionalSensors ? "Functional Sensors" : "<span style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS</span>"}</b>
+                                    <ol style="margin: 10px 0;">
+                                        ${functionalSensorNames.collect { "<li style='margin: 5px 0;'>${it}</li>" }.join('')}
+                                    </ol>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <script>
+                function closeModal() {
+                    document.getElementById('healthCheckModal').style.display = 'none';
+                    // Attempt to update state via AJAX
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'showHealthCheck=false'
+                    }).catch(console.error);
+                }
+
+                // Close modal when clicking outside
+                document.getElementById('healthCheckModal').addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeModal();
+                    }
+                });
+
+                // Prevent closing when clicking inside modal
+                document.querySelector('.modal-content').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            </script>
+        """
+    }
+}
+
+// Approach 2: Relative positioned modal
+section('App Control') {
+    input 'update', 'button', title: 'UPDATE'
+    input 'run', 'button', title: 'RUN'
+    input 'reset', 'button', title: 'Reset States'
+    input 'checkSensors', 'button', title: 'Health Check'
+    
+    if (state.showHealthCheck) {
+        def motionSensorNames = motionSensors?.collect { it.displayName } ?: []
+        def functionalSensors = checkFunctionalSensors()
+        def functionalSensorNames = functionalSensors?.collect { it.displayName } ?: []
+        
+        paragraph """
+            <style>
+                .relative-modal {
+                    position: relative;
+                    margin: 20px 0;
+                }
+                .modal-container {
+                    position: absolute;
+                    top: 20%;
+                    left: 50%;
+                    transform: translate(-50%, 0);
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+                    width: calc(100% - 40px);
+                    max-width: 800px;
+                    z-index: 100;
+                }
+                .modal-backdrop {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(0, 0, 0, 0.3);
+                    z-index: 99;
+                }
+            </style>
+            <div class="relative-modal">
+                <div class="modal-backdrop"></div>
+                <div class="modal-container">
+                    <h2 style="margin-top: 0;">Sensor Health Check Results</h2>
+                    <div style="margin: 20px 0;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="padding: 10px; border: 1px solid #ddd;">
+                                    <b>All Motion Sensors</b>
+                                    <ol style="margin: 10px 0;">
+                                        ${motionSensorNames.collect { "<li style='margin: 5px 0;'>${it}</li>" }.join('')}
+                                    </ol>
+                                </td>
+                                <td style="padding: 10px; border: 1px solid #ddd;">
+                                    <b>${functionalSensors ? "Functional Sensors" : "<span style='color:red; font-weight:900;'>NO FUNCTIONAL SENSORS</span>"}</b>
+                                    <ol style="margin: 10px 0;">
+                                        ${functionalSensorNames.collect { "<li style='margin: 5px 0;'>${it}</li>" }.join('')}
+                                    </ol>
+                                </td>
+                            </tr>
+                        </table>
+                        <div style="text-align: right; margin-top: 20px;">
+                            <button onclick="location.reload()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """
+    }
+}

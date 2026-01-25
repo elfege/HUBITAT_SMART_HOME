@@ -10,7 +10,8 @@ declare -A HUBS=(
 )
 
 # Backup directory
-BACKUP_DIR="/mnt/f/HUBITAT_BACKUPS"
+BACKUP_DIR="/mnt/THE_BIG_DRIVE/HUBITAT_BACKUPS"
+SSH_HOST=dellserver
 
 # Log file
 LOG_FILE="$BACKUP_DIR/backup_log.txt"

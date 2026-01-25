@@ -100,29 +100,32 @@ is_gold_copy_day() {
 
 gold_copy_exists_this_month() {
     local hub_name="$1"
-    local hub_backup_dir="$BACKUP_DIR/$hub_name"
-    local current_month_year
-    current_month_year=$(date '+%m_%Y')
+    local current_year current_month
+    current_year=$(date '+%Y')
+    current_month=$(date '+%m')
+    local gold_copy_dir="$BACKUP_DIR/$hub_name/gold_copies/$current_year/$current_month"
 
     # Check if a gold copy for this month already exists
     local gold_exists
-    gold_exists=$(ssh_with_socket "$SSH_HOST" "ls -1 '$hub_backup_dir' 2>/dev/null | grep -c '_gold_copy_.*${current_month_year}' || true")
+    gold_exists=$(ssh_with_socket "$SSH_HOST" "find '$gold_copy_dir' -type f -name '*_gold_copy_*.lzf' 2>/dev/null | wc -l" || echo "0")
     [[ "$gold_exists" -gt 0 ]]
 }
 
 create_gold_copy() {
     local hub_name="$1"
     local source_file="$2"
-    local hub_backup_dir="$BACKUP_DIR/$hub_name/gold_copies"
-    local timestamp
-    timestamp=$(date '+%m_%d_%Y_T_%H_%M_%S')
-    local gold_file="${hub_name}_gold_copy_${timestamp}.lzf"
+    local current_year current_month file_date
+    current_year=$(date '+%Y')
+    current_month=$(date '+%m')
+    file_date=$(date '+%m-%d-%Y')
+    local gold_copy_dir="$BACKUP_DIR/$hub_name/gold_copies/$current_year/$current_month"
+    local gold_file="${hub_name}_gold_copy_${file_date}.lzf"
 
-    ensure_remote_directory "$hub_backup_dir"
+    ensure_remote_directory "$gold_copy_dir"
 
     log "Creating gold copy for $hub_name..."
-    if scp -o ControlPath="/tmp/ssh-socket-${SSH_HOST}" "$source_file" "${SSH_HOST}:${hub_backup_dir}/${gold_file}"; then
-        log_success "Gold copy created: $hub_backup_dir/$gold_file"
+    if scp -o ControlPath="/tmp/ssh-socket-${SSH_HOST}" "$source_file" "${SSH_HOST}:${gold_copy_dir}/${gold_file}"; then
+        log_success "Gold copy created: $gold_copy_dir/$gold_file"
         return 0
     else
         log_error "Failed to create gold copy for $hub_name"
@@ -137,32 +140,37 @@ rotate_old_backups() {
     log "Rotating backups older than $MAX_RETENTION_DAYS days for $hub_name (excluding gold copies)..."
 
     # Find and delete regular backups older than MAX_RETENTION_DAYS days
-    # Exclude gold_copies directory and any files with 'gold_copy' in name
+    # Search recursively through YYYY/mm structure, exclude gold_copies directory
     local deleted_count
     deleted_count=$(ssh_with_socket "$SSH_HOST" "
-        find '$hub_backup_dir' -maxdepth 1 -type f -name '*.lzf' ! -name '*gold_copy*' -mtime +$MAX_RETENTION_DAYS -delete -print 2>/dev/null | wc -l
+        find '$hub_backup_dir' -path '*/gold_copies' -prune -o -type f -name '*.lzf' -mtime +$MAX_RETENTION_DAYS -delete -print 2>/dev/null | wc -l
     " || echo "0")
 
     if [[ "$deleted_count" -gt 0 ]]; then
         log "Deleted $deleted_count old backup(s) for $hub_name"
-    else
-        log "No backups older than $MAX_RETENTION_DAYS days found for $hub_name"
     fi
+
+    # Clean up empty year/month directories (but not gold_copies)
+    ssh_with_socket "$SSH_HOST" "
+        find '$hub_backup_dir' -path '*/gold_copies' -prune -o -type d -empty -delete 2>/dev/null
+    " || true
 }
 
 backup_hub() {
     local hub_name="$1"
     local hub_ip="$2"
-    local timestamp
-    timestamp=$(date '+%m_%d_%Y_T_%H_%M_%S')
-    local backup_file="${hub_ip}-${timestamp}.lzf"
-    local hub_backup_dir="$BACKUP_DIR/$hub_name"
+    local current_year current_month file_date
+    current_year=$(date '+%Y')
+    current_month=$(date '+%m')
+    file_date=$(date '+%m-%d-%Y')
+    local backup_file="${hub_ip}-${file_date}.lzf"
+    local hub_backup_dir="$BACKUP_DIR/$hub_name/$current_year/$current_month"
     local local_backup_file="$LOCAL_TMP_DIR/$backup_file"
 
     # Create local temp directory
     mkdir -p "$LOCAL_TMP_DIR"
 
-    # Ensure remote hub directory exists
+    # Ensure remote hub directory exists (YYYY/mm structure)
     ensure_remote_directory "$hub_backup_dir"
 
     # Download backup from hub (this creates a NEW backup and downloads it)
@@ -229,19 +237,19 @@ show_status() {
         local hub_backup_dir="$BACKUP_DIR/$hub_name"
         log "--- $hub_name ---"
 
-        # Count regular backups
+        # Count regular backups (search recursively, exclude gold_copies)
         local regular_count
-        regular_count=$(ssh_with_socket "$SSH_HOST" "find '$hub_backup_dir' -maxdepth 1 -type f -name '*.lzf' ! -name '*gold_copy*' 2>/dev/null | wc -l" || echo "0")
+        regular_count=$(ssh_with_socket "$SSH_HOST" "find '$hub_backup_dir' -path '*/gold_copies' -prune -o -type f -name '*.lzf' -print 2>/dev/null | wc -l" || echo "0")
         log "  Regular backups: $regular_count"
 
         # Count gold copies
         local gold_count
-        gold_count=$(ssh_with_socket "$SSH_HOST" "find '$hub_backup_dir/gold_copies' -type f -name '*gold_copy*.lzf' 2>/dev/null | wc -l" || echo "0")
+        gold_count=$(ssh_with_socket "$SSH_HOST" "find '$hub_backup_dir/gold_copies' -type f -name '*_gold_copy_*.lzf' 2>/dev/null | wc -l" || echo "0")
         log "  Gold copies: $gold_count"
 
-        # Show latest backup
+        # Show latest backup (most recent by modification time)
         local latest
-        latest=$(ssh_with_socket "$SSH_HOST" "ls -1t '$hub_backup_dir'/*.lzf 2>/dev/null | head -1 | xargs basename 2>/dev/null" || echo "none")
+        latest=$(ssh_with_socket "$SSH_HOST" "find '$hub_backup_dir' -path '*/gold_copies' -prune -o -type f -name '*.lzf' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2 | xargs basename 2>/dev/null" || echo "none")
         log "  Latest backup: $latest"
     done
 }

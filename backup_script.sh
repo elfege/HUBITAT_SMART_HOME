@@ -215,19 +215,43 @@ backup_hub() {
 create_cron_job() {
     local script_path
     script_path=$(realpath "$0")
-    local cron_job="0 6 * * * /bin/bash $script_path >> /tmp/hubitat_backup_cron.log 2>&1"
+    local cron_entry="0 6 * * * /bin/bash $script_path >> /tmp/hubitat_backup_cron.log 2>&1"
+    local cron_file="$HOME/0_CRON/mycrontab_$(hostname)"
 
-    # Check if cron job already exists
-    if crontab -l 2>/dev/null | grep -qF "$script_path"; then
-        # Update existing cron job to new time
-        log "Updating existing cron job to 6 AM..."
-        (crontab -l 2>/dev/null | grep -vF "$script_path"; echo "$cron_job") | crontab -
-    else
-        # Add new cron job
-        log "Adding new cron job for daily backup at 6 AM..."
-        (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
+    # Ensure 0_CRON directory exists
+    mkdir -p "$HOME/0_CRON"
+
+    # Create cron file if it doesn't exist
+    if [[ ! -f "$cron_file" ]]; then
+        touch "$cron_file"
+        log "Created new crontab file: $cron_file"
     fi
-    log_success "Cron job configured: $cron_job"
+
+    # Check if entry already exists in mycrontab file
+    if grep -qF "$script_path" "$cron_file" 2>/dev/null; then
+        # Update existing entry
+        log "Updating existing cron entry in $cron_file..."
+        sed -i "\|$script_path|d" "$cron_file"
+    fi
+
+    # Add the cron entry with header comment
+    cat >> "$cron_file" << EOF
+
+#####################################################################
+# Hubitat Backup - daily at 6 AM
+#####################################################################
+$cron_entry
+EOF
+
+    log "Added cron entry to $cron_file"
+
+    # Apply the crontab using the standard method (updatecrontab alias equivalent)
+    if crontab "$cron_file"; then
+        log_success "Crontab updated from $cron_file"
+    else
+        log_error "Failed to apply crontab from $cron_file"
+        return 1
+    fi
 }
 
 show_status() {

@@ -1,6 +1,6 @@
 # Hubitat Smart Home Automation Suite
 
-A comprehensive collection of custom Hubitat Elevation apps and drivers for advanced home automation. This repository showcases production-grade Groovy development with intelligent climate control, motion-based lighting, hub health monitoring, and custom device integrations.
+A collection of custom Hubitat Elevation apps and drivers for advanced home automation, combining original work with community integrations. This repository includes original Groovy development for intelligent climate control, motion-based lighting, and hub health monitoring, alongside third-party integrations that have been configured for personal use.
 
 ## Table of Contents
 
@@ -33,19 +33,25 @@ graph TB
     subgraph "Hubitat Hub Ecosystem"
         HUB[Hubitat Hub]
 
-        subgraph "Applications"
+        subgraph "Original Applications"
             TM[Thermostat Manager V3]
             ES[Eternal Sunshine]
             WD[CSP Watchdog]
             AML[Advanced Motion Lighting]
-            L360[Life360+]
         end
 
-        subgraph "Custom Drivers"
+        subgraph "Third-Party Apps"
+            L360[Life360+ *]
+        end
+
+        subgraph "Original Drivers"
             ESP[ESP8266/ESP32 Drivers]
-            MIDEA[Midea AC Driver]
-            LIFE[Life360 Driver]
             MISC[Misc Device Drivers]
+        end
+
+        subgraph "Third-Party Drivers"
+            MIDEA[Midea AC Driver *]
+            LIFE[Life360 Driver *]
         end
 
         subgraph "Devices"
@@ -164,7 +170,9 @@ stateDiagram-v2
 
 **Location:** [SMARTHOME_MAIN/APPS/CLIMATE/TEMPERATURE/Thermostat-Manager/](SMARTHOME_MAIN/APPS/CLIMATE/TEMPERATURE/Thermostat-Manager/)
 
-#### Midea AC Integration
+#### Midea AC Integration (Third-Party)
+
+> **Note:** This driver was created by **tomw** (2021), with contributions from tcurtin and jcox10. Based on the [midea-msmart](https://github.com/mill1000/midea-msmart) protocol library by Tucker Kern, Colin Kuebler, Mac_Zhou, and NeoAcheron.
 
 Local LAN control for Midea-branded air conditioners, eliminating cloud dependency.
 
@@ -313,7 +321,9 @@ Real-time power usage tracking and reporting.
 
 ### Presence Detection
 
-#### Life360+
+#### Life360+ (Third-Party)
+
+> **Note:** This is a third-party app. Original authors: Jeff's Account (2014), Bryan Turcotte (@bptworld, 2019-2020), Joe Page. See [source file](SMARTHOME_MAIN/APPS/GEOLOCATION_PRESENCE/Life360+.groovy) for full attribution.
 
 Enhanced Life360 integration for family location tracking with Hubitat presence management.
 
@@ -331,18 +341,30 @@ Enhanced Life360 integration for family location tracking with Hubitat presence 
 
 ## Custom Drivers
 
+### Original Drivers (by Elfege)
+
 | Driver | Description | Communication |
 | ------ | ----------- | ------------- |
 | **ESP8266 Curtains** | Motorized curtain/blind control | HTTP/REST |
 | **ESP8266 Door Intercom** | Video intercom integration | HTTP/REST |
 | **ESP8266 Apple TV/IR** | IR control for entertainment devices | HTTP/REST |
-| **Midea AC Controller** | Local control for Midea HVAC | LAN Protocol |
-| **Life360+ Driver** | Location tracker user driver | Cloud API |
-| **Gas Detector** | Gas leak sensor | Zigbee/Z-Wave |
+| **ESP8266 Switch** | Generic ESP8266 switch controller | HTTP/REST |
+| **ESP8266 Window** | Window sensor/controller | HTTP/REST |
 | **PIR Motion Sensor** | Custom motion sensor handler | Zigbee/Z-Wave |
 | **Cats Water Tank** | Pet water level monitor | HTTP/REST |
-| **EzOutlet2** | Network power switch control | HTTP/REST |
-| **Levoit Air Purifier** | Core 400S/600S control | Cloud API |
+| **Thermostat Dimmer** | Virtual thermostat dimmer | Internal |
+| **Water Sensor ESP** | Water leak detection | HTTP/REST |
+| **Wet Food Cat Feeder** | Automated pet feeder | HTTP/REST |
+| **Split AC IR Controller** | IR-based AC control | HTTP/REST |
+
+### Third-Party Drivers (with attribution)
+
+| Driver | Original Author(s) | Elfege Contribution |
+| ------ | ------------------ | ------------------- |
+| **Midea AC Controller** | tomw (2021), tcurtin, jcox10 | Configuration only |
+| **Life360+ Driver** | bptworld, Joe Page, tmleafs | None (usage only) |
+| **Levoit Air Purifier** | Niklas Gustafsson | Contributor (600S support, improvements) |
+| **SwitchBot Bot API** | ToffeHoff | Co-author (PowerMeter capability) |
 
 **Location:** [SMARTHOME_MAIN/DRIVERS/](SMARTHOME_MAIN/DRIVERS/)
 
@@ -432,22 +454,22 @@ python discover_devices.py  # Find your AC units
 HUBITAT/
 ├── SMARTHOME_MAIN/              # Primary hub configuration
 │   ├── APPS/
-│   │   ├── BATTERY_MANAGEMENT/  # Battery monitoring
+│   │   ├── BATTERY_MANAGEMENT/  # Battery monitoring (original)
 │   │   ├── CLIMATE/             # Temperature & humidity control
-│   │   │   ├── HUMIDITY/
+│   │   │   ├── HUMIDITY/        # (derived from SmartThings)
 │   │   │   └── TEMPERATURE/
-│   │   │       ├── Thermostat-Manager/
-│   │   │       ├── hubitat_midea/
-│   │   │       └── midea-msmart/
-│   │   ├── GEOLOCATION_PRESENCE/# Life360 integration
-│   │   ├── LIGHTING/            # Light automation
+│   │   │       ├── Thermostat-Manager/   # (original)
+│   │   │       ├── hubitat_midea/        # (third-party: tomw)
+│   │   │       └── midea-msmart/         # (third-party: MIT)
+│   │   ├── GEOLOCATION_PRESENCE/# (third-party: bptworld et al.)
+│   │   ├── LIGHTING/            # Light automation (original)
 │   │   │   ├── eternalSunshine/
 │   │   │   └── Advanced-Motion-Light-Management/
 │   │   ├── MISC/                # Utilities & web UI
-│   │   │   └── elfegetiles/
-│   │   ├── POWER/               # Power monitoring
-│   │   └── WATCHDOG/            # Hub health monitoring
-│   └── DRIVERS/                 # Custom device drivers
+│   │   │   └── elfegetiles/     # (original)
+│   │   ├── POWER/               # Power monitoring (original)
+│   │   └── WATCHDOG/            # Hub health monitoring (original)
+│   └── DRIVERS/                 # Mixed original and third-party
 ├── SMARTHOME1-4/                # Additional hub configs
 ├── HOOKS.md                     # Git hook documentation
 └── README.md                    # This file
@@ -467,7 +489,9 @@ HUBITAT/
 
 ## Author
 
-Elfege Leylavergne
+**Elfege Leylavergne** - Original applications and drivers, repository maintainer
+
+This repository is a personal smart home configuration that includes both original work and third-party community integrations. See the [License](#license) and [Acknowledgments](#acknowledgments) sections for full attribution of third-party components.
 
 ---
 
@@ -475,9 +499,22 @@ Elfege Leylavergne
 
 Individual apps and drivers may have different licenses. See the license headers in each file for details.
 
+### Original Work (by Elfege Leylavergne)
+
 - **Thermostat Manager V3:** Non-Commercial Use Only
 - **Eternal Sunshine:** AS-IS, Copyright 2016
-- **Life360+ Driver:** Apache License 2.0
+- **Advanced Motion Lighting V2:** Copyright 2024
+- **CSP Watchdog:** Copyright Elfege
+- **ESP8266 Drivers:** Apache License 2.0
+
+### Third-Party Components
+
+- **Life360+ App & Driver:** Apache License 2.0 - Original authors: Jeff's Account (2014), Bryan Turcotte (@bptworld, 2019-2020), Joe Page
+- **Midea AC Controller (hubitat_midea):** Apache License 2.0 - Author: tomw (2021)
+- **midea-msmart library:** MIT License - Authors: Tucker Kern, Colin Kuebler (@kueblc), Mac_Zhou (@mac-zhou), NeoAcheron
+- **Levoit Air Purifier:** MIT License - Author: Niklas Gustafsson (Elfege as contributor)
+- **SwitchBot Bot API:** Original by ToffeHoff (Elfege as co-author)
+- **Homebridge v2:** Copyright 2018-2023 Anthony Santilli (tonesto7)
 
 ---
 
@@ -493,6 +530,29 @@ Contributions are welcome! Please ensure any submissions:
 
 ## Acknowledgments
 
-- Hubitat Community for platform support
-- bptworld for Life360 driver foundation
-- msmart-ng contributors for Midea protocol research
+This repository includes significant contributions from the Hubitat community:
+
+### Third-Party App/Driver Authors
+
+- **Bryan Turcotte (@bptworld)** - Life360+ app and driver
+- **Joe Page (@jpage4500)** - Life360+ maintenance and improvements
+- **Jeff's Account / cwwilson08** - Original Life360 SmartThings port
+- **tomw** - Midea AC local controller driver for Hubitat
+- **Tucker Kern, Colin Kuebler, Mac_Zhou, NeoAcheron** - midea-msmart Python library
+- **Niklas Gustafsson** - Levoit Air Purifier and VeSync Integration drivers
+- **ToffeHoff** - SwitchBot Bot API driver
+- **Anthony Santilli (tonesto7)** - Homebridge v2 integration
+- **Robert Morris (RMoRobert)** - Zooz Q Sensor ZSE11 community driver
+- **Dave Gutheinz** - Samsung TV Remote driver
+- **cuboy29** - Heiman Gas Detector driver
+
+### Community Support
+
+- Hubitat Community forums for platform support and testing
+- SmartThings community for original app foundations
+
+---
+
+## TODO
+
+- [ ] Fix Samsung TV Remote driver to improve off command handling (remove multiple command retry logic)

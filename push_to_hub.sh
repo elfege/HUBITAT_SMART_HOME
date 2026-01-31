@@ -406,11 +406,12 @@ push_to_hub() {
         if [[ "$is_new" == "true" || "$auto_create" == "true" ]]; then
             # Append new entry to metadata.json
             local full_filepath="${HUBITAT_BASE}/${instance}/${FILE_PATH}"
-            # Convert to Windows-style path format to match existing entries
-            local win_filepath=$(echo "$full_filepath" | sed 's|/home/elfege/HUBITAT/||' | sed 's|SMARTHOME[0-9]|/H:/OneDrive/Documents/PROJECTS/HUBITAT/&|')
+            # Use WSL path format (not Windows paths)
+            # Full filepath is already in correct format: /home/elfege/HUBITAT/SMARTHOME{N}/...
+            local metadata_filepath="$full_filepath"
 
             local new_entry=$(jq -n \
-                --arg filepath "$win_filepath" \
+                --arg filepath "$metadata_filepath" \
                 --arg codeType "$code_type" \
                 --argjson id "$actual_hub_id" \
                 --argjson version "$new_version" \

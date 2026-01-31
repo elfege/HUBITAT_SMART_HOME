@@ -212,6 +212,18 @@
 - Changes to shared code should be evaluated for all instances
 - Sync mechanisms exist via _SYNCAPP directories
 
+**Hub Architecture:**
+
+- All 4 hubs (SMARTHOME1-4) are hub meshed
+- Hub 1 & Hub 2 are masters (hold most devices):
+  - Hub 2: Holds most devices (primary device hub)
+  - Hub 1: Mostly for security stuff and Alexa integration
+- Hub 4: Central Maker API for ~/0_TILES project and power measurement
+- Hub 3: (role to be documented)
+- **CRITICAL**: Each hub has DIFFERENT driver/app IDs for the same code
+  - Same driver deployed to multiple hubs = different ID on each hub
+  - metadata.json must reflect hub-specific IDs, not shared IDs
+
 ---
 
 ## Meta-Suggestions for Rule Effectiveness

@@ -231,11 +231,9 @@ localHub = $localHub
                 log.error "INSIDE httpGet - resp.status = ${resp.status}"
 
                 if (resp.success) {
-                    log.error "resp.data TYPE: ${resp.data.getClass().getName()}"
                     log.error "resp.data CONTENT: ${resp.data}"
 
                     def attributes = resp.data.attributes
-                    log.error "attributes TYPE: ${attributes?.getClass()?.getName()}"
                     log.error "attributes SIZE: ${attributes?.size()}"
 
                     if (attributes) {
@@ -266,7 +264,7 @@ localHub = $localHub
             log.error "AFTER httpGet - powerVal = ${powerVal}"
             return powerVal
         } catch (Exception e) {
-            log.error "EXCEPTION CAUGHT: ${e.getClass().getName()}"
+            log.error "EXCEPTION CAUGHT: ${e}"
             log.error "EXCEPTION MESSAGE: ${e.message}"
             log.error "EXCEPTION STACK: ${e.stackTrace.take(5)}"
             sendEvent(name: "power", value: "API ERROR")

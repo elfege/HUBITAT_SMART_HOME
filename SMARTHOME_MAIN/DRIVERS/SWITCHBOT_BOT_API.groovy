@@ -218,36 +218,42 @@ MakerApiToken = $MakerApiToken
 """
     if(powerDevId && AppNumber && MakerApiToken)
     {
-        def uri = "http://"+localHub+"/apps/api/"+AppNumber+"/devices/"+powerDevId+"/events?access_token="+MakerApiToken
+        def uri = "http://"+localHub+"/apps/api/"+AppNumber+"/devices/"+powerDevId+"?access_token="+MakerApiToken
 
         if (logEnable) log.debug uri
 
-        def DATA = []
-        def value = null
-        def name = null
+        def powerVal = null
         try {
             httpGet(uri) { resp ->
-                if (resp.success) {  
+                if (resp.success) {
                     if (logEnable) log.debug "resp.data = $resp.data"
-                    DATA = resp.data
-                    def powerVal = DATA.find{element -> element.'name' == 'power'}.value
-                    powerVal = powerVal.toFloat()
-                    if (logEnable) log.debug "********power: "+powerVal+" Watts"
-                    sendEvent(name: "power", value: powerVal)
-                    return powerVal     
+                    def attributes = resp.data.attributes
+                    if (attributes) {
+                        def powerElement = attributes.find{attr -> attr.name == 'power'}
+                        if (powerElement) {
+                            powerVal = powerElement.currentValue.toFloat()
+                            if (logEnable) log.debug "********power: "+powerVal+" Watts"
+                            sendEvent(name: "power", value: powerVal)
+                        } else {
+                            log.warn "No 'power' attribute found in device ${powerDevId}"
+                            sendEvent(name: "power", value: "NO POWER ATTR")
+                        }
+                    } else {
+                        log.warn "No attributes found in response"
+                        sendEvent(name: "power", value: "NO ATTRS")
+                    }
                 }
-                if (resp.data && logEnable) log.debug "${resp.data}"
             }
+            return powerVal
         } catch (Exception e) {
             log.warn "getPowerValue URI HttpGet call failed: ${e.message}"
             sendEvent(name: "power", value: "API ERROR")
+            return null
         }
-
-
     }
-    else 
+    else
     {
-        log.warn "power null value!"
+        log.warn "Missing configuration: powerDevId, AppNumber, or MakerApiToken"
         return null
     }
 }

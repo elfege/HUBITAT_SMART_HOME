@@ -3,6 +3,8 @@
 # Pushes updated Groovy code to Hubitat hubs via HTTP API
 # Reads metadata.json to map files to hub IDs
 
+clear
+
 . ~/.env.colors
 
 # PID-based locking to prevent duplicate instances
@@ -77,17 +79,22 @@ case "$selection" in
         echo ""
         echo "Available drivers:"
 
-        # Find all .groovy files in DRIVERS directory
-        mapfile -t driver_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN/DRIVERS" -type f -name "*.groovy" -printf "%P\n" | sort)
+        # Find all .groovy files in DRIVERS directory (exclude deprecated, copies, and old versions)
+        mapfile -t driver_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN/DRIVERS" -type f -name "*.groovy" \
+            -not -ipath "*deprecated*" \
+            -not -name "* copy.groovy" \
+            -not -iname "*_OLD_*" \
+            -not -iname "*old*" \
+            -printf "%P\n" | sort)
 
         if [[ ${#driver_files[@]} -eq 0 ]]; then
             echo -e "$ERROR No driver files found"
             exit 1
         fi
 
-        # Display numbered list
+        # Display numbered list (basename only)
         for i in "${!driver_files[@]}"; do
-            echo "  $((i + 1)). DRIVERS/${driver_files[$i]}"
+            echo "  $((i + 1)). $(basename "${driver_files[$i]}")"
         done
 
         echo ""
@@ -106,17 +113,22 @@ case "$selection" in
         echo ""
         echo "Available apps:"
 
-        # Find all .groovy files in APPS directory
-        mapfile -t app_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN/APPS" -type f -name "*.groovy" -printf "%P\n" | sort)
+        # Find all .groovy files in APPS directory (exclude deprecated, copies, and old versions)
+        mapfile -t app_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN/APPS" -type f -name "*.groovy" \
+            -not -ipath "*deprecated*" \
+            -not -name "* copy.groovy" \
+            -not -iname "*_OLD_*" \
+            -not -iname "*old*" \
+            -printf "%P\n" | sort)
 
         if [[ ${#app_files[@]} -eq 0 ]]; then
             echo -e "$ERROR No app files found"
             exit 1
         fi
 
-        # Display numbered list
+        # Display numbered list (basename only)
         for i in "${!app_files[@]}"; do
-            echo "  $((i + 1)). APPS/${app_files[$i]}"
+            echo "  $((i + 1)). $(basename "${app_files[$i]}")"
         done
 
         echo ""
@@ -135,17 +147,22 @@ case "$selection" in
         echo ""
         echo "Available Groovy files:"
 
-        # Find all .groovy files
-        mapfile -t all_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN" -type f -name "*.groovy" -printf "%P\n" | sort)
+        # Find all .groovy files (exclude deprecated, copies, and old versions)
+        mapfile -t all_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN" -type f -name "*.groovy" \
+            -not -ipath "*deprecated*" \
+            -not -name "* copy.groovy" \
+            -not -iname "*_OLD_*" \
+            -not -iname "*old*" \
+            -printf "%P\n" | sort)
 
         if [[ ${#all_files[@]} -eq 0 ]]; then
             echo -e "$ERROR No Groovy files found"
             exit 1
         fi
 
-        # Display numbered list
+        # Display numbered list (basename only)
         for i in "${!all_files[@]}"; do
-            echo "  $((i + 1)). ${all_files[$i]}"
+            echo "  $((i + 1)). $(basename "${all_files[$i]}")"
         done
 
         echo ""

@@ -472,11 +472,11 @@ echo -e "$INFO Metadata checks complete. Proceeding with parallel push..."
 
 # PHASE 2: Parallel push to hubs using pre-gathered decisions
 declare -a PIDS=()
-local tmp_results="/tmp/push_to_hub_results_$$"
+tmp_results="/tmp/push_to_hub_results_$$"
 mkdir -p "$tmp_results"
 
 for instance in "${!HUB_DECISIONS[@]}"; do
-    local decision="${HUB_DECISIONS[$instance]}"
+    decision="${HUB_DECISIONS[$instance]}"
 
     echo ""
     echo -e "${BG_BLUE}═══════════════════════════════════════${NC}"
@@ -484,7 +484,7 @@ for instance in "${!HUB_DECISIONS[@]}"; do
     echo -e "${BG_BLUE}═══════════════════════════════════════${NC}"
 
     {
-        local result_file="$tmp_results/${instance}.result"
+        result_file="$tmp_results/${instance}.result"
 
         if push_to_hub "$instance" "$decision"; then
             echo "SUCCESS" > "$result_file"
@@ -503,8 +503,8 @@ done
 wait "${PIDS[@]}"
 
 # Count results
-local success_count=0
-local fail_count=0
+success_count=0
+fail_count=0
 for result_file in "$tmp_results"/*.result; do
     if [[ -f "$result_file" ]]; then
         if grep -q "SUCCESS" "$result_file"; then

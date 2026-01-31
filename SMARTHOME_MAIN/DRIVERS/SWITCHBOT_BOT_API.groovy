@@ -211,49 +211,71 @@ def refreshPowerMeter(){
 }
 
 def getPowerValue(){
+    log.error "=========== getPowerValue() STARTED - VERSION 3 ==========="
     log.warn """
 powerDevId = $powerDevId
 AppNumber = $AppNumber
 MakerApiToken = $MakerApiToken
+localHub = $localHub
 """
     if(powerDevId && AppNumber && MakerApiToken)
     {
         def uri = "http://"+localHub+"/apps/api/"+AppNumber+"/devices/"+powerDevId+"?access_token="+MakerApiToken
-
-        if (logEnable) log.debug uri
+        log.error "URI: ${uri}"
 
         def powerVal = null
         try {
+            log.error "BEFORE httpGet"
             httpGet(uri) { resp ->
+                log.error "INSIDE httpGet - resp.success = ${resp.success}"
+                log.error "INSIDE httpGet - resp.status = ${resp.status}"
+
                 if (resp.success) {
-                    if (logEnable) log.debug "resp.data = $resp.data"
+                    log.error "resp.data TYPE: ${resp.data.getClass().getName()}"
+                    log.error "resp.data CONTENT: ${resp.data}"
+
                     def attributes = resp.data.attributes
+                    log.error "attributes TYPE: ${attributes?.getClass()?.getName()}"
+                    log.error "attributes SIZE: ${attributes?.size()}"
+
                     if (attributes) {
+                        log.error "ITERATING ATTRIBUTES:"
+                        attributes.each { attr ->
+                            log.error "  - name: ${attr.name}, value: ${attr.value}, currentValue: ${attr.currentValue}"
+                        }
+
                         def powerElement = attributes.find{attr -> attr.name == 'power'}
+                        log.error "powerElement FOUND: ${powerElement != null}"
+
                         if (powerElement) {
                             powerVal = powerElement.currentValue.toFloat()
-                            if (logEnable) log.debug "********power: "+powerVal+" Watts"
+                            log.error "SUCCESS! power: ${powerVal} Watts"
                             sendEvent(name: "power", value: powerVal)
                         } else {
-                            log.warn "No 'power' attribute found in device ${powerDevId}"
+                            log.error "ERROR: No 'power' attribute found in attributes array"
                             sendEvent(name: "power", value: "NO POWER ATTR")
                         }
                     } else {
-                        log.warn "No attributes found in response"
+                        log.error "ERROR: No attributes found in response"
                         sendEvent(name: "power", value: "NO ATTRS")
                     }
+                } else {
+                    log.error "ERROR: resp.success was false"
                 }
             }
+            log.error "AFTER httpGet - powerVal = ${powerVal}"
             return powerVal
         } catch (Exception e) {
-            log.warn "getPowerValue URI HttpGet call failed: ${e.message}"
+            log.error "EXCEPTION CAUGHT: ${e.getClass().getName()}"
+            log.error "EXCEPTION MESSAGE: ${e.message}"
+            log.error "EXCEPTION STACK: ${e.stackTrace.take(5)}"
             sendEvent(name: "power", value: "API ERROR")
             return null
         }
     }
     else
     {
-        log.warn "Missing configuration: powerDevId, AppNumber, or MakerApiToken"
+        log.error "ERROR: Missing configuration - powerDevId=${powerDevId}, AppNumber=${AppNumber}, MakerApiToken=${MakerApiToken != null}"
         return null
     }
 }

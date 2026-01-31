@@ -74,15 +74,90 @@ read -p "Enter selection (1-5): " selection
 case "$selection" in
     1)
         echo -e "$INFO Selected: Push DRIVER"
-        read -p "Enter driver path relative to HUBITAT base (e.g., DRIVERS/SWITCHBOT_BOT_API.groovy): " FILE_PATH
+        echo ""
+        echo "Available drivers:"
+
+        # Find all .groovy files in DRIVERS directory
+        mapfile -t driver_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN/DRIVERS" -type f -name "*.groovy" -printf "%P\n" | sort)
+
+        if [[ ${#driver_files[@]} -eq 0 ]]; then
+            echo -e "$ERROR No driver files found"
+            exit 1
+        fi
+
+        # Display numbered list
+        for i in "${!driver_files[@]}"; do
+            echo "  $((i + 1)). DRIVERS/${driver_files[$i]}"
+        done
+
+        echo ""
+        read -p "Select driver number (1-${#driver_files[@]}): " driver_selection
+
+        if [[ ! "$driver_selection" =~ ^[0-9]+$ ]] || [[ "$driver_selection" -lt 1 ]] || [[ "$driver_selection" -gt ${#driver_files[@]} ]]; then
+            echo -e "$ERROR Invalid selection"
+            exit 1
+        fi
+
+        FILE_PATH="DRIVERS/${driver_files[$((driver_selection - 1))]}"
+        echo -e "$INFO Selected: $FILE_PATH"
         ;;
     2)
         echo -e "$INFO Selected: Push APP"
-        read -p "Enter app path relative to HUBITAT base (e.g., APPS/LIGHTING/Eternal_Sunshine.groovy): " FILE_PATH
+        echo ""
+        echo "Available apps:"
+
+        # Find all .groovy files in APPS directory
+        mapfile -t app_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN/APPS" -type f -name "*.groovy" -printf "%P\n" | sort)
+
+        if [[ ${#app_files[@]} -eq 0 ]]; then
+            echo -e "$ERROR No app files found"
+            exit 1
+        fi
+
+        # Display numbered list
+        for i in "${!app_files[@]}"; do
+            echo "  $((i + 1)). APPS/${app_files[$i]}"
+        done
+
+        echo ""
+        read -p "Select app number (1-${#app_files[@]}): " app_selection
+
+        if [[ ! "$app_selection" =~ ^[0-9]+$ ]] || [[ "$app_selection" -lt 1 ]] || [[ "$app_selection" -gt ${#app_files[@]} ]]; then
+            echo -e "$ERROR Invalid selection"
+            exit 1
+        fi
+
+        FILE_PATH="APPS/${app_files[$((app_selection - 1))]}"
+        echo -e "$INFO Selected: $FILE_PATH"
         ;;
     3)
         echo -e "$INFO Selected: Push ANY file"
-        read -p "Enter file path relative to HUBITAT base: " FILE_PATH
+        echo ""
+        echo "Available Groovy files:"
+
+        # Find all .groovy files
+        mapfile -t all_files < <(find "${HUBITAT_BASE}/SMARTHOME_MAIN" -type f -name "*.groovy" -printf "%P\n" | sort)
+
+        if [[ ${#all_files[@]} -eq 0 ]]; then
+            echo -e "$ERROR No Groovy files found"
+            exit 1
+        fi
+
+        # Display numbered list
+        for i in "${!all_files[@]}"; do
+            echo "  $((i + 1)). ${all_files[$i]}"
+        done
+
+        echo ""
+        read -p "Select file number (1-${#all_files[@]}): " file_selection
+
+        if [[ ! "$file_selection" =~ ^[0-9]+$ ]] || [[ "$file_selection" -lt 1 ]] || [[ "$file_selection" -gt ${#all_files[@]} ]]; then
+            echo -e "$ERROR Invalid selection"
+            exit 1
+        fi
+
+        FILE_PATH="${all_files[$((file_selection - 1))]}"
+        echo -e "$INFO Selected: $FILE_PATH"
         ;;
     4)
         cat <<EOF

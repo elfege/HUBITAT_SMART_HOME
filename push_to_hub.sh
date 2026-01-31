@@ -377,12 +377,19 @@ push_to_hub() {
     echo -e "$NETWORK Pushing to http://${hub_ip}${endpoint}..."
 
     # Make HTTP request (no auth for now - will add session/cookie support)
-    local response=$(curl -s -X POST \
+    local response=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "$post_data" \
         "http://${hub_ip}${endpoint}" 2>&1)
 
-    if [[ $? -eq 0 ]]; then
+    # Extract HTTP status code from response
+    local http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+    local response_body=$(echo "$response" | sed 's/HTTP_CODE:[0-9]*$//')
+
+    echo -e "$INFO ${instance}: HTTP Response Code: ${http_code:-UNKNOWN}"
+    echo -e "$INFO ${instance}: Response Body: ${response_body:0:200}..."
+
+    if [[ $? -eq 0 && "$http_code" == "200" ]]; then
         echo -e "$SUCCESS ${instance}: Code pushed successfully"
 
         # For auto-create, try to extract assigned ID from response
@@ -390,14 +397,14 @@ push_to_hub() {
         if [[ "$auto_create" == "true" ]]; then
             # Try to parse ID from response JSON (format varies by Hubitat version)
             # Common patterns: {"id":123,...} or {"status":"success","id":123,...}
-            local extracted_id=$(echo "$response" | jq -r '.id // .data.id // empty' 2>/dev/null)
+            local extracted_id=$(echo "$response_body" | jq -r '.id // .data.id // empty' 2>/dev/null)
 
             if [[ -n "$extracted_id" && "$extracted_id" =~ ^[0-9]+$ ]]; then
                 actual_hub_id="$extracted_id"
                 echo -e "$INFO ${instance}: Hub assigned ID ${actual_hub_id}"
             else
                 echo -e "$WARNING ${instance}: Could not extract auto-assigned ID from response"
-                echo -e "$WARNING Response: $response"
+                echo -e "$WARNING Response: $response_body"
                 echo -e "$INFO ${instance}: Using ID 0 in metadata - you may need to manually update"
                 actual_hub_id="0"
             fi

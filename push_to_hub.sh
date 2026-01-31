@@ -232,18 +232,26 @@ if [[ ! -f "$MAIN_FILE" ]]; then
     exit 1
 fi
 
-# Always run full bidirectional sync
-echo -e "$SYNCING Running bidirectional sync..."
-if [[ -x "$SYNC_SCRIPT" ]]; then
-    "$SYNC_SCRIPT" || {
-        echo -e "$ERROR Sync script failed"
-        exit 1
-    }
+# Lightweight sync: MAIN → instances, then instances → MAIN
+quick_sync() {
+    echo -e "$SYNCING Quick sync: distributing code from MAIN to instances..."
+
+    # MAIN → all instances (distribute updated code)
+    for instance in SMARTHOME1 SMARTHOME2 SMARTHOME3 SMARTHOME4; do
+        rsync -auc --delete "${HUBITAT_BASE}/SMARTHOME_MAIN/" "${HUBITAT_BASE}/${instance}/" \
+            --exclude='.hubitat/' >/dev/null 2>&1
+    done
+
+    # All instances → MAIN (pull any instance-specific changes back)
+    for instance in SMARTHOME1 SMARTHOME2 SMARTHOME3 SMARTHOME4; do
+        rsync -auc "${HUBITAT_BASE}/${instance}/" "${HUBITAT_BASE}/SMARTHOME_MAIN/" \
+            --exclude='.hubitat/' >/dev/null 2>&1
+    done
+
     echo -e "$SUCCESS Sync completed"
-else
-    echo -e "$WARNING Sync script not found: $SYNC_SCRIPT"
-    echo -e "$INFO Skipping sync - file should already be in place from cron"
-fi
+}
+
+quick_sync
 
 echo ""
 echo -e "$PUSHING Preparing to push to hubs..."

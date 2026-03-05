@@ -397,6 +397,9 @@ def controlTurboMode(turboMode)
 {
     def turboOn = ['on', 'true', true].contains(turboMode)
 
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'turboMode', value: turboOn ? 'on' : 'off')
+
     def params = updateSettingParams([turbo_mode: turboOn])
     if(params)
     {
@@ -406,6 +409,9 @@ def controlTurboMode(turboMode)
 
 def fanAuto()
 {
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'thermostatFanMode', value: 'auto')
+
     def params = updateSettingParams([fan_speed: translateFanMode('auto', 'string')])
     if(params)
     {
@@ -417,6 +423,9 @@ def setSpeed(fanSpeed)
 {
     if(supportedFanSpeedsList().contains(fanSpeed))
     {
+        // Optimistic update — respond immediately in UI
+        sendEvent(name: 'thermostatFanMode', value: fanSpeed)
+
         def params = updateSettingParams([fan_speed: translateFanMode(fanSpeed, 'string')])
         if(params)
         {
@@ -436,6 +445,9 @@ def cycleSpeed()
 
 def fanCirculate()
 {
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'thermostatFanMode', value: 'medium')
+
     def params = updateSettingParams([fan_speed: translateFanMode('medium', 'string')])
     if(params)
     {
@@ -445,6 +457,9 @@ def fanCirculate()
 
 def fanOn()
 {
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'thermostatFanMode', value: 'high')
+
     def params = updateSettingParams([fan_speed: translateFanMode('high', 'string')])
     if(params)
     {
@@ -464,6 +479,10 @@ def heat()
 
 def off()
 {
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'thermostatMode', value: 'off')
+    sendEvent(name: 'thermostatOperatingState', value: 'off')
+
     def params = updateSettingParams([power_state: false])
     if(params)
     {
@@ -502,8 +521,13 @@ def setThermostatSetpoint(temperature) {
 def setCoolingSetpoint(temperature)
 {
     logDebug("setCoolingSetpoint(${temperature})")
+
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'coolingSetpoint', value: temperature, unit: getUnit())
+    sendEvent(name: 'thermostatSetpoint', value: temperature, unit: getUnit())
+
     temperature = ensureCelsius(temperature)
-    
+
     def params = updateSettingParams([target_temperature: temperature])
     if(params)
     {
@@ -514,6 +538,11 @@ def setCoolingSetpoint(temperature)
 def setHeatingSetpoint(temperature)
 {
     logDebug("setHeatingSetpoint(${temperature})")
+
+    // Optimistic update — respond immediately in UI
+    sendEvent(name: 'heatingSetpoint', value: temperature, unit: getUnit())
+    sendEvent(name: 'thermostatSetpoint', value: temperature, unit: getUnit())
+
     setCoolingSetpoint(temperature)
 }
 
@@ -526,6 +555,9 @@ def setThermostatFanMode(fanmode)
 {
     if(supportedThermoFanModesList().contains(fanmode))
     {
+        // Optimistic update — respond immediately in UI
+        sendEvent(name: 'thermostatFanMode', value: fanmode)
+
         def params = updateSettingParams([fan_speed: translateFanMode(fanmode, 'string')])
         if(params)
         {
@@ -543,25 +575,29 @@ def setThermostatMode(thermostatmode)
     if('off' == thermostatmode)
     {
         off()
-        
+
         return
     }
 
     if(supportedThermoModesList().contains(thermostatmode))
     {
+        // Optimistic update — respond immediately in UI
+        sendEvent(name: 'thermostatMode', value: thermostatmode)
+        sendEvent(name: 'thermostatOperatingState', value: 'on')
+
         def params = updateSettingParams([operational_mode: translateMode(thermostatmode, 'string')])
-        
+
         if(params)
         {
             // all of these modes indicate power_state should be 'on'
             params.power_state = true
-            
+
             apply(params)
         }
-        
+
         return
     }
-    
+
     log.warn('setThermostatMode(): unsupported mode')
 }
 

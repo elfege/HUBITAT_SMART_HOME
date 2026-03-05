@@ -60,12 +60,6 @@ def pageSetup(){
 			   options: ["off", "10", "20", "30", "60"], defaultValue: "60")
 		tvAppsPreferences()
 
-		input "childProtect", "bool", title: "Enable child protection (TV will turn off if turned on, for some time)"
-		input "childProtectDelay", "number", title: "Duration TV can't be turned back on (in seconds)", defaultValue:120
-		if(childProtect){
-			device.updateSetting("pollInterval", ["value": "10", "type": "enum"])
-		}
-		
 }
 
 String helpLogo() { 
@@ -211,16 +205,21 @@ def onPollParse(resp, data) {
 		powerState = "NC"
 	}
 	def onOff = "off"
-	if (powerState == "on") { 
-		onOff = "on" 
-		if (childProtectIsActive()) {
-			off()	
-			return
-		} 
+	if (powerState == "on") {
+		onOff = "on"
 	}
 
-	Map logData = [method: "onPollParse", httpStatus: resp.status, 
+	Map logData = [method: "onPollParse", httpStatus: resp.status,
 				   powerState: powerState, onOff: onOff]
+
+	// During the 60s grace period after on()/off(), trust the optimistic state
+	def cmdTime = state.lastPowerCmdTime ?: 0
+	if (cmdTime > 0 && (now() - cmdTime) < 60000) {
+		logData << [gracePeriod: true, ignoredPollState: onOff]
+		logDebug(logData)
+		return
+	}
+
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff)
 		logData << [switch: onOff]
@@ -233,64 +232,20 @@ def onPollParse(resp, data) {
 	logDebug(logData)
 }
 
-def childProtectIsActive(){
-	if(childProtect){
-		state.lastOffCmdTime = state.lastOffCmdTime ?: now() 
-		long timeSinceLastOffCmdWasSent = now() - state.lastOffCmdTime 
-        long delayMillis = childProtectDelay * 1000L
-
-		if(timeSinceLastOffCmdWasSent < delayMillis)
-		{
-			log.warn "TV IS IN CHILD PROTECT MODE. NOT TURNING IT ON."
-			sendEvent(name: "switch", value: "off")
-			return true
-		}
-		else {
-			log.info "CHILD PROTECT TIMED OUT. Ok to turn on..."
-			return false 
-		}
-	}
-	return false 
-}
-
 //	===== Capability Switch =====
-def on(calledBy="unknown") {	
-
-	log.debug "Opening websocket before sending on command... "
-	webSocketOpen()
-	pauseExecution(1000)
-
+def on(calledBy="unknown") {
 	log.debug "on() calledBy=$calledBy"
 
-	if (childProtectIsActive()) return 
-
-	def delay = 1500
-	def attempts = state.onAttempts ?: 0
-	state.onAttempts = attempts + 1
+	// Cancel any pending off-verification (user wants ON now)
+	unschedule(verifyPowerState)
+	state.lastPowerCmd = "on"
+	state.lastPowerCmdTime = now()
 
 	if (device.currentValue("switch") != "on") {
-
-		if (device.currentValue("wsStatus") == "open") {	
-			log.info "POWER ON, Press"	
-			sendKey("POWER", "Press") 
-			pauseExecution(delay)
-			log.info "POWER ON, Release"	
-			sendKey("POWER", "Release")
-			
-		}
-		else {
-			log.warn "SOCKET IS CLOSED!"
-			// run(1, keepAlive) 
-			webSocketOpen()
-		
-
-			def wolMac = getDataValue("alternateWolMac")
-
-			if (!wolMac){
-				wolMac = macAddressPref
-			}
-
-			// wolMac = "54880e84866e" // tv office
+		// Send WoL first (works even when TV is fully off and WS unreachable)
+		def wolMac = getDataValue("alternateWolMac")
+		if (!wolMac) { wolMac = macAddressPref }
+		if (wolMac) {
 			log.debug "wolMac: $wolMac"
 			def cmd = "FFFFFFFFFFFF$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac"
 			def wol = new hubitat.device.HubAction(
@@ -299,72 +254,35 @@ def on(calledBy="unknown") {
 				[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
 				destinationAddress: "255.255.255.255:7",
 				encoding: hubitat.device.HubAction.Encoding.HEX_STRING])
-			
-			log.debug "wol: <br> $wol"
-			
-			int c = 0;
+			int c = 0
 			while (c < 3){
 				c++
 				sendHubCommand(wol)
-				log.trace c
 				pauseExecution(500)
 			}
-			log.debug "WoL packet sent $c times..."
+			log.debug "WoL packet sent $c times"
 		}
-		
-		// Poll to check if successful
-		onPoll()
-		runIn(5, checkOnStatus)
-		
-		if(!state.onAttempts || state.onAttempts == 0){
-			// Reset attempt counter after 30 seconds
-			runIn(30, clearOnAttempts)
-		}
-	}
-	else {
+
+		log.info "POWER ON"
+		sendKey("POWER")
+
+		// Optimistic update — assume on immediately, no retries (POWER is a toggle key)
+		sendEvent(name: "switch", value: "on")
+		runIn(5, setPowerOnMode)
+	} else {
 		log.info "${device.label} is already on"
 	}
+
+	// Schedule verification in 60s — will only correct state if no contradicting command arrived
+	runIn(60, verifyPowerState)
 }
 
-def checkOnStatus() {
-	log.debug "checking status..."
-	log.debug "state.onAttempts = $state.onAttempts"
-	
-    
-	def currentState = device.currentValue('switch')
-	log.debug "checkOnStatus(1) => current state: ${currentState}"
-
+def verifyPowerState() {
+	log.debug "verifyPowerState: grace period over, clearing lock and polling for actual state"
+	// Clear the grace period FIRST — so the onPollParse callback can update state freely
+	state.lastPowerCmdTime = 0
+	// Now poll — onPollParse will apply the real state
 	onPoll()
-	pauseExecution(3000)
-
-	currentState = device.currentValue('switch')
-	log.debug "checkOnStatus(2) => current state: ${currentState}"
-
-	if (currentState == "on") {
-		log.info "TV is on."
-		clearOnAttempts()
-		return
-	}
-
-	def max = 10
-	// If still off after max attempts, log warning
-    if (device.currentValue("switch") == "off" && state.onAttempts >= max) {
-        logError("on: Multiple power on attempts unsuccessful")
-        state.onAttempts = 0
-		clearOnAttempts()
-    }
-	else {
-		if(currentState != "on") {
-			log.warn "Still off, new attempt"
-			on(calledBy="checkOnStatus")
-		}
-	}
-}
-
-def clearOnAttempts() {
-	log.debug "clearOnAttempts()"
-    state.onAttempts = 0
-	unschedule(checkOnStatus)
 }
 
 def setPowerOnMode() {
@@ -380,91 +298,30 @@ def setPowerOnMode() {
 }
 
 def off() {
+	log.debug "off()"
 
-	webSocketOpen()
-	pauseExecution(1000)
-
-	clearOnAttempts() // clear any currently running attempts to turn the tv on
+	// Cancel any pending on-verification (user wants OFF now)
+	unschedule(verifyPowerState)
+	state.lastPowerCmd = "off"
+	state.lastPowerCmdTime = now()
 
 	if (device.currentValue("switch") != "off") {
-
 		logInfo("off: --[frameTv: ${getDataValue("frameTv")}]")
-		def attempts = state.offAttempts ?: 0
-		state.offAttempts = attempts + 1
-		
-		def delay = 1500
 
-		if (device.currentValue("wsStatus") == "open") {	
-			log.info "POWER OFF, Press"	
-			sendKey("POWER", "Press") 
-			pauseExecution(delay)
-			log.info "POWER OFF, Release"	
-			sendKey("POWER", "Release")
-		}
-		else {
-			log.warn "SOCKET IS CLOSED!"
-			// run(1, keepAlive) 
-			webSocketOpen()
-		}
-		
-		// Poll to check if successful
-		onPoll()
-		runIn(5, checkOffStatus)
-		
-		if(!state.offAttempts || state.offAttempts == 0){
-			delay = childProtectDelay ?: 30
-			runIn(delay, clearOffAttempts)
+		log.info "POWER OFF"
+		sendKey("POWER")
 
-			if (childProtect){
-				state.lastOffCmdTime = now() 
-			}
-		}
-
+		// Optimistic update — assume off immediately, no retries (POWER is a toggle key)
+		sendEvent(name: "switch", value: "off")
+		setPowerOffMode()
 	} else {
 		log.debug("off: TV is already off")
 	}
+
+	// Schedule verification in 60s — will only correct state if no contradicting command arrived
+	runIn(60, verifyPowerState)
 }
 
-def checkOffStatus() {
-	log.debug "checking status..."
-	log.debug "state.offAttempts = $state.offAttempts"
-	
-    
-	def currentState = device.currentValue('switch')
-	log.debug "checkOffStatus(1) => current state: ${currentState}"
-
-	onPoll()
-	pauseExecution(3000)
-
-	currentState = device.currentValue('switch')
-	log.debug "checkOffStatus(2) => current state: ${currentState}"
-
-	if (currentState == "off") {
-		log.info "TV is off."
-		if(!childProtect) clearOffAttempts() 
-		return
-	}
-
-	def max = 10
-	// If still on after max attempts, log warning
-    if (device.currentValue("switch") == "on" && state.offAttempts >= max) {
-        logError("off: Multiple power off attempts unsuccessful")
-        state.offAttempts = 0
-		clearOffAttempts()
-    }
-	else {
-		if(currentState != "off") {
-			log.warn "Still on, new attempt"
-			off()
-		}
-	}
-}
-
-def clearOffAttempts() {
-	log.debug "clearOffAttempts()"
-    state.offAttempts = 0
-	unschedule(checkOffStatus)
-}
 
 def setPowerOffMode() {
 	logInfo("setPowerOffMode")

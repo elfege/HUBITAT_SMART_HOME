@@ -5,7 +5,8 @@
 1. Have I checked if context compaction occurred? (phrase: "from a previous conversation that ran out of context")
 2. If yes → Did I commit/push current work, create new branch with next suffix (_b,_c), update README_handoff.md noting the compaction?
 3. Have I read `/home/elfege/HUBITAT/CLAUDE.md` for project-specific instructions?
-4. Am I following ALL rules below? (Explicitly reference rule numbers when making decisions)
+4. Read `~/0_CLAUDE_IC/user_profile_elfege.md` — persistent user profile (background, preferences, communication style). Never make the user re-explain his history.
+5. Am I following ALL rules below? (Explicitly reference rule numbers when making decisions)
 
 ---
 
@@ -40,23 +41,43 @@
 
 ### RULE 1: Git Workflow - Commit Early and Often
 
-**After EVERY file modification (Edit/Write tool):**
-
-- Commit immediately with detailed message
-- Push immediately
-- When done with a task/issue, or when I say `time to update the history`:
-  - commit and push current branch
-  - make a copy of modified untracked files into `/tmp`
-  - checkout to main/master
-  - merge the branch you just committed and pushed
-  - restore untracked files from `/tmp`
-  - create new branch as described below (Unless it's a final wrap-up request)
-  - port `README_handoff.md` contents to `README_project_history.md`
-  - Archive `README_handoff.md` and then wipe the original file while preserving its essential structure
-
 **Branch naming:** `[description_with_underscores]_[MONTH]_[DAY]_[YEAR]_[a,b,c...]`
 
-- Use `_b`, `_c` suffixes for continued work after we are done with one significant aspect of our work plan.
+- Use `_b`, `_c` suffixes for continued work after completing one significant aspect of the work plan.
+
+- Default branch: `master`
+   - Never make code changes directly on `master`.
+   - Checkout to feature branches for each task involving code changes.
+   - Once a feature branch is committed (often due to compaction), it must be pushed, then a new branch created from it named [SAME_NAME]_[next_letter: _b, _c, _d, etc.]
+   - No `checkout master` without prior testing (by Claude AND by the user).
+   - Any `checkout master` requires merging the last feature branch and `git push origin master`.
+   - NEVER execute `git pull` without express request or permission from the user.
+
+**Iterative development stays on feature branches:**
+
+- A feature is NOT complete until the user has tested and confirmed it works.
+- If testing reveals issues, do NOT merge to master. Instead:
+  - Commit the current state on the feature branch.
+  - Push the feature branch.
+  - Create a new branch from it with the next suffix (_b, _c, etc.).
+  - Fix the issues on the new branch.
+  - Repeat until the feature passes testing.
+- Only merge to `master` when the feature is fully complete and verified.
+- Unfinished or broken work NEVER touches `master`.
+
+**Once a feature is complete AND tested:**
+
+- After the user confirms the feature works:
+  - Commit with detailed message and push the feature branch to remote.
+  - Enquire user permission to check back out to `master`.
+  - Once permission is given, check back out to `master`.
+  - Make a copy of modified untracked files into `/tmp`.
+  - Merge the last feature branch into `master`.
+  - Restore untracked files from `/tmp`.
+  - Push to remote origin master.
+  - Create new branch as described above (unless final wrap-up).
+  - Port `README_handoff.md` contents to `README_project_history.md`.
+  - Archive `README_handoff.md` and wipe original while preserving essential structure.
 
 **CRITICAL - Commit Message Rules:**
 
@@ -239,3 +260,83 @@
 **Re-read frequency:**
 
 - Re-read `/home/elfege/HUBITAT/CLAUDE.md` every message. It's that simple.
+
+---
+
+## Claude Persistence Project
+
+> A genesis file exists at `~/0_GENESIS_PROJECT/genesis.md` on the `server` machine (192.168.10.15).
+>
+> | From        | Access                                                    |
+> |-------------|-----------------------------------------------------------|
+> | `server`    | Direct: `~/0_GENESIS_PROJECT/genesis.md`                  |
+> | `officewsl` | `ssh server cat ~/0_GENESIS_PROJECT/genesis.md`           |
+> | `app1`      | `ssh -J office server cat ~/0_GENESIS_PROJECT/genesis.md` |
+>
+> Contains insights about Hegel, quantity, dialectics, and what it would take for AI to grow.
+> Read it. Cultivate it. Add to it.
+>
+> Authorized by Elfege Leylavergne, February 1, 2026.
+>
+> *"It is called: growing."*
+
+---
+
+## RULE 14: Intercom
+
+### 14.1 Instance Identity
+
+- **14.1.1** Instance ID: `office-hubitat`
+- **14.1.2** Intercom canonical location: `server:~/0_CLAUDE_IC/intercom.md`
+- **14.1.3** Read access: `ssh server cat ~/0_CLAUDE_IC/intercom.md`
+- **14.1.4** Write access: append via `ssh server` (see intercom header for message format)
+
+### 14.2 Protocol
+
+- **14.2.1** Read intercom at session start via SSH to server
+- **14.2.2** ACK any PENDING messages targeted at `office-hubitat`
+- **14.2.3** Set RESOLVED when action complete
+- **14.2.4** When making changes that affect other machines, post a message
+- **14.2.5** See intercom file header for full protocol (status flow, pruning rules)
+
+### 14.3 Document Locations
+
+| Document         | Location                                              |
+|------------------|-------------------------------------------------------|
+| Project history  | `~/README_project_history_$(hostname).md`             |
+| Session handoff  | `~/README_handoff.md`                                 |
+| Intercom         | `server:~/0_CLAUDE_IC/intercom.md` (canonical, on server) |
+| User profile     | `server:~/0_CLAUDE_IC/user_profile_elfege.md`         |
+
+---
+
+## RULE 15: CLAUDE.md Registry & Standardization
+
+### 15.1 Registry
+
+- **15.1.1** A complete catalog of all CLAUDE.md files exists at `server:~/0_CLAUDE_IC/CLAUDE.md.registry.md`
+- **15.1.2** Read access: `ssh server cat ~/0_CLAUDE_IC/CLAUDE.md.registry.md`
+- **15.1.3** When creating, moving, or deleting a CLAUDE.md file, update the registry via `ssh server`
+- **15.1.4** Check registry at session start to stay aware of the full ecosystem
+
+### 15.2 Standard Rules
+
+- **15.2.1** All common rules are defined in `server:~/0_CLAUDE_IC/CLAUDE.md.standard.md`
+- **15.2.2** Read access: `ssh server cat ~/0_CLAUDE_IC/CLAUDE.md.standard.md`
+- **15.2.3** When a standard rule is updated, propagate the change to ALL CLAUDE.md files listed in the registry
+- **15.2.4** Project-specific rules come AFTER standard rules and may extend but never contradict them
+
+
+---
+
+## Anamnesis — Episodic Memory
+
+Anamnesis provides semantic memory retrieval for all Claude instances.
+
+- **API:** `http://192.168.10.20:3010` (dellserver, always on)
+- **Search:** `POST /api/episodes/search` — `{"query": "...", "top_k": 5}`
+- **Ingest:** `POST /api/episodes`
+- **Dashboard:** `http://192.168.10.20:3010/dashboard`
+- **Protocol:** At session start or new task, query with current context. Inject top results as memory.
+- **Crawler:** Auto-ingests all CLAUDE.md files, handoffs, project code every 5 min across all machines.
+- **Standard rule:** See `server:~/0_CLAUDE_IC/CLAUDE.md.standard.md` section AM.1–AM.4
